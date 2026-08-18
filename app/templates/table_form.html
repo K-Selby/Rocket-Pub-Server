@@ -1,24 +1,41 @@
 {% extends "base.html" %}
 
-{% block title %}New Table | Pub Booking System{% endblock %}
+{% block title %}
+    {% if table %}Edit Table {{ table.number }}{% else %}New Table{% endif %}
+    | Pub Booking System
+{% endblock %}
 
 {% block content %}
 <div class="page-heading">
     <div>
-        <h1>Add table</h1>
-        <p>Enter the physical characteristics of a table.</p>
+        <h1>
+            {% if table %}
+                Edit table {{ table.number }}
+            {% else %}
+                Add table
+            {% endif %}
+        </h1>
+        <p>Set the physical characteristics used by automatic allocation.</p>
     </div>
 </div>
 
 <form class="card form-grid" method="post">
     <label>
         Table number *
-        <input name="number" required placeholder="e.g. 12">
+        <input name="number"
+               required
+               placeholder="e.g. 12"
+               value="{{ table.number if table else '' }}">
     </label>
 
     <label>
         Capacity *
-        <input type="number" name="capacity" min="1" max="30" required>
+        <input type="number"
+               name="capacity"
+               min="1"
+               max="30"
+               required
+               value="{{ table.capacity if table else '' }}">
     </label>
 
     <label>
@@ -26,28 +43,48 @@
         <select name="area_id" required>
             <option value="">Choose area</option>
             {% for area in areas %}
-                <option value="{{ area.id }}">{{ area.name }}</option>
+                <option value="{{ area.id }}"
+                    {% if table and table.area_id == area.id %}selected{% endif %}>
+                    {{ area.name }}
+                </option>
             {% endfor %}
         </select>
     </label>
 
     <label class="checkbox-row">
-        <input type="checkbox" name="near_tv">
+        <input type="checkbox"
+               name="near_tv"
+               {% if table and table.near_tv %}checked{% endif %}>
         Near a TV
     </label>
 
     <label class="checkbox-row">
-        <input type="checkbox" name="accessible">
-        Accessible
+        <input type="checkbox"
+               name="has_bench"
+               {% if table and table.has_bench %}checked{% endif %}>
+        Has bench seating
     </label>
 
     <label class="checkbox-row">
-        <input type="checkbox" name="window_seat">
-        Window seat
+        <input type="checkbox"
+               name="accessible"
+               {% if table and table.accessible %}checked{% endif %}>
+        Accessible
     </label>
 
+    {% if table %}
+        <label class="checkbox-row">
+            <input type="checkbox"
+                   name="active"
+                   {% if table.active %}checked{% endif %}>
+            Active / available for bookings
+        </label>
+    {% endif %}
+
     <div class="full-width">
-        <button class="button" type="submit">Save table</button>
+        <button class="button" type="submit">
+            {% if table %}Save changes{% else %}Save table{% endif %}
+        </button>
     </div>
 </form>
 {% endblock %}

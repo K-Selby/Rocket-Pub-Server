@@ -3,15 +3,21 @@ from app import db
 
 
 class Customer(db.Model):
-    """Stores customer details once so repeat bookings can reuse them."""
+    """
+    Stores recurring customer details and useful seating preferences.
+
+    The phone number is the main unique identifier because names are not unique.
+    """
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False, index=True)
     phone = db.Column(db.String(30), nullable=False, unique=True, index=True)
-    email = db.Column(db.String(120))
+
     preferred_area_id = db.Column(db.Integer, db.ForeignKey("area.id"))
     preferred_table_id = db.Column(db.Integer, db.ForeignKey("pub_table.id"))
     prefers_near_tv = db.Column(db.Boolean, default=False)
+    avoids_bench = db.Column(db.Boolean, default=False)
+
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -35,7 +41,7 @@ class Area(db.Model):
 
 
 class PubTable(db.Model):
-    """Represents one physical table in the pub."""
+    """Represents one physical table and the characteristics used for allocation."""
 
     id = db.Column(db.Integer, primary_key=True)
     number = db.Column(db.String(20), nullable=False, unique=True, index=True)
@@ -43,11 +49,11 @@ class PubTable(db.Model):
     area_id = db.Column(db.Integer, db.ForeignKey("area.id"), nullable=False)
 
     near_tv = db.Column(db.Boolean, default=False)
+    has_bench = db.Column(db.Boolean, default=False)
     accessible = db.Column(db.Boolean, default=False)
-    window_seat = db.Column(db.Boolean, default=False)
     active = db.Column(db.Boolean, default=True)
 
-    # Stored now so a future floor-plan editor can position tables visually.
+    # Kept ready for the visual drag-and-drop floor plan.
     x_position = db.Column(db.Float, default=0)
     y_position = db.Column(db.Float, default=0)
 
@@ -76,26 +82,30 @@ class TablePairing(db.Model):
 
 
 class Booking(db.Model):
-    """One customer reservation."""
+    """One reservation. Standard duration is three hours (180 minutes)."""
 
     id = db.Column(db.Integer, primary_key=True)
     customer_id = db.Column(db.Integer, db.ForeignKey("customer.id"), nullable=False)
 
     booking_date = db.Column(db.Date, nullable=False, index=True)
     booking_time = db.Column(db.Time, nullable=False)
-    duration_minutes = db.Column(db.Integer, nullable=False, default=120)
+    duration_minutes = db.Column(db.Integer, nullable=False, default=180)
 
     party_size = db.Column(db.Integer, nullable=False)
     occasion = db.Column(db.String(120))
-    preferred_area_id = db.Column(db.Integer, db.ForeignKey("area.id"))
-    wants_near_tv = db.Column(db.Boolean, default=False)
-    notes = db.Column(db.Text)
 
+    preferred_area_id = db.Column(db.Integer, db.ForeignKey("area.id"))
+    preferred_table_id = db.Column(db.Integer, db.ForeignKey("pub_table.id"))
+    wants_near_tv = db.Column(db.Boolean, default=False)
+    avoids_bench = db.Column(db.Boolean, default=False)
+
+    notes = db.Column(db.Text)
     status = db.Column(db.String(30), nullable=False, default="Booked")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     customer = db.relationship("Customer", back_populates="bookings")
     preferred_area = db.relationship("Area")
+    preferred_table = db.relationship("PubTable", foreign_keys=[preferred_table_id])
 
     table_links = db.relationship(
         "BookingTable",
@@ -105,16 +115,16 @@ class Booking(db.Model):
 
     @property
     def tables(self):
-        """Convenient list of tables attached to the booking."""
+        """Convenient list of all physical tables assigned to this booking."""
         return [link.table for link in self.table_links]
 
 
 class BookingTable(db.Model):
     """
-    Join table between bookings and physical tables.
+    Join table between bookings and tables.
 
-    We use this instead of putting one table number directly on Booking
-    so a booking can use Table 1 + Table 2 together.
+    Keeping this separate means one booking can reserve Table 1 + Table 2
+    together without changing the Booking model.
     """
 
     id = db.Column(db.Integer, primary_key=True)

@@ -6,7 +6,7 @@
 <div class="page-heading">
     <div>
         <h1>Tables</h1>
-        <p>Configure capacities, areas and table pairings.</p>
+        <p>Configure capacities, areas, characteristics and table pairings.</p>
     </div>
 
     <a class="button" href="{{ url_for('main.new_table') }}">Add table</a>
@@ -18,15 +18,23 @@
     {% if tables %}
         <div class="table-card-grid">
             {% for table in tables %}
-                <div class="table-card">
-                    <div class="table-number">T{{ table.number }}</div>
+                <div class="table-card {% if not table.active %}inactive-table{% endif %}">
+                    <div class="table-card-header">
+                        <div class="table-number">T{{ table.number }}</div>
+                        <a class="small-link"
+                           href="{{ url_for('main.edit_table', table_id=table.id) }}">
+                            Edit
+                        </a>
+                    </div>
+
                     <strong>{{ table.capacity }} seats</strong>
                     <span>{{ table.area.name }}</span>
 
                     <div class="feature-list">
                         {% if table.near_tv %}<span class="badge">Near TV</span>{% endif %}
+                        {% if table.has_bench %}<span class="badge">Bench</span>{% endif %}
                         {% if table.accessible %}<span class="badge">Accessible</span>{% endif %}
-                        {% if table.window_seat %}<span class="badge">Window</span>{% endif %}
+                        {% if not table.active %}<span class="badge danger-badge">Inactive</span>{% endif %}
                     </div>
                 </div>
             {% endfor %}
@@ -40,7 +48,7 @@
 <div class="card">
     <h2>Pair tables</h2>
     <p class="muted">
-        Use this for tables that can physically be pushed together.
+        Define tables that can physically be pushed together.
     </p>
 
     <form method="post"

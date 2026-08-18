@@ -6,16 +6,12 @@
 <div class="page-heading">
     <div>
         <h1>New booking</h1>
-        <p>Create a reservation and allocate a table.</p>
+        <p>
+            Enter the customer's details here. New customers are saved
+            automatically and returning customers are recognised by phone number.
+        </p>
     </div>
 </div>
-
-{% if not customers %}
-<div class="flash error">
-    You need to add a customer before creating a booking.
-    <a href="{{ url_for('main.new_customer') }}">Add customer</a>
-</div>
-{% endif %}
 
 {% if not tables %}
 <div class="flash error">
@@ -24,78 +20,139 @@
 </div>
 {% endif %}
 
-<form class="card form-grid" method="post">
-    <label>
-        Customer *
-        <select name="customer_id" required>
-            <option value="">Choose customer</option>
-            {% for customer in customers %}
-                <option value="{{ customer.id }}">
-                    {{ customer.name }} — {{ customer.phone }}
-                </option>
-            {% endfor %}
-        </select>
-    </label>
+<form class="card form-grid" method="post" id="booking-form">
+    <section class="form-section full-width">
+        <h2>Customer</h2>
 
-    <label>
-        Date *
-        <input type="date"
-               name="booking_date"
-               value="{{ today.isoformat() }}"
-               required>
-    </label>
+        <div class="nested-grid">
+            <label>
+                Name *
+                <input name="customer_name"
+                       id="customer-name"
+                       list="customer-names"
+                       autocomplete="off"
+                       required>
+                <datalist id="customer-names">
+                    {% for customer in customer_lookup %}
+                        <option value="{{ customer.name }}"></option>
+                    {% endfor %}
+                </datalist>
+            </label>
 
-    <label>
-        Time *
-        <input type="time" name="booking_time" required>
-    </label>
+            <label>
+                Phone number *
+                <input name="customer_phone"
+                       id="customer-phone"
+                       inputmode="tel"
+                       autocomplete="tel"
+                       required>
+            </label>
+        </div>
 
-    <label>
-        Number of people *
-        <input type="number"
-               name="party_size"
-               min="1"
-               max="50"
-               required>
-    </label>
+        <div id="returning-customer-message"
+             class="existing-customer-message"
+             hidden>
+            Returning customer found — saved seating preferences have been filled in.
+        </div>
+    </section>
 
-    <label>
-        Duration
-        <select name="duration_minutes">
-            <option value="90">1 hour 30</option>
-            <option value="105">1 hour 45</option>
-            <option value="120" selected>2 hours</option>
-            <option value="150">2 hours 30</option>
-            <option value="180">3 hours</option>
-        </select>
-    </label>
+    <section class="form-section full-width">
+        <h2>Booking</h2>
 
-    <label>
-        Occasion
-        <input name="occasion"
-               placeholder="Birthday, anniversary...">
-    </label>
+        <div class="nested-grid">
+            <label class="date-field">
+                Date *
+                <input class="booking-date-input"
+                       id="booking-date"
+                       type="date"
+                       name="booking_date"
+                       value="{{ today.isoformat() }}"
+                       required>
+            </label>
 
-    <label>
-        Preferred area
-        <select name="preferred_area_id">
-            <option value="">No preference</option>
-            {% for area in areas %}
-                <option value="{{ area.id }}">{{ area.name }}</option>
-            {% endfor %}
-        </select>
-    </label>
+            <label>
+                Time *
+                <select name="booking_time"
+                        id="booking-time"
+                        class="booking-time-select"
+                        required>
+                    <option value="">Choose a time</option>
+                    {% for time in booking_times %}
+                        <option value="{{ time }}">{{ time }}</option>
+                    {% endfor %}
+                </select>
+            </label>
 
-    <label class="checkbox-row">
-        <input type="checkbox" name="wants_near_tv">
-        Prefer to sit near a TV
-    </label>
+            <label>
+                Number of people *
+                <input type="number"
+                       name="party_size"
+                       min="1"
+                       max="50"
+                       required>
+            </label>
+
+            <label>
+                Occasion
+                <input name="occasion"
+                       placeholder="Birthday, anniversary...">
+            </label>
+        </div>
+
+        <div class="info-strip">
+            Standard table time: <strong>3 hours</strong>
+        </div>
+
+        <div id="late-food-warning" class="late-food-warning" hidden></div>
+    </section>
+
+    <section class="form-section full-width">
+        <h2>Seating preferences</h2>
+
+        <div class="nested-grid">
+            <label>
+                Preferred area
+                <select name="preferred_area_id" id="preferred-area">
+                    <option value="">No preference</option>
+                    {% for area in areas %}
+                        <option value="{{ area.id }}">{{ area.name }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label>
+                Preferred table
+                <select name="preferred_table_id" id="preferred-table">
+                    <option value="">No preference</option>
+                    {% for table in tables %}
+                        <option value="{{ table.id }}">
+                            Table {{ table.number }} — {{ table.capacity }} seats
+                        </option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label class="checkbox-row">
+                <input type="checkbox"
+                       name="wants_near_tv"
+                       id="wants-near-tv">
+                Prefer to sit near a TV
+            </label>
+
+            <label class="checkbox-row">
+                <input type="checkbox"
+                       name="avoids_bench"
+                       id="avoids-bench">
+                Does not want bench seating
+            </label>
+        </div>
+    </section>
 
     <fieldset class="full-width">
         <legend>Manual table selection</legend>
         <p class="muted">
-            Leave all unticked and the system will automatically choose
-            the best currently available single table.
+            Leave all unticked and the system will automatically choose the
+            best available table or valid table pair.
         </p>
 
         <div class="table-checkbox-grid">
@@ -104,8 +161,14 @@
                     <input type="checkbox"
                            name="table_ids"
                            value="{{ table.id }}">
+
                     <strong>T{{ table.number }}</strong>
-                    <span>{{ table.capacity }} seats · {{ table.area.name }}</span>
+
+                    <span>
+                        {{ table.capacity }} seats · {{ table.area.name }}
+                        {% if table.near_tv %} · TV{% endif %}
+                        {% if table.has_bench %} · Bench{% endif %}
+                    </span>
                 </label>
             {% endfor %}
         </div>
@@ -119,9 +182,14 @@
     <div class="full-width">
         <button class="button"
                 type="submit"
-                {% if not customers or not tables %}disabled{% endif %}>
+                {% if not tables %}disabled{% endif %}>
             Create booking
         </button>
     </div>
 </form>
+
+<script>
+    // Existing customer data is embedded locally; no internet/API call is needed.
+    window.PUB_CUSTOMERS = {{ customer_lookup | tojson }};
+</script>
 {% endblock %}

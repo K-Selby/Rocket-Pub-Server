@@ -1,22 +1,39 @@
 # Pub Booking System - Starter
 
-A lightweight Flask/SQLite starter application for a local pub booking system.
+Local Flask/SQLite pub booking application.
 
-## Included in this first version
+## Current features
 
 - Dashboard showing today's bookings
-- Customer records
-- Customer search by name or phone number
-- Stored customer preferences
+- Customer records created automatically when a booking is made
+- Returning customer recognition by phone number
+- Name/phone customer search
+- Saved seating preferences
 - Configurable pub areas
-- Configurable tables and capacities
-- Table characteristics such as near-TV/accessibility/window
-- Table pairing definitions
+- Configurable tables
+- Edit tables after creation
+- Table characteristics:
+  - capacity
+  - area
+  - near TV
+  - bench seating
+  - accessible
+  - active/inactive
+- Numerically ordered table numbers
+- Physically valid table pairings
 - Booking creation
+- 3-hour standard booking duration
+- Booking times from 12:15 to 19:30 in 15-minute intervals
+- Late food-order warning after 18:45
+- Sunday-specific 19:30 kitchen closing warning
 - Manual table assignment
-- Simple automatic single-table allocation
+- Automatic single-table or paired-table allocation
+- Allocation preferences:
+  - area
+  - specific table
+  - near TV
+  - no bench seating
 - Booking overlap prevention
-- Multi-table bookings
 - Booking cancellation
 - Date-based booking view
 - Local-network hosting support
@@ -31,18 +48,19 @@ pip install -r requirements.txt
 python run.py
 ```
 
-Then open:
+Open:
 
-http://127.0.0.1:5000
+http://127.0.0.1:8000
 
-For another device on the same Wi-Fi, use the Mac's local IP:
+Another device on the same Wi-Fi can use the Mac's local address, e.g.:
 
-http://YOUR-MAC-IP:5000
+http://192.168.1.173:8000
 
 ## Database
 
-The SQLite database is created automatically at:
+The database is stored at:
 
 instance/pub_booking.db
 
-Do not commit the database file to Git.
+The revised starter includes a small compatibility step that adds the new
+bench-related columns to a database created by the earlier starter version.

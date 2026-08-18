@@ -9,6 +9,8 @@
     --danger: #a83232;
     --success-bg: #e8f5ea;
     --error-bg: #fdeaea;
+    --warning-bg: #fff3cd;
+    --warning-border: #e2c45f;
 }
 
 * {
@@ -77,12 +79,17 @@ h1, h2 {
     color: var(--muted);
 }
 
-.card {
+.card,
+.form-section {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 22px;
     margin-bottom: 20px;
+}
+
+.form-section {
+    margin-bottom: 0;
 }
 
 .button {
@@ -132,8 +139,15 @@ h1, h2 {
     gap: 18px;
 }
 
+.nested-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+}
+
 .form-grid label,
-.form-grid fieldset {
+.form-grid fieldset,
+.nested-grid label {
     display: flex;
     flex-direction: column;
     gap: 7px;
@@ -165,6 +179,37 @@ textarea {
 
 .checkbox-row input {
     width: auto;
+}
+
+.booking-date-input,
+.booking-time-select {
+    min-height: 58px;
+    font-size: 18px;
+    padding: 13px 14px;
+}
+
+.info-strip {
+    margin-top: 16px;
+    padding: 11px 13px;
+    border-radius: 8px;
+    background: #eef1ef;
+}
+
+.late-food-warning {
+    margin-top: 14px;
+    padding: 14px 16px;
+    background: var(--warning-bg);
+    border: 1px solid var(--warning-border);
+    border-radius: 8px;
+    font-weight: 600;
+    line-height: 1.45;
+}
+
+.existing-customer-message {
+    margin-top: 14px;
+    padding: 10px 12px;
+    background: var(--success-bg);
+    border-radius: 8px;
 }
 
 .search-bar,
@@ -263,7 +308,7 @@ textarea {
 
 .table-card-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     gap: 14px;
 }
 
@@ -276,9 +321,25 @@ textarea {
     gap: 6px;
 }
 
+.table-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
 .table-number {
     font-size: 26px;
     font-weight: 700;
+}
+
+.small-link {
+    font-size: 14px;
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.inactive-table {
+    opacity: 0.6;
 }
 
 .feature-list,
@@ -288,7 +349,7 @@ textarea {
 
 .table-checkbox-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
     gap: 10px;
 }
 
@@ -323,7 +384,8 @@ textarea {
         flex-direction: column;
     }
 
-    .form-grid {
+    .form-grid,
+    .nested-grid {
         grid-template-columns: 1fr;
     }
 
