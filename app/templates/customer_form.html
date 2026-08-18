@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}New Customer | Pub Booking System{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h1>Add customer</h1>
+        <p>Create a reusable customer record.</p>
+    </div>
+</div>
+
+<form class="card form-grid" method="post">
+    <label>
+        Name *
+        <input name="name" required>
+    </label>
+
+    <label>
+        Phone number *
+        <input name="phone" required>
+    </label>
+
+    <label>
+        Email
+        <input type="email" name="email">
+    </label>
+
+    <label>
+        Preferred area
+        <select name="preferred_area_id">
+            <option value="">No preference</option>
+            {% for area in areas %}
+                <option value="{{ area.id }}">{{ area.name }}</option>
+            {% endfor %}
+        </select>
+    </label>
+
+    <label>
+        Preferred table
+        <select name="preferred_table_id">
+            <option value="">No preference</option>
+            {% for table in tables %}
+                <option value="{{ table.id }}">
+                    Table {{ table.number }} — {{ table.capacity }} seats
+                </option>
+            {% endfor %}
+        </select>
+    </label>
+
+    <label class="checkbox-row">
+        <input type="checkbox" name="prefers_near_tv">
+        Usually prefers to sit near a TV
+    </label>
+
+    <label class="full-width">
+        Notes
+        <textarea name="notes" rows="4"></textarea>
+    </label>
+
+    <div class="full-width">
+        <button class="button" type="submit">Save customer</button>
+    </div>
+</form>
+{% endblock %}

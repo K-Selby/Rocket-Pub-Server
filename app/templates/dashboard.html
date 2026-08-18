@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard | Pub Booking System{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h1>Dashboard</h1>
+        <p>Today's bookings — {{ today.strftime("%d %B %Y") }}</p>
+    </div>
+
+    <a class="button" href="{{ url_for('main.new_booking') }}">New booking</a>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <span class="stat-number">{{ bookings|length }}</span>
+        <span>Bookings today</span>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Today's bookings</h2>
+
+    {% if bookings %}
+        <div class="booking-list">
+            {% for booking in bookings %}
+                <div class="booking-row">
+                    <strong>{{ booking.booking_time.strftime("%H:%M") }}</strong>
+
+                    <div>
+                        <strong>{{ booking.customer.name }}</strong>
+                        <div class="muted">
+                            {{ booking.party_size }} people
+                            {% if booking.occasion %} · {{ booking.occasion }}{% endif %}
+                        </div>
+                    </div>
+
+                    <div>
+                        {% if booking.tables %}
+                            {% for table in booking.tables %}
+                                <span class="badge">T{{ table.number }}</span>
+                            {% endfor %}
+                        {% else %}
+                            <span class="muted">No table</span>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="muted">No bookings for today yet.</p>
+    {% endif %}
+</div>
+{% endblock %}

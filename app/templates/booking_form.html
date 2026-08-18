@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block title %}New Booking | Pub Booking System{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h1>New booking</h1>
+        <p>Create a reservation and allocate a table.</p>
+    </div>
+</div>
+
+{% if not customers %}
+<div class="flash error">
+    You need to add a customer before creating a booking.
+    <a href="{{ url_for('main.new_customer') }}">Add customer</a>
+</div>
+{% endif %}
+
+{% if not tables %}
+<div class="flash error">
+    You need to configure at least one table first.
+    <a href="{{ url_for('main.new_table') }}">Add table</a>
+</div>
+{% endif %}
+
+<form class="card form-grid" method="post">
+    <label>
+        Customer *
+        <select name="customer_id" required>
+            <option value="">Choose customer</option>
+            {% for customer in customers %}
+                <option value="{{ customer.id }}">
+                    {{ customer.name }} — {{ customer.phone }}
+                </option>
+            {% endfor %}
+        </select>
+    </label>
+
+    <label>
+        Date *
+        <input type="date"
+               name="booking_date"
+               value="{{ today.isoformat() }}"
+               required>
+    </label>
+
+    <label>
+        Time *
+        <input type="time" name="booking_time" required>
+    </label>
+
+    <label>
+        Number of people *
+        <input type="number"
+               name="party_size"
+               min="1"
+               max="50"
+               required>
+    </label>
+
+    <label>
+        Duration
+        <select name="duration_minutes">
+            <option value="90">1 hour 30</option>
+            <option value="105">1 hour 45</option>
+            <option value="120" selected>2 hours</option>
+            <option value="150">2 hours 30</option>
+            <option value="180">3 hours</option>
+        </select>
+    </label>
+
+    <label>
+        Occasion
+        <input name="occasion"
+               placeholder="Birthday, anniversary...">
+    </label>
+
+    <label>
+        Preferred area
+        <select name="preferred_area_id">
+            <option value="">No preference</option>
+            {% for area in areas %}
+                <option value="{{ area.id }}">{{ area.name }}</option>
+            {% endfor %}
+        </select>
+    </label>
+
+    <label class="checkbox-row">
+        <input type="checkbox" name="wants_near_tv">
+        Prefer to sit near a TV
+    </label>
+
+    <fieldset class="full-width">
+        <legend>Manual table selection</legend>
+        <p class="muted">
+            Leave all unticked and the system will automatically choose
+            the best currently available single table.
+        </p>
+
+        <div class="table-checkbox-grid">
+            {% for table in tables %}
+                <label class="table-checkbox">
+                    <input type="checkbox"
+                           name="table_ids"
+                           value="{{ table.id }}">
+                    <strong>T{{ table.number }}</strong>
+                    <span>{{ table.capacity }} seats · {{ table.area.name }}</span>
+                </label>
+            {% endfor %}
+        </div>
+    </fieldset>
+
+    <label class="full-width">
+        Booking notes
+        <textarea name="notes" rows="4"></textarea>
+    </label>
+
+    <div class="full-width">
+        <button class="button"
+                type="submit"
+                {% if not customers or not tables %}disabled{% endif %}>
+            Create booking
+        </button>
+    </div>
+</form>
+{% endblock %}

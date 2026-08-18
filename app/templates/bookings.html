@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Bookings | Pub Booking System{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h1>Bookings</h1>
+        <p>{{ selected_date.strftime("%A %d %B %Y") }}</p>
+    </div>
+
+    <a class="button" href="{{ url_for('main.new_booking') }}">New booking</a>
+</div>
+
+<form class="date-selector" method="get">
+    <label>
+        View date
+        <input type="date"
+               name="date"
+               value="{{ selected_date.isoformat() }}"
+               onchange="this.form.submit()">
+    </label>
+</form>
+
+<div class="card">
+    {% if bookings %}
+        <div class="booking-list">
+            {% for booking in bookings %}
+                <div class="booking-row {% if booking.status == 'Cancelled' %}cancelled{% endif %}">
+                    <strong>{{ booking.booking_time.strftime("%H:%M") }}</strong>
+
+                    <div>
+                        <strong>{{ booking.customer.name }}</strong>
+                        <div class="muted">
+                            {{ booking.party_size }} people ·
+                            {{ booking.duration_minutes }} mins
+                            {% if booking.occasion %}
+                                · {{ booking.occasion }}
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div>
+                        {% for table in booking.tables %}
+                            <span class="badge">T{{ table.number }}</span>
+                        {% endfor %}
+                    </div>
+
+                    <div>
+                        {% if booking.status != "Cancelled" %}
+                            <form method="post"
+                                  action="{{ url_for('main.cancel_booking', booking_id=booking.id) }}"
+                                  onsubmit="return confirm('Cancel this booking?');">
+                                <button class="link-button danger" type="submit">
+                                    Cancel
+                                </button>
+                            </form>
+                        {% else %}
+                            <span class="badge danger-badge">Cancelled</span>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="muted">No bookings on this date.</p>
+    {% endif %}
+</div>
+{% endblock %}

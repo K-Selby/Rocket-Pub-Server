@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Customers | Pub Booking System{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h1>Customers</h1>
+        <p>Search by name or phone number.</p>
+    </div>
+
+    <a class="button" href="{{ url_for('main.new_customer') }}">Add customer</a>
+</div>
+
+<form class="search-bar" method="get">
+    <input type="search"
+           name="q"
+           value="{{ search }}"
+           placeholder="Search name or phone number">
+    <button class="button secondary" type="submit">Search</button>
+</form>
+
+<div class="card">
+    {% if customers %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Phone</th>
+                    <th>Preference</th>
+                    <th>Bookings</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for customer in customers %}
+                    <tr>
+                        <td>{{ customer.name }}</td>
+                        <td>{{ customer.phone }}</td>
+                        <td>
+                            {% if customer.preferred_area %}
+                                {{ customer.preferred_area.name }}
+                            {% endif %}
+                            {% if customer.preferred_table %}
+                                · T{{ customer.preferred_table.number }}
+                            {% endif %}
+                            {% if customer.prefers_near_tv %}
+                                · Near TV
+                            {% endif %}
+                        </td>
+                        <td>{{ customer.bookings|length }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="muted">No matching customers.</p>
+    {% endif %}
+</div>
+{% endblock %}

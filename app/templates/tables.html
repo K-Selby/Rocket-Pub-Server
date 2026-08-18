@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Tables | Pub Booking System{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h1>Tables</h1>
+        <p>Configure capacities, areas and table pairings.</p>
+    </div>
+
+    <a class="button" href="{{ url_for('main.new_table') }}">Add table</a>
+</div>
+
+<div class="card">
+    <h2>Current tables</h2>
+
+    {% if tables %}
+        <div class="table-card-grid">
+            {% for table in tables %}
+                <div class="table-card">
+                    <div class="table-number">T{{ table.number }}</div>
+                    <strong>{{ table.capacity }} seats</strong>
+                    <span>{{ table.area.name }}</span>
+
+                    <div class="feature-list">
+                        {% if table.near_tv %}<span class="badge">Near TV</span>{% endif %}
+                        {% if table.accessible %}<span class="badge">Accessible</span>{% endif %}
+                        {% if table.window_seat %}<span class="badge">Window</span>{% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="muted">Add your first physical table.</p>
+    {% endif %}
+</div>
+
+{% if tables|length >= 2 %}
+<div class="card">
+    <h2>Pair tables</h2>
+    <p class="muted">
+        Use this for tables that can physically be pushed together.
+    </p>
+
+    <form method="post"
+          action="{{ url_for('main.pair_tables') }}"
+          class="inline-form">
+
+        <select name="table_a_id" required>
+            <option value="">First table</option>
+            {% for table in tables %}
+                <option value="{{ table.id }}">Table {{ table.number }}</option>
+            {% endfor %}
+        </select>
+
+        <span>+</span>
+
+        <select name="table_b_id" required>
+            <option value="">Second table</option>
+            {% for table in tables %}
+                <option value="{{ table.id }}">Table {{ table.number }}</option>
+            {% endfor %}
+        </select>
+
+        <button class="button secondary" type="submit">Create pairing</button>
+    </form>
+
+    {% if pairings %}
+        <div class="pairing-list">
+            {% for pairing in pairings %}
+                <span class="badge">
+                    T{{ pairing.table_a.number }} + T{{ pairing.table_b.number }}
+                    = {{ pairing.table_a.capacity + pairing.table_b.capacity }} seats
+                </span>
+            {% endfor %}
+        </div>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}
