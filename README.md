@@ -1,4 +1,4 @@
-# Rocket Pub Server - v5.8.1 Centred Brand Panel
+# Rocket Pub Server - v5.8.3 Active Navigation
 
 ## Added in v4
 
@@ -393,3 +393,14 @@ bookings remain white/upcoming.
 - Added a subtle glass effect, green-tinted border and shadow to separate the
   operational interface from the branded wallpaper.
 - Responsive sizing keeps the same treatment on laptops, tablets and phones.
+
+
+## v5.8.3 active navigation
+
+- The current section is now highlighted in the top navigation bar.
+- Related screens inherit the same section highlight, so:
+  - New/Edit Booking highlights Bookings
+  - New/Edit Large Party highlights Large Parties
+  - Customer edit highlights Customers
+  - Table create/edit highlights Tables
+- The active state uses the light sage Rocket Pub branding rather than a generic colour.

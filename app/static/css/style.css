@@ -2565,3 +2565,17 @@ main.container {
         padding: 4px;
     }
 }
+
+
+/* v5.8.3 active navigation state */
+.topbar nav a.active {
+    background: rgba(210, 234, 198, 0.20);
+    color: #e4f3dc;
+    box-shadow:
+        inset 0 0 0 1px rgba(205, 232, 192, 0.28),
+        0 2px 7px rgba(0, 0, 0, 0.08);
+}
+
+.topbar nav a.active:hover {
+    background: rgba(210, 234, 198, 0.24);
+}

@@ -1,4 +1,4 @@
-#!/Users/kieran/Documents/pub-booking-system/.venv/bin/python3.12
+#!/Users/kieran/Documents/Rocket-Pub-Server/.venv/bin/python3.12
 # -*- coding: utf-8 -*-
 import re
 import sys
