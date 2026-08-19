@@ -88,6 +88,7 @@ def ensure_starter_schema_updates():
         "is_eating_food": "BOOLEAN DEFAULT 1",
         "high_chairs_required": "INTEGER DEFAULT 0",
         "repeat_booking_id": "INTEGER",
+        "completed_at": "DATETIME",
     }
 
     for name, sql_type in booking_additions.items():

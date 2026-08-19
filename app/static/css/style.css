@@ -1930,3 +1930,115 @@ textarea {
         grid-template-columns: 1fr;
     }
 }
+
+
+/* v5.6 live dashboard booking states */
+.dashboard-booking-row {
+    border: 1px solid #deded8;
+    border-radius: 10px;
+    margin: 7px 0;
+    padding: 14px 15px;
+    transition:
+        background 180ms ease,
+        border-color 180ms ease,
+        padding 180ms ease,
+        min-height 180ms ease,
+        opacity 180ms ease;
+}
+
+.dashboard-booking-time {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.dashboard-booking-state-label {
+    font-size: 11px;
+    font-weight: 750;
+    color: var(--muted);
+}
+
+.dashboard-booking-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.booking-finished-button {
+    padding: 7px 10px;
+    font-size: 12px;
+}
+
+/* Before the customer arrives. */
+.dashboard-booking-row.booking-state-upcoming {
+    background: white;
+    border-color: #deded8;
+}
+
+/* The booking's scheduled 2h30m occupancy window. */
+.dashboard-booking-row.booking-state-active {
+    background: #fff3c9;
+    border-color: #d7b653;
+    box-shadow: 0 2px 8px rgba(125, 99, 24, 0.08);
+}
+
+.dashboard-booking-row.booking-state-active
+.dashboard-booking-state-label {
+    color: #795e09;
+}
+
+/*
+ * At scheduled end time, or after staff press "They've left", the booking
+ * becomes a compact green history row.
+ */
+.dashboard-booking-row.booking-state-finished {
+    background: #e8f4e9;
+    border-color: #8db494;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    min-height: 48px;
+    grid-template-columns: 80px minmax(160px, 1fr) auto auto;
+}
+
+.dashboard-booking-row.booking-state-finished
+.dashboard-booking-full-details {
+    display: none;
+}
+
+.dashboard-booking-row.booking-state-finished
+.dashboard-booking-state-label {
+    color: #4e7656;
+}
+
+.dashboard-booking-row.booking-state-finished
+.dashboard-booking-main > strong {
+    font-size: 13px;
+}
+
+.dashboard-booking-row.booking-state-finished
+.badge {
+    padding: 3px 7px;
+    font-size: 11px;
+}
+
+.dashboard-booking-row.booking-state-finished
+.dashboard-booking-edit {
+    font-size: 12px;
+}
+
+.finish-booking-form[hidden] {
+    display: none !important;
+}
+
+@media (max-width: 760px) {
+    .dashboard-booking-row,
+    .dashboard-booking-row.booking-state-finished {
+        grid-template-columns: 70px minmax(0, 1fr);
+        gap: 9px 12px;
+    }
+
+    .dashboard-booking-tables,
+    .dashboard-booking-actions {
+        grid-column: 2;
+    }
+}

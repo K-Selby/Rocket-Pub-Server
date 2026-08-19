@@ -1745,6 +1745,108 @@ function setupTableLayoutEditor() {
 
 
 
+
+function setupDashboardBookingStates() {
+    const stateRoot = document.getElementById("dashboard-booking-state");
+    const rows = Array.from(
+        document.querySelectorAll(".dashboard-booking-row")
+    );
+
+    if (!stateRoot || !rows.length) return;
+
+    const dashboardDate = stateRoot.dataset.dashboardDate;
+
+    function localDateString(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+    }
+
+    function bookingTimes(row) {
+        const [hours, minutes] = row.dataset.startTime
+            .split(":")
+            .map(Number);
+
+        const start = new Date(`${row.dataset.bookingDate}T00:00:00`);
+        start.setHours(hours, minutes, 0, 0);
+
+        const end = new Date(
+            start.getTime() +
+            Number(row.dataset.duration || 150) * 60 * 1000
+        );
+
+        return {start, end};
+    }
+
+    function setState(row, state) {
+        row.classList.remove(
+            "booking-state-upcoming",
+            "booking-state-active",
+            "booking-state-finished"
+        );
+
+        row.classList.add(`booking-state-${state}`);
+
+        const label = row.querySelector(".dashboard-booking-state-label");
+        const finishForm = row.querySelector(".finish-booking-form");
+
+        if (state === "upcoming") {
+            if (label) label.textContent = "Upcoming";
+            if (finishForm) finishForm.hidden = true;
+        } else if (state === "active") {
+            if (label) label.textContent = "Here now";
+            if (finishForm) finishForm.hidden = false;
+        } else {
+            if (label) label.textContent =
+                row.dataset.completed === "1" ? "Left" : "Finished";
+            if (finishForm) finishForm.hidden = true;
+        }
+    }
+
+    function updateStates() {
+        const now = new Date();
+        const today = localDateString(now);
+
+        rows.forEach(row => {
+            if (row.dataset.completed === "1") {
+                setState(row, "finished");
+                return;
+            }
+
+            const rowDate = row.dataset.bookingDate;
+            const {start, end} = bookingTimes(row);
+
+            if (rowDate < today) {
+                setState(row, "finished");
+                return;
+            }
+
+            if (rowDate > today) {
+                setState(row, "upcoming");
+                return;
+            }
+
+            if (now < start) {
+                setState(row, "upcoming");
+            } else if (now < end) {
+                setState(row, "active");
+            } else {
+                setState(row, "finished");
+            }
+        });
+    }
+
+    updateStates();
+
+    // Keep today's dashboard changing automatically as bookings begin/end.
+    if (dashboardDate === localDateString(new Date())) {
+        window.setInterval(updateStates, 30000);
+    }
+}
+
+
+
 function setupDashboardFloorMap() {
     const stage = document.getElementById("dashboard-floor-stage");
     const shell = document.getElementById("dashboard-floor-shell");
@@ -1952,4 +2054,5 @@ document.addEventListener("DOMContentLoaded", () => {
     setupNormalTableAvailability();
     setupTableLayoutEditor();
     setupDashboardFloorMap();
+    setupDashboardBookingStates();
 });

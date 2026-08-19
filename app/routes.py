@@ -230,7 +230,7 @@ def table_is_available(
         .where(
             BookingTable.table_id == table_id,
             Booking.booking_date == date_value,
-            Booking.status != "Cancelled",
+            Booking.status.notin_(["Cancelled", "Completed"]),
         )
     )
 
@@ -792,6 +792,7 @@ def dashboard():
             "start_time": booking.booking_time.strftime("%H:%M"),
             "end_time": end.strftime("%H:%M"),
             "is_eating_food": bool(booking.is_eating_food),
+            "completed": booking.status == "Completed",
         }
 
         for table in booking.tables:
@@ -871,6 +872,43 @@ def dashboard():
         dashboard_large_parties=dashboard_large_parties,
         dashboard_large_party_tables=dashboard_large_party_tables,
         dashboard_large_party_area_ids=list(dashboard_large_party_area_ids),
+    )
+
+
+
+@main.route("/bookings/<int:booking_id>/finish", methods=["POST"])
+def finish_booking(booking_id):
+    """
+    Mark a booking as finished/left early.
+
+    This immediately frees its assigned table(s) for subsequent allocation and
+    leaves the booking visible on the dashboard as completed history.
+    """
+    booking = db.get_or_404(Booking, booking_id)
+
+    if booking.status == "Cancelled":
+        flash("A cancelled booking cannot be marked as finished.", "error")
+        return redirect(
+            url_for(
+                "main.dashboard",
+                date=booking.booking_date.isoformat(),
+            )
+        )
+
+    booking.status = "Completed"
+    booking.completed_at = datetime.now()
+    db.session.commit()
+
+    flash(
+        f"{booking.customer.name}'s booking has been marked as finished.",
+        "success",
+    )
+
+    return redirect(
+        url_for(
+            "main.dashboard",
+            date=booking.booking_date.isoformat(),
+        )
     )
 
 

@@ -3,6 +3,9 @@
 {% block title %}Dashboard | Pub Booking System{% endblock %}
 
 {% block content %}
+<div id="dashboard-booking-state"
+     data-dashboard-date="{{ selected_date.isoformat() }}"></div>
+
 <div class="page-heading">
     <div>
         <h1>Dashboard</h1>
@@ -208,30 +211,64 @@
     {% if bookings %}
         <div class="booking-list">
             {% for booking in bookings %}
-                <div class="booking-row">
-                    <strong>{{ booking.booking_time.strftime("%H:%M") }}</strong>
+                {% set booking_end_minutes = booking.duration_minutes %}
+                <div class="booking-row dashboard-booking-row"
+                     data-booking-id="{{ booking.id }}"
+                     data-booking-date="{{ booking.booking_date.isoformat() }}"
+                     data-start-time="{{ booking.booking_time.strftime('%H:%M') }}"
+                     data-duration="{{ booking.duration_minutes }}"
+                     data-completed="{{ '1' if booking.status == 'Completed' else '0' }}">
 
-                    <div>
-                        <strong>{{ booking.customer.name }}</strong>
-                        <div class="muted">
-                            {{ booking.party_size }} people
-                            {% if booking.number_of_children %}
-                                · {{ booking.number_of_children }} under 13
+                    <div class="dashboard-booking-time">
+                        <strong>{{ booking.booking_time.strftime("%H:%M") }}</strong>
+                        <span class="dashboard-booking-state-label">
+                            {% if booking.status == "Completed" %}
+                                Finished
+                            {% else %}
+                                Upcoming
                             {% endif %}
-                            · {% if booking.is_eating_food %}Eating{% else %}Drinks only{% endif %}
+                        </span>
+                    </div>
+
+                    <div class="dashboard-booking-main">
+                        <strong>{{ booking.customer.name }}</strong>
+
+                        <div class="dashboard-booking-full-details">
+                            <div class="muted">
+                                {{ booking.party_size }} people
+                                {% if booking.number_of_children %}
+                                    · {{ booking.number_of_children }} under 13
+                                {% endif %}
+                                · {% if booking.is_eating_food %}Eating{% else %}Drinks only{% endif %}
+                                · {{ booking.duration_minutes // 60 }}h
+                                {% if booking.duration_minutes % 60 %}
+                                    {{ booking.duration_minutes % 60 }}m
+                                {% endif %}
+                            </div>
                         </div>
                     </div>
 
-                    <div>
+                    <div class="dashboard-booking-tables">
                         {% for table in booking.tables %}
                             <span class="badge">T{{ table.number }}</span>
                         {% endfor %}
                     </div>
 
-                    <a class="small-link"
-                       href="{{ url_for('main.edit_booking', booking_id=booking.id) }}">
-                        Edit
-                    </a>
+                    <div class="dashboard-booking-actions">
+                        <form method="post"
+                              class="finish-booking-form"
+                              action="{{ url_for('main.finish_booking', booking_id=booking.id) }}">
+                            <button class="button booking-finished-button"
+                                    type="submit">
+                                They've left
+                            </button>
+                        </form>
+
+                        <a class="small-link dashboard-booking-edit"
+                           href="{{ url_for('main.edit_booking', booking_id=booking.id) }}">
+                            Edit
+                        </a>
+                    </div>
                 </div>
             {% endfor %}
         </div>

@@ -1,4 +1,4 @@
-# Pub Booking System - v5.5 Dashboard + Booking Duration Refinements
+# Pub Booking System - v5.6 Live Dashboard Booking States
 
 ## Added in v4
 
@@ -329,3 +329,29 @@ inside the dashboard content block.
   on the dashboard map and shows a separate purple LP badge. This means a table
   with normal bookings earlier in the day still visibly shows that count before
   the later large-party reservation.
+
+
+## v5.6 live dashboard booking states
+
+Dashboard normal-booking rows now change automatically through three visual
+states:
+
+- White / Upcoming:
+  - before the booking's start time
+  - full booking details remain visible
+- Yellow / Here now:
+  - from booking start until scheduled end
+  - shows a "They've left" button
+- Green / Finished:
+  - automatically after the scheduled end time
+  - or immediately when staff press "They've left"
+  - row collapses into a smaller/minimised history rectangle
+
+The dashboard checks today's rows every 30 seconds so a booking can move from
+white to yellow and yellow to green without refreshing the page.
+
+Pressing "They've left" persists the booking as Completed and records the
+completion time. A manually completed booking stops blocking its table(s)
+immediately, allowing those tables to be allocated to a later booking.
+Past-day bookings display as completed/minimised automatically while future-day
+bookings remain white/upcoming.

@@ -230,6 +230,12 @@ class Booking(db.Model):
 
     notes = db.Column(db.Text)
     status = db.Column(db.String(30), nullable=False, default="Booked")
+
+    # Set when staff explicitly mark the booking as finished/left early.
+    # Bookings also appear completed visually once their scheduled end time
+    # passes, even when this remains blank.
+    completed_at = db.Column(db.DateTime)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     customer = db.relationship("Customer", back_populates="bookings")
