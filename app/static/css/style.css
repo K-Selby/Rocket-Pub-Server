@@ -4741,3 +4741,99 @@ main.container {
     height: 39px !important;
     min-height: 39px !important;
 }
+
+
+/* v9.3.7 roster and user permissions cleanup */
+
+.rota-add-staff-row th,
+.rota-add-staff-row td {
+    background: #f3f6f1 !important;
+}
+
+.rota-add-person {
+    border-style: solid;
+    padding: 6px 10px;
+}
+
+.user-edit-menu {
+    position: relative;
+}
+
+.user-edit-menu > summary {
+    cursor: pointer;
+    list-style: none;
+}
+
+.user-edit-menu > summary::-webkit-details-marker {
+    display: none;
+}
+
+.user-edit-panel {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 7px);
+    z-index: 500;
+    width: 310px;
+    padding: 13px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: white;
+    box-shadow: 0 12px 30px rgba(0,0,0,.17);
+}
+
+.user-edit-form {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: end;
+    margin-bottom: 10px !important;
+}
+
+.user-edit-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-size: 12px;
+}
+
+.user-edit-form input,
+.user-edit-form select {
+    padding: 7px 8px;
+    font-size: 12px;
+}
+
+.user-edit-form .button,
+.user-edit-panel > form > .button {
+    padding: 8px 10px;
+    font-size: 12px;
+}
+
+.user-edit-email {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+
+.user-edit-email-status {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-bottom: 8px;
+    font-size: 12px;
+}
+
+.user-row {
+    overflow: visible;
+}
+
+@media (max-width: 720px) {
+    .user-edit-panel {
+        position: fixed;
+        left: 16px;
+        right: 16px;
+        top: 120px;
+        width: auto;
+        max-height: calc(100vh - 150px);
+        overflow-y: auto;
+    }
+}

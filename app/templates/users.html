@@ -96,112 +96,148 @@
                         or (current_user.role == 'manager' and user.role == 'staff')
                     %}
 
-                    {% if current_user.is_admin and user.id != current_user.id and user.role != 'admin' %}
-                        <form method="post"
-                              action="{{ url_for('main.change_user_role', user_id=user.id) }}"
-                              class="inline-role-form">
-                            <select name="role" onchange="this.form.submit()">
-                                <option value="staff" {% if user.role == 'staff' %}selected{% endif %}>Staff</option>
-                                <option value="manager" {% if user.role == 'manager' %}selected{% endif %}>Manager</option>
-                            </select>
-                        </form>
-                    {% endif %}
-
-                    {% if current_user.is_admin %}
-                        <div class="admin-email-controls">
-                            {% if user.email_verified and user.email %}
-                                <form method="post"
-                                      action="{{ url_for('main.reset_user_email', user_id=user.id) }}"
-                                      onsubmit="return confirm('Reset the verified email for {{ user.username }}?');">
-                                    <button class="link-button danger"
-                                            type="submit">
-                                        Reset email
-                                    </button>
-                                </form>
-
-                            {% elif user.pending_email %}
-                                <form method="post"
-                                      action="{{ url_for('main.admin_verify_user_email', user_id=user.id) }}"
-                                      class="inline-verification-form">
-                                    <input type="text"
-                                           name="code"
-                                           inputmode="numeric"
-                                           maxlength="6"
-                                           pattern="[0-9]{6}"
-                                           placeholder="6-digit code"
-                                           required>
-
-                                    <button class="link-button"
-                                            type="submit">
-                                        Verify email
-                                    </button>
-                                </form>
-
-                                <form method="post"
-                                      action="{{ url_for('main.admin_resend_user_email_code', user_id=user.id) }}">
-                                    <button class="link-button"
-                                            type="submit">
-                                        Resend code
-                                    </button>
-                                </form>
-
-                                <form method="post"
-                                      action="{{ url_for('main.reset_user_email', user_id=user.id) }}"
-                                      onsubmit="return confirm('Clear the pending email for {{ user.username }}?');">
-                                    <button class="link-button danger"
-                                            type="submit">
-                                        Clear email
-                                    </button>
-                                </form>
-
-                            {% else %}
-                                <form method="post"
-                                      action="{{ url_for('main.set_user_email', user_id=user.id) }}"
-                                      class="inline-user-email-form">
-                                    <input type="email"
-                                           name="email"
-                                           placeholder="Set email"
-                                           required>
-                                    <button class="link-button"
-                                            type="submit">
-                                        Send code
-                                    </button>
-                                </form>
-                            {% endif %}
-                        </div>
-                    {% endif %}
-
                     {% if can_manage and user.id != current_user.id %}
-                        <form method="post"
-                              action="{{ url_for('main.rename_user', user_id=user.id) }}"
-                              class="inline-rename-user-form">
-                            <input type="text"
-                                   name="username"
-                                   value="{{ user.username }}"
-                                   aria-label="Edit name for {{ user.username }}"
-                                   required>
-                            <button class="link-button"
-                                    type="submit">
-                                Save name
-                            </button>
-                        </form>
+                        <details class="user-edit-menu">
+                            <summary class="small-link">Edit</summary>
 
-                        <form method="post"
-                              action="{{ url_for('main.reset_user_password', user_id=user.id) }}"
-                              onsubmit="return confirm('Reset {{ user.username }} to the temporary password Password?');">
-                            <button class="link-button" type="submit">
-                                Reset password
-                            </button>
-                        </form>
+                            <div class="user-edit-panel">
+                                <form method="post"
+                                      action="{{ url_for('main.rename_user', user_id=user.id) }}"
+                                      class="user-edit-form">
+                                    <label>
+                                        Name
+                                        <input type="text"
+                                               name="username"
+                                               value="{{ user.username }}"
+                                               required>
+                                    </label>
 
-                        <form method="post"
-                              action="{{ url_for('main.toggle_user', user_id=user.id) }}"
-                              onsubmit="return confirm('{{ 'Disable' if user.active else 'Enable' }} {{ user.username }}?');">
-                            <button class="link-button {% if user.active %}danger{% endif %}"
-                                    type="submit">
-                                {{ "Disable" if user.active else "Enable" }}
-                            </button>
-                        </form>
+                                    <button class="button secondary"
+                                            type="submit">
+                                        Save name
+                                    </button>
+                                </form>
+
+                                {% if current_user.is_admin and user.role != 'admin' %}
+                                    <form method="post"
+                                          action="{{ url_for('main.change_user_role', user_id=user.id) }}"
+                                          class="user-edit-form">
+                                        <label>
+                                            Role
+                                            <select name="role">
+                                                <option value="staff"
+                                                        {% if user.role == 'staff' %}selected{% endif %}>
+                                                    Staff
+                                                </option>
+                                                <option value="manager"
+                                                        {% if user.role == 'manager' %}selected{% endif %}>
+                                                    Manager
+                                                </option>
+                                            </select>
+                                        </label>
+
+                                        <button class="button secondary"
+                                                type="submit">
+                                            Save role
+                                        </button>
+                                    </form>
+                                {% endif %}
+
+                                <form method="post"
+                                      action="{{ url_for('main.reset_user_password', user_id=user.id) }}"
+                                      onsubmit="return confirm('Reset {{ user.username }} to the temporary password Password?');">
+                                    <button class="button secondary"
+                                            type="submit">
+                                        Reset password
+                                    </button>
+                                </form>
+
+                                <form method="post"
+                                      action="{{ url_for('main.toggle_user', user_id=user.id) }}"
+                                      onsubmit="return confirm('{{ 'Disable' if user.active else 'Enable' }} {{ user.username }}?');">
+                                    <button class="link-button {% if user.active %}danger{% endif %}"
+                                            type="submit">
+                                        {{ "Disable account" if user.active else "Enable account" }}
+                                    </button>
+                                </form>
+
+                                {% if current_user.is_admin %}
+                                    <div class="admin-email-controls user-edit-email">
+                                        {% if user.email_verified and user.email %}
+                                            <div class="user-edit-email-status">
+                                                <strong>Email</strong>
+                                                <span>{{ user.email }}</span>
+                                            </div>
+
+                                            <form method="post"
+                                                  action="{{ url_for('main.reset_user_email', user_id=user.id) }}"
+                                                  onsubmit="return confirm('Reset the verified email for {{ user.username }}?');">
+                                                <button class="link-button danger"
+                                                        type="submit">
+                                                    Reset email
+                                                </button>
+                                            </form>
+
+                                        {% elif user.pending_email %}
+                                            <div class="user-edit-email-status">
+                                                <strong>Pending email</strong>
+                                                <span>{{ user.pending_email }}</span>
+                                            </div>
+
+                                            <form method="post"
+                                                  action="{{ url_for('main.admin_verify_user_email', user_id=user.id) }}"
+                                                  class="inline-verification-form">
+                                                <input type="text"
+                                                       name="code"
+                                                       inputmode="numeric"
+                                                       maxlength="6"
+                                                       pattern="[0-9]{6}"
+                                                       placeholder="6-digit code"
+                                                       required>
+
+                                                <button class="link-button"
+                                                        type="submit">
+                                                    Verify
+                                                </button>
+                                            </form>
+
+                                            <form method="post"
+                                                  action="{{ url_for('main.admin_resend_user_email_code', user_id=user.id) }}">
+                                                <button class="link-button"
+                                                        type="submit">
+                                                    Resend code
+                                                </button>
+                                            </form>
+
+                                            <form method="post"
+                                                  action="{{ url_for('main.reset_user_email', user_id=user.id) }}">
+                                                <button class="link-button danger"
+                                                        type="submit">
+                                                    Clear email
+                                                </button>
+                                            </form>
+
+                                        {% else %}
+                                            <form method="post"
+                                                  action="{{ url_for('main.set_user_email', user_id=user.id) }}"
+                                                  class="user-edit-form">
+                                                <label>
+                                                    Email
+                                                    <input type="email"
+                                                           name="email"
+                                                           required>
+                                                </label>
+
+                                                <button class="button secondary"
+                                                        type="submit">
+                                                    Send verification code
+                                                </button>
+                                            </form>
+                                        {% endif %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </details>
                     {% endif %}
                 </div>
             </div>

@@ -811,3 +811,23 @@ Manager rota tools are accessible from the Rota screen.
   be earlier than `From`, but the user can extend it to any later date.
 - Managers can rename staff accounts from the Users screen; administrators can
   rename manager accounts as well.
+
+
+## v9.3.7 roster, diary and users cleanup
+
+- Archived rota staff are handled only from the bottom row of the Rota Builder.
+- Any archived current staff member appears there; Matt remains excluded because
+  he no longer works at the pub.
+- Archiving no longer opens a separate Rota Staff page. It keeps the manager on
+  the same draft and moves the name to the archived row.
+- Restoring a staff member makes them active immediately and they remain on
+  current/future rota drafts until explicitly archived again.
+- Rota profiles automatically link to matching user accounts by name where an
+  older profile was not already linked.
+- Staff Diary entries for another person can now only be created by Admin.
+  Staff and Managers can submit only for their own linked rota profile.
+- Managers do not get email-setting controls for user accounts.
+- User Name, Role and Reset Password actions are now behind a single Edit
+  control. Role and email remain Admin-only.
+- Removed the `F = Finish (actual finishing time varies)` footer from saved rota
+  images.

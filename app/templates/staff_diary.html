@@ -21,7 +21,7 @@
     <h2>Add diary entry</h2>
 
     <form method="post" class="diary-entry-form diary-entry-form-clean">
-        {% if current_user.is_manager %}
+        {% if current_user.is_admin %}
             <label>
                 Staff
                 <select name="staff_id">

@@ -2079,7 +2079,11 @@ def new_user():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         role = request.form.get("role", "staff").strip()
-        email = normalise_email(request.form.get("email"))
+        email = (
+            normalise_email(request.form.get("email"))
+            if current_user().is_admin
+            else None
+        )
 
         if not username:
             flash("Enter a username.", "error")
@@ -2288,11 +2292,29 @@ def current_staff_profile():
     if not user:
         return None
 
-    return db.session.scalar(
+    profile = db.session.scalar(
         db.select(StaffProfile).where(
             StaffProfile.user_id == user.id
         )
     )
+
+    if profile:
+        return profile
+
+    # Every rota member now has a login. Older rota profiles may pre-date
+    # those accounts, so link them automatically by matching the name.
+    profile = db.session.scalar(
+        db.select(StaffProfile).where(
+            db.func.lower(StaffProfile.display_name)
+            == user.username.lower()
+        )
+    )
+
+    if profile and profile.user_id is None:
+        profile.user_id = user.id
+        db.session.commit()
+
+    return profile
 
 
 def time_label(value):
@@ -2835,9 +2857,7 @@ def rota_edit(rota_id):
         db.select(StaffProfile)
         .where(
             StaffProfile.active.is_(False),
-            db.func.lower(StaffProfile.display_name).in_(
-                {"hannah", "charl", "leoni", "erin"}
-            ),
+            db.func.lower(StaffProfile.display_name) != "matt",
         )
         .order_by(StaffProfile.sort_order, StaffProfile.display_name)
     ).all()
@@ -3126,7 +3146,7 @@ def rota_image(rota_id):
     width = 2200
     row_h = 92
     header_h = 220
-    footer_h = 120
+    footer_h = 30
     height = header_h + max(len(profiles), 1) * row_h + footer_h
 
     image = Image.new("RGB", (width, height), "white")
@@ -3210,13 +3230,6 @@ def rota_image(rota_id):
 
         y += row_h
 
-    draw.text(
-        (45, height-75),
-        "F = Finish (actual finishing time varies)",
-        fill=(90, 105, 96),
-        font=small_font,
-    )
-
     output = BytesIO()
     image.save(output, format="PNG", optimize=True)
     output.seek(0)
@@ -3237,22 +3250,7 @@ def rota_image(rota_id):
 
 @main.route("/rota/staff")
 def rota_profiles():
-    profiles = db.session.scalars(
-        db.select(StaffProfile)
-        .order_by(StaffProfile.active.desc(), StaffProfile.display_name)
-    ).all()
-
-    users = db.session.scalars(
-        db.select(AppUser)
-        .where(AppUser.active.is_(True))
-        .order_by(AppUser.username)
-    ).all()
-
-    return render_template(
-        "rota_profiles.html",
-        profiles=profiles,
-        users=users,
-    )
+    return redirect(url_for("main.rota_home"))
 
 
 @main.route("/rota/staff/new", methods=["GET", "POST"])
@@ -3339,16 +3337,36 @@ def rota_profile_archive(profile_id):
     db.session.commit()
 
     flash(
-        f"{profile.display_name} archived from future rotas.",
+        f"{profile.display_name} moved to the archived row.",
         "success",
     )
-    return redirect(url_for("main.rota_profiles"))
+
+    rota_id_text = request.form.get("rota_id", "").strip()
+
+    if rota_id_text.isdigit():
+        return redirect(
+            url_for("main.rota_edit", rota_id=int(rota_id_text))
+        )
+
+    return redirect(url_for("main.rota_home"))
 
 
 @main.route("/rota/staff/<int:profile_id>/restore", methods=["POST"])
 def rota_profile_restore(profile_id):
     profile = db.get_or_404(StaffProfile, profile_id)
     profile.active = True
+
+    # Link the rota profile to its existing login if needed.
+    if profile.user_id is None:
+        matching_user = db.session.scalar(
+            db.select(AppUser).where(
+                db.func.lower(AppUser.username)
+                == profile.display_name.lower()
+            )
+        )
+        if matching_user:
+            profile.user_id = matching_user.id
+
     db.session.commit()
 
     flash(
@@ -3363,7 +3381,7 @@ def rota_profile_restore(profile_id):
             url_for("main.rota_edit", rota_id=int(rota_id_text))
         )
 
-    return redirect(url_for("main.rota_profiles"))
+    return redirect(url_for("main.rota_home"))
 
 
 # -------------------------
@@ -3389,18 +3407,24 @@ def staff_diary():
     profile = current_staff_profile()
 
     if request.method == "POST":
-        if profile is None and not current_user().is_manager:
+        if profile is None and not current_user().is_admin:
             flash(
                 "Your login is not linked to a rota staff profile yet.",
                 "error",
             )
             return redirect(request.url)
 
-        target_profile_id = (
-            int(request.form["staff_id"])
-            if current_user().is_manager and request.form.get("staff_id")
-            else profile.id
-        )
+        if current_user().is_admin and request.form.get("staff_id"):
+            target_profile_id = int(request.form["staff_id"])
+        else:
+            if profile is None:
+                flash(
+                    "Your login is not linked to a rota profile.",
+                    "error",
+                )
+                return redirect(request.url)
+
+            target_profile_id = profile.id
 
         entry_type = request.form.get(
             "entry_type",
