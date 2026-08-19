@@ -1,13 +1,22 @@
 :root {
-    --background: #f5f5f2;
+    --background: #f0f5ee;
     --surface: #ffffff;
-    --text: #232323;
-    --muted: #6f6f6f;
-    --border: #ddddda;
-    --accent: #2f5d50;
-    --accent-dark: #23463c;
+    --surface-soft: #f7faf5;
+    --text: #193025;
+    --muted: #6a786f;
+    --border: #d4ded5;
+
+    --accent: #4d755b;
+    --accent-dark: #345640;
+    --accent-soft: #dce9da;
+    --accent-pale: #edf5ea;
+
+    --brand-deep: #0e3528;
+    --brand-mid: #285842;
+    --brand-light: #b8d9a7;
+
     --danger: #a83232;
-    --success-bg: #e8f5ea;
+    --success-bg: #e5f3e4;
     --error-bg: #fdeaea;
     --warning-bg: #fff3cd;
     --warning-border: #e2c45f;
@@ -25,36 +34,91 @@ body {
 }
 
 .topbar {
-    background: #1f2523;
+    background:
+        linear-gradient(
+            110deg,
+            var(--brand-deep) 0%,
+            #164936 54%,
+            #2d6047 100%
+        );
     color: white;
-    padding: 0 24px;
-    min-height: 64px;
+    padding: 10px 24px;
+    min-height: 82px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 24px;
+    border-bottom: 3px solid rgba(184, 217, 167, 0.72);
+    box-shadow: 0 3px 16px rgba(12, 54, 39, 0.16);
 }
 
 .brand {
-    font-weight: 700;
-    font-size: 18px;
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    min-width: 260px;
+    padding: 0 !important;
+    color: white;
+    text-decoration: none;
+}
+
+.brand-logo-frame {
+    width: 62px;
+    height: 62px;
+    flex: 0 0 62px;
+    overflow: hidden;
+    border-radius: 12px;
+    border: 1px solid rgba(220, 241, 208, 0.35);
+    background: #0b3024;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
+}
+
+.brand-logo-frame img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+}
+
+.brand-copy {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.08;
+}
+
+.brand-copy strong {
+    font-size: 19px;
+    letter-spacing: 0.01em;
+}
+
+.brand-copy small {
+    margin-top: 5px;
+    color: #cde3c2;
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: 0.055em;
+    text-transform: uppercase;
 }
 
 .topbar nav {
     display: flex;
-    gap: 8px;
+    gap: 5px;
     flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
-.topbar a {
-    color: white;
+.topbar nav a {
+    color: #f5fbf2;
     text-decoration: none;
-    padding: 9px 12px;
-    border-radius: 7px;
+    padding: 9px 11px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
 }
 
-.topbar a:hover {
-    background: rgba(255, 255, 255, 0.12);
+.topbar nav a:hover {
+    background: rgba(205, 230, 193, 0.15);
+    color: #def0d5;
 }
 
 .container {
@@ -2115,5 +2179,357 @@ textarea {
     .archive-row {
         grid-template-columns: 1fr;
         gap: 8px;
+    }
+}
+
+
+/* v5.8 Rocket Pub Server brand theme */
+:root {
+    --background: #f1f5ef;
+    --surface: #ffffff;
+    --text: #18231d;
+    --muted: #667069;
+    --border: #d9e2d6;
+    --accent: #496d50;
+    --accent-dark: #294c36;
+    --accent-light: #d9e9cf;
+    --rocket-deep: #103b28;
+    --rocket-mid: #496d50;
+    --rocket-light: #c9dfa9;
+}
+
+body {
+    background:
+        linear-gradient(rgba(244, 248, 242, 0.94), rgba(244, 248, 242, 0.94)),
+        url("../images/rocket-pub-wallpaper.jpg") center / cover fixed;
+}
+
+.topbar {
+    min-height: 76px;
+    background:
+        linear-gradient(90deg, rgba(12, 50, 32, 0.98), rgba(24, 70, 43, 0.97));
+    border-bottom: 3px solid var(--rocket-light);
+    box-shadow: 0 5px 18px rgba(15, 50, 32, 0.16);
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    color: white;
+    text-decoration: none;
+    min-width: max-content;
+}
+
+.brand img {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 50%;
+    border: 2px solid rgba(201, 223, 169, 0.8);
+    box-shadow: 0 2px 8px rgba(0,0,0,.18);
+}
+
+.brand span {
+    display: flex;
+    flex-direction: column;
+    line-height: 1;
+}
+
+.brand strong {
+    font-size: 18px;
+    letter-spacing: .3px;
+}
+
+.brand small {
+    margin-top: 5px;
+    color: var(--rocket-light);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 2.1px;
+    text-transform: uppercase;
+}
+
+.topbar a {
+    color: #f6faf3;
+}
+
+.topbar nav a:hover {
+    background: rgba(201, 223, 169, 0.15);
+}
+
+.container {
+    width: min(1240px, calc(100% - 32px));
+}
+
+.card,
+.form-section,
+.stat-card {
+    border-color: var(--border);
+    box-shadow: 0 3px 12px rgba(25, 58, 36, 0.045);
+}
+
+h1 {
+    color: var(--rocket-deep);
+    letter-spacing: -0.4px;
+}
+
+h2 {
+    color: #203e2b;
+}
+
+.button {
+    background: var(--accent);
+}
+
+.button:hover {
+    background: var(--accent-dark);
+}
+
+.button.secondary {
+    background: #6c796e;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    outline: none;
+    border-color: #6e9771;
+    box-shadow: 0 0 0 3px rgba(110, 151, 113, 0.13);
+}
+
+.badge {
+    border-color: #cbd9c8;
+}
+
+.info-strip {
+    background: #edf4e9;
+}
+
+.existing-customer-message,
+.flash.success {
+    background: #e4f2df;
+}
+
+.dashboard-booking-row.booking-state-active {
+    background: #fff4c9;
+}
+
+.dashboard-booking-row.booking-state-finished {
+    background: #e2f0dc;
+    border-color: #8eae8d;
+}
+
+.archive-tabs a {
+    color: var(--accent-dark);
+}
+
+@media (max-width: 900px) {
+    .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+        padding: 13px 18px;
+        gap: 10px;
+    }
+
+    .topbar nav {
+        width: 100%;
+    }
+}
+
+
+/* v5.8 Rocket Pub Server brand refresh */
+body {
+    background:
+        linear-gradient(
+            180deg,
+            #eaf2e7 0,
+            #f7f9f5 230px,
+            var(--background) 100%
+        );
+}
+
+.container {
+    width: min(1240px, calc(100% - 32px));
+}
+
+.page-heading h1 {
+    color: var(--brand-deep);
+    letter-spacing: -0.02em;
+}
+
+.card,
+.form-section {
+    border-color: #d2ddd3;
+    box-shadow: 0 2px 10px rgba(27, 69, 49, 0.04);
+}
+
+.card h2,
+.form-section h2,
+fieldset legend {
+    color: #264a38;
+}
+
+.button {
+    background: linear-gradient(180deg, #587f64 0%, var(--accent) 100%);
+    box-shadow: 0 1px 3px rgba(28, 74, 51, 0.13);
+}
+
+.button:hover {
+    background: linear-gradient(180deg, #456d52 0%, var(--accent-dark) 100%);
+}
+
+.button.secondary {
+    background: #61736a;
+}
+
+.small-link,
+.archive-tabs a {
+    color: #3d6b4e;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    outline: 2px solid rgba(91, 137, 104, 0.18);
+    border-color: #739d7d;
+}
+
+.badge {
+    background: #e4eee3;
+    color: #345340;
+}
+
+.info-strip {
+    background: #eef5eb;
+    border: 1px solid #d8e5d5;
+}
+
+.stat-card {
+    background: linear-gradient(145deg, #ffffff 0%, #f4f9f1 100%);
+}
+
+.dashboard-floor-shell,
+.booking-floor-plan-shell,
+.floor-plan-shell {
+    background: #dfe8dd;
+    border-color: #bfccbf;
+}
+
+.dashboard-floor-stage,
+.booking-floor-plan-stage,
+.floor-plan-stage {
+    border-color: #627467;
+    background: #fbfcf9;
+}
+
+/* Keep status colours meaningful while pulling green states into the brand. */
+.table-choice-card.status-ideal,
+.booking-map-table.status-ideal {
+    border-color: #72a678;
+    background: #edf6e9;
+}
+
+.dashboard-table-has-bookings {
+    border-color: #648b70;
+    background: #e3efe3;
+}
+
+.has-bookings-dot {
+    background: #dcebdc;
+    border-color: #648b70;
+}
+
+@media (max-width: 900px) {
+    .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+        padding: 12px 16px;
+    }
+
+    .topbar nav {
+        justify-content: flex-start;
+        width: 100%;
+    }
+}
+
+@media (max-width: 520px) {
+    .brand-logo-frame {
+        width: 54px;
+        height: 54px;
+        flex-basis: 54px;
+    }
+
+    .brand-copy strong {
+        font-size: 16px;
+    }
+}
+
+
+/* v5.8.1 centred glass content panel */
+html {
+    min-height: 100%;
+    background: var(--brand-deep);
+}
+
+body {
+    min-height: 100vh;
+    background:
+        linear-gradient(
+            rgba(13, 53, 40, 0.16),
+            rgba(13, 53, 40, 0.16)
+        ),
+        url("../images/rocket-pub-wallpaper.jpg")
+        center center / cover fixed no-repeat;
+}
+
+/*
+ * Keep the actual application content in one clear central panel, while the
+ * Rocket Pub artwork remains visible around both sides of it.
+ */
+main.container {
+    width: min(1240px, calc(100% - 56px));
+    min-height: calc(100vh - 118px);
+    margin: 22px auto 34px;
+    padding: 30px 28px 36px;
+
+    background: rgba(247, 250, 245, 0.88);
+    border: 1px solid rgba(193, 213, 187, 0.94);
+    border-radius: 18px;
+
+    box-shadow:
+        0 18px 48px rgba(8, 39, 28, 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.82);
+
+    -webkit-backdrop-filter: blur(7px);
+    backdrop-filter: blur(7px);
+}
+
+/* Keep the wallpaper visible as a deliberate outer frame on large screens. */
+@media (min-width: 1350px) {
+    main.container {
+        width: min(1240px, calc(100% - 150px));
+    }
+}
+
+@media (max-width: 900px) {
+    main.container {
+        width: calc(100% - 28px);
+        margin: 14px auto 24px;
+        padding: 22px 18px 28px;
+        border-radius: 14px;
+    }
+
+    body {
+        background-attachment: scroll;
+    }
+}
+
+@media (max-width: 520px) {
+    main.container {
+        width: calc(100% - 16px);
+        margin-top: 8px;
+        padding: 18px 12px 24px;
+        border-radius: 12px;
     }
 }

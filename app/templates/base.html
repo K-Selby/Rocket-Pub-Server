@@ -3,13 +3,26 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}Pub Booking System{% endblock %}</title>
+    <title>{% block title %}Rocket Pub Server{% endblock %}</title>
     <link rel="stylesheet"
           href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
 <header class="topbar">
-    <div class="brand">Pub Booking System</div>
+    <a class="brand"
+       href="{{ url_for('main.dashboard') }}"
+       aria-label="Rocket Pub Server dashboard">
+        <span class="brand-logo-frame">
+            <img src="{{ url_for('static', filename='images/rocket-pub-icon.png') }}"
+                 alt="The Rocket Pub Liverpool logo">
+        </span>
+
+        <span class="brand-copy">
+            <strong>Rocket Pub Server</strong>
+            <small>The Rocket Pub · Liverpool</small>
+        </span>
+    </a>
+
     <nav>
         <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
         <a href="{{ url_for('main.bookings') }}">Bookings</a>

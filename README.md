@@ -1,4 +1,4 @@
-# Pub Booking System - v5.7 Archive + Test Data Cleanup
+# Rocket Pub Server - v5.8.1 Centred Brand Panel
 
 ## Added in v4
 
@@ -372,3 +372,24 @@ bookings remain white/upcoming.
 - Deleting a cancelled normal booking safely detaches any repeat occurrence that
   pointed to it before removing the booking.
 - Archive is available from the top navigation and from Bookings/Large Parties.
+
+
+## v5.8 Rocket Pub Server brand refresh
+
+- Renamed the user-facing application to Rocket Pub Server.
+- Added The Rocket Pub Liverpool green logo to the application header.
+- Reworked the site around the new deep-green and light-sage colour scheme.
+- Updated header/navigation, buttons, cards, badges, inputs and floor-plan
+  surrounds while keeping red/yellow/purple operational status colours distinct.
+- Increased the main desktop width slightly for better use of laptop screens.
+
+
+## v5.8.1 centred brand panel
+
+- Restored the Rocket Pub artwork as the full browser background.
+- Main application content now sits inside one bordered translucent central
+  panel instead of washing the wallpaper out across the entire page.
+- The outer left/right margins intentionally expose the full background image.
+- Added a subtle glass effect, green-tinted border and shadow to separate the
+  operational interface from the branded wallpaper.
+- Responsive sizing keeps the same treatment on laptops, tablets and phones.
