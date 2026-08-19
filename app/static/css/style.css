@@ -2994,3 +2994,45 @@ main.container {
         align-items: stretch;
     }
 }
+
+
+/* v6.2.1 admin-only email management */
+.admin-email-controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.admin-email-controls form {
+    margin: 0;
+}
+
+.inline-verification-form {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.inline-verification-form input {
+    width: 112px;
+    padding: 6px 8px;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+}
+
+
+/* v6.3 forgotten password */
+.auth-secondary-link {
+    display: inline-block;
+    text-align: center;
+    margin-top: 3px;
+    color: #3d6b4e;
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.auth-secondary-link:hover {
+    text-decoration: underline;
+}

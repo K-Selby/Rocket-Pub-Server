@@ -107,19 +107,71 @@
                         </form>
                     {% endif %}
 
-                    {% if can_manage and user.id != current_user.id %}
-                        <form method="post"
-                              action="{{ url_for('main.set_user_email', user_id=user.id) }}"
-                              class="inline-user-email-form">
-                            <input type="email"
-                                   name="email"
-                                   placeholder="Set email"
-                                   required>
-                            <button class="link-button" type="submit">
-                                Send code
-                            </button>
-                        </form>
+                    {% if current_user.is_admin %}
+                        <div class="admin-email-controls">
+                            {% if user.email_verified and user.email %}
+                                <form method="post"
+                                      action="{{ url_for('main.reset_user_email', user_id=user.id) }}"
+                                      onsubmit="return confirm('Reset the verified email for {{ user.username }}?');">
+                                    <button class="link-button danger"
+                                            type="submit">
+                                        Reset email
+                                    </button>
+                                </form>
 
+                            {% elif user.pending_email %}
+                                <form method="post"
+                                      action="{{ url_for('main.admin_verify_user_email', user_id=user.id) }}"
+                                      class="inline-verification-form">
+                                    <input type="text"
+                                           name="code"
+                                           inputmode="numeric"
+                                           maxlength="6"
+                                           pattern="[0-9]{6}"
+                                           placeholder="6-digit code"
+                                           required>
+
+                                    <button class="link-button"
+                                            type="submit">
+                                        Verify email
+                                    </button>
+                                </form>
+
+                                <form method="post"
+                                      action="{{ url_for('main.admin_resend_user_email_code', user_id=user.id) }}">
+                                    <button class="link-button"
+                                            type="submit">
+                                        Resend code
+                                    </button>
+                                </form>
+
+                                <form method="post"
+                                      action="{{ url_for('main.reset_user_email', user_id=user.id) }}"
+                                      onsubmit="return confirm('Clear the pending email for {{ user.username }}?');">
+                                    <button class="link-button danger"
+                                            type="submit">
+                                        Clear email
+                                    </button>
+                                </form>
+
+                            {% else %}
+                                <form method="post"
+                                      action="{{ url_for('main.set_user_email', user_id=user.id) }}"
+                                      class="inline-user-email-form">
+                                    <input type="email"
+                                           name="email"
+                                           placeholder="Set email"
+                                           required>
+                                    <button class="link-button"
+                                            type="submit">
+                                        Send code
+                                    </button>
+                                </form>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+
+                    {% if can_manage and user.id != current_user.id %}
                         <form method="post"
                               action="{{ url_for('main.reset_user_password', user_id=user.id) }}"
                               onsubmit="return confirm('Reset {{ user.username }} to the temporary password Password?');">

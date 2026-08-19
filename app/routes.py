@@ -193,38 +193,26 @@ def email_delivery_mode():
     ).strip().lower()
 
 
-def send_verification_email(recipient, code):
+def send_rocket_email(recipient, subject, body):
     """
-    Send a six-digit verification code.
+    Send a Rocket Pub Server email through Microsoft Graph.
 
-    Production/default mode uses the connected
-    rocketpubserver@outlook.com Microsoft account via Graph.
+    Console mode remains available for local development.
     """
     sender = os.environ.get(
         "ROCKET_EMAIL_FROM",
         "rocketpubserver@outlook.com",
     )
 
-    subject = "Rocket Pub Server email verification"
-    body = (
-        "Your Rocket Pub Server verification code is:\n\n"
-        f"{code}\n\n"
-        "This code expires in 15 minutes.\n\n"
-        "If you did not request this code, you can ignore this email."
-    )
-
     if email_delivery_mode() == "console":
         print("\n" + "=" * 60)
-        print("ROCKET PUB SERVER EMAIL VERIFICATION")
+        print("ROCKET PUB SERVER EMAIL")
         print(f"To: {recipient}")
         print(f"From: {sender}")
-        print(f"Code: {code}")
+        print(f"Subject: {subject}")
+        print(body)
         print("=" * 60 + "\n")
-
-        return True, (
-            "Development email mode is enabled. "
-            "The verification code was printed in the server Terminal."
-        )
+        return True, "Email content printed in the server Terminal."
 
     access_token = get_microsoft_access_token()
 
@@ -264,10 +252,10 @@ def send_verification_email(recipient, code):
         )
     except requests.RequestException as exc:
         print(f"Microsoft Graph email request failed: {exc}")
-        return False, "The verification email could not be sent."
+        return False, "The email could not be sent."
 
     if response.status_code == 202:
-        return True, f"Verification code sent to {recipient}."
+        return True, f"Email sent to {recipient}."
 
     print(
         "Microsoft Graph sendMail failed:",
@@ -276,9 +264,44 @@ def send_verification_email(recipient, code):
     )
 
     return False, (
-        "Microsoft could not send the verification email. "
+        "Microsoft could not send the email. "
         "Check the Rocket Email connection in Users."
     )
+
+
+def send_verification_email(recipient, code):
+    subject = "Rocket Pub Server email verification"
+    body = (
+        "Your Rocket Pub Server verification code is:\n\n"
+        f"{code}\n\n"
+        "This code expires in 15 minutes.\n\n"
+        "If you did not request this code, you can ignore this email."
+    )
+
+    success, message = send_rocket_email(recipient, subject, body)
+
+    if success:
+        return True, f"Verification code sent to {recipient}."
+
+    return False, message
+
+
+def send_password_reset_email(recipient, code):
+    subject = "Rocket Pub Server password reset"
+    body = (
+        "A password reset was requested for your Rocket Pub Server account.\n\n"
+        "Your reset code is:\n\n"
+        f"{code}\n\n"
+        "This code expires in 15 minutes.\n\n"
+        "If you did not request a password reset, you can ignore this email."
+    )
+
+    success, message = send_rocket_email(recipient, subject, body)
+
+    if success:
+        return True, f"Password reset code sent to {recipient}."
+
+    return False, message
 
 
 
@@ -367,6 +390,9 @@ def load_and_protect_user():
 
     public_endpoints = {
         "main.login",
+        "main.forgot_password",
+        "main.forgot_password_verify",
+        "main.forgot_password_new",
     }
 
     if endpoint in public_endpoints:
@@ -397,6 +423,192 @@ def inject_current_user():
     return {
         "current_user": current_user(),
     }
+
+
+
+@main.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    """
+    Start a forgotten-password flow.
+
+    The user supplies their username. We only continue if the account has a
+    verified email address. The response is intentionally generic where
+    possible so the page does not unnecessarily expose account information.
+    """
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+
+        user = db.session.scalar(
+            db.select(AppUser).where(
+                db.func.lower(AppUser.username) == username.lower(),
+                AppUser.active.is_(True),
+            )
+        )
+
+        if user is None:
+            flash(
+                "If that account exists and has a verified email, a reset code will be sent.",
+                "success",
+            )
+            return redirect(url_for("main.forgot_password"))
+
+        if not user.email_verified or not user.email:
+            flash(
+                "This account does not have a verified email. "
+                "Please ask a manager or administrator to reset the password.",
+                "error",
+            )
+            return redirect(url_for("main.forgot_password"))
+
+        code = f"{secrets.randbelow(1000000):06d}"
+
+        user.password_reset_code_hash = generate_password_hash(code)
+        user.password_reset_expires_at = (
+            datetime.now() + timedelta(minutes=15)
+        )
+        db.session.commit()
+
+        success, message = send_password_reset_email(
+            user.email,
+            code,
+        )
+
+        if not success:
+            flash(message, "error")
+            return redirect(url_for("main.forgot_password"))
+
+        session["password_reset_user_id"] = user.id
+        session["password_reset_verified"] = False
+
+        flash(
+            "A six-digit password reset code has been sent to your email.",
+            "success",
+        )
+        return redirect(url_for("main.forgot_password_verify"))
+
+    return render_template("forgot_password.html")
+
+
+@main.route("/forgot-password/verify", methods=["GET", "POST"])
+def forgot_password_verify():
+    user_id = session.get("password_reset_user_id")
+
+    if not user_id:
+        flash("Start the password reset again.", "error")
+        return redirect(url_for("main.forgot_password"))
+
+    user = db.session.get(AppUser, user_id)
+
+    if user is None:
+        session.pop("password_reset_user_id", None)
+        session.pop("password_reset_verified", None)
+        return redirect(url_for("main.forgot_password"))
+
+    if request.method == "POST":
+        action = request.form.get("action", "verify")
+
+        if action == "resend":
+            if not user.email_verified or not user.email:
+                flash("This account has no verified email.", "error")
+                return redirect(url_for("main.forgot_password"))
+
+            code = f"{secrets.randbelow(1000000):06d}"
+            user.password_reset_code_hash = generate_password_hash(code)
+            user.password_reset_expires_at = (
+                datetime.now() + timedelta(minutes=15)
+            )
+            db.session.commit()
+
+            success, message = send_password_reset_email(
+                user.email,
+                code,
+            )
+            flash(message, "success" if success else "error")
+            return redirect(request.url)
+
+        code = request.form.get("code", "").strip()
+
+        if (
+            not user.password_reset_code_hash
+            or not user.password_reset_expires_at
+        ):
+            flash("Request a new password reset code.", "error")
+            return redirect(url_for("main.forgot_password"))
+
+        if datetime.now() > user.password_reset_expires_at:
+            flash(
+                "That reset code has expired. Request a new one.",
+                "error",
+            )
+            return redirect(request.url)
+
+        if not check_password_hash(
+            user.password_reset_code_hash,
+            code,
+        ):
+            flash("Incorrect reset code.", "error")
+            return redirect(request.url)
+
+        session["password_reset_verified"] = True
+        return redirect(url_for("main.forgot_password_new"))
+
+    return render_template(
+        "forgot_password_verify.html",
+        email=user.email,
+    )
+
+
+@main.route("/forgot-password/new", methods=["GET", "POST"])
+def forgot_password_new():
+    user_id = session.get("password_reset_user_id")
+    verified = session.get("password_reset_verified")
+
+    if not user_id or not verified:
+        flash("Verify your reset code first.", "error")
+        return redirect(url_for("main.forgot_password"))
+
+    user = db.session.get(AppUser, user_id)
+
+    if user is None:
+        session.pop("password_reset_user_id", None)
+        session.pop("password_reset_verified", None)
+        return redirect(url_for("main.forgot_password"))
+
+    if request.method == "POST":
+        new_password = request.form.get("new_password", "")
+        confirm_password = request.form.get("confirm_password", "")
+
+        if len(new_password) < 8:
+            flash("New passwords must be at least 8 characters.", "error")
+            return redirect(request.url)
+
+        if new_password == "Password":
+            flash(
+                "Choose a password other than the default Password.",
+                "error",
+            )
+            return redirect(request.url)
+
+        if new_password != confirm_password:
+            flash("The new passwords do not match.", "error")
+            return redirect(request.url)
+
+        user.password_hash = generate_password_hash(new_password)
+        user.must_change_password = False
+        user.password_reset_code_hash = None
+        user.password_reset_expires_at = None
+        db.session.commit()
+
+        session.pop("password_reset_user_id", None)
+        session.pop("password_reset_verified", None)
+
+        flash(
+            "Your password has been reset. You can now sign in.",
+            "success",
+        )
+        return redirect(url_for("main.login"))
+
+    return render_template("forgot_password_new.html")
 
 
 @main.route("/login", methods=["GET", "POST"])
@@ -1569,7 +1781,11 @@ def email_setup():
             )
             return redirect(url_for("main.dashboard"))
 
-        email = normalise_email(request.form.get("email"))
+        email = (
+            normalise_email(request.form.get("email"))
+            if current_user().is_admin
+            else ""
+        )
 
         success, message = start_email_verification(user, email)
         flash(message, "success" if success else "error")
@@ -1642,10 +1858,23 @@ def verify_email():
 
 @main.route("/users/<int:user_id>/email", methods=["POST"])
 def set_user_email(user_id):
+    """
+    Admin-only: set an email for another account and send its verification code.
+
+    Managers can manage staff accounts, but email identity is reserved for the
+    administrator because it will later be used for password recovery/security.
+    """
+    if not current_user().is_admin:
+        flash("Administrator access is required to set user emails.", "error")
+        return redirect(url_for("main.users"))
+
     target = db.get_or_404(AppUser, user_id)
 
-    if not manager_can_manage_user(target):
-        flash("You cannot change that user's email.", "error")
+    if target.email_verified and target.email:
+        flash(
+            "That user already has a verified email. Reset it first if it needs changing.",
+            "error",
+        )
         return redirect(url_for("main.users"))
 
     email = normalise_email(request.form.get("email"))
@@ -1655,10 +1884,107 @@ def set_user_email(user_id):
 
     if success:
         flash(
-            f"{target.username} must enter the verification code sent to {email}.",
+            f"Enter the code sent to {email} below to verify {target.username}.",
             "success",
         )
 
+    return redirect(url_for("main.users"))
+
+
+@main.route("/users/<int:user_id>/email/verify", methods=["POST"])
+def admin_verify_user_email(user_id):
+    """Admin-only: enter the verification code for a user's pending email."""
+    if not current_user().is_admin:
+        flash("Administrator access is required.", "error")
+        return redirect(url_for("main.users"))
+
+    target = db.get_or_404(AppUser, user_id)
+
+    if not target.pending_email:
+        flash("That user has no email waiting for verification.", "error")
+        return redirect(url_for("main.users"))
+
+    code = request.form.get("code", "").strip()
+
+    if (
+        not target.email_verification_code_hash
+        or not target.email_verification_expires_at
+    ):
+        flash("Request a new verification code for that user.", "error")
+        return redirect(url_for("main.users"))
+
+    if datetime.now() > target.email_verification_expires_at:
+        flash(
+            "That verification code has expired. Send a new code.",
+            "error",
+        )
+        return redirect(url_for("main.users"))
+
+    if not check_password_hash(
+        target.email_verification_code_hash,
+        code,
+    ):
+        flash("Incorrect verification code.", "error")
+        return redirect(url_for("main.users"))
+
+    target.email = target.pending_email
+    target.pending_email = None
+    target.email_verified = True
+    target.email_verification_code_hash = None
+    target.email_verification_expires_at = None
+    db.session.commit()
+
+    flash(
+        f"{target.username}'s email has been verified.",
+        "success",
+    )
+    return redirect(url_for("main.users"))
+
+
+@main.route("/users/<int:user_id>/email/resend", methods=["POST"])
+def admin_resend_user_email_code(user_id):
+    """Admin-only: send a fresh code to a user's pending email."""
+    if not current_user().is_admin:
+        flash("Administrator access is required.", "error")
+        return redirect(url_for("main.users"))
+
+    target = db.get_or_404(AppUser, user_id)
+
+    if not target.pending_email:
+        flash("That user has no pending email.", "error")
+        return redirect(url_for("main.users"))
+
+    success, message = start_email_verification(
+        target,
+        target.pending_email,
+    )
+    flash(message, "success" if success else "error")
+
+    return redirect(url_for("main.users"))
+
+
+@main.route("/users/<int:user_id>/email/reset", methods=["POST"])
+def reset_user_email(user_id):
+    """
+    Admin-only: remove a user's verified/pending email so a new one can be set.
+    """
+    if not current_user().is_admin:
+        flash("Administrator access is required to reset user emails.", "error")
+        return redirect(url_for("main.users"))
+
+    target = db.get_or_404(AppUser, user_id)
+
+    target.email = None
+    target.pending_email = None
+    target.email_verified = False
+    target.email_verification_code_hash = None
+    target.email_verification_expires_at = None
+    db.session.commit()
+
+    flash(
+        f"{target.username}'s email has been reset.",
+        "success",
+    )
     return redirect(url_for("main.users"))
 
 
@@ -1759,6 +2085,7 @@ def new_user():
     return render_template(
         "user_form.html",
         allowed_roles=allowed_roles,
+        can_set_email=current_user().is_admin,
     )
 
 

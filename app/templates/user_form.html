@@ -15,15 +15,18 @@
         <input name="username" required autofocus>
     </label>
 
+    {% if can_set_email %}
     <label>
         Email address (optional)
         <input type="email"
                name="email"
                placeholder="name@example.com">
         <span class="field-note">
-            If entered, a verification code will be generated immediately.
+            Admin only. If entered, a verification code is sent immediately
+            and can be entered from the Users screen.
         </span>
     </label>
+    {% endif %}
 
     <label>
         Account type

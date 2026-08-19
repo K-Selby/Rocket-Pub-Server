@@ -488,3 +488,31 @@ Both `.env` and `instance/microsoft_token_cache.bin` are ignored by Git.
 
 The returned project ZIP intentionally does not contain the real `.env` file
 or Microsoft token cache.
+
+
+## v6.2.1 admin-only email management
+
+- Managers can no longer set, replace, clear or verify another user's email.
+- Managers still see email status for accounts they can view.
+- Only Admin can attach an email to Staff/Manager accounts from Users.
+- If an account already has a verified email, the Set Email field disappears;
+  Admin must deliberately Reset Email before assigning another address.
+- Pending emails show an Admin verification-code field directly on Users.
+- Admin can enter the six-digit code, resend the code, or clear the pending
+  address.
+- New-user email entry is shown only when Admin creates the account.
+- Individual users still retain their own first-login/self-service email setup.
+
+
+## v6.3 forgotten password
+
+- Login screen now has **Forgot password?**
+- User enters their username.
+- Reset is available only when the account has a verified email.
+- Rocket Pub Server emails a six-digit reset code through the connected Outlook
+  / Microsoft Graph sender.
+- Reset codes expire after 15 minutes and are stored hashed.
+- After the code is verified, the user chooses and confirms a new password.
+- Successful reset clears the reset token and returns the user to sign-in.
+- Accounts without a verified email must use the existing manager/admin password
+  reset process.

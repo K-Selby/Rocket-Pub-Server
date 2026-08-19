@@ -40,6 +40,10 @@ class AppUser(db.Model):
     email_verification_code_hash = db.Column(db.String(255))
     email_verification_expires_at = db.Column(db.DateTime)
 
+    # Forgotten-password verification.
+    password_reset_code_hash = db.Column(db.String(255))
+    password_reset_expires_at = db.Column(db.DateTime)
+
     active = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login_at = db.Column(db.DateTime)

@@ -109,6 +109,8 @@ def ensure_starter_schema_updates():
         "email_verified": "BOOLEAN DEFAULT 0",
         "email_verification_code_hash": "VARCHAR(255)",
         "email_verification_expires_at": "DATETIME",
+        "password_reset_code_hash": "VARCHAR(255)",
+        "password_reset_expires_at": "DATETIME",
     }
 
     for name, sql_type in app_user_additions.items():
