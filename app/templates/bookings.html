@@ -9,7 +9,16 @@
         <p>{{ selected_date.strftime("%A %d %B %Y") }}</p>
     </div>
 
-    <a class="button" href="{{ url_for('main.new_booking') }}">New booking</a>
+    <div class="heading-actions">
+        <a class="button secondary"
+           href="{{ url_for('main.new_large_party') }}">
+            Large party enquiry
+        </a>
+        <a class="button"
+           href="{{ url_for('main.new_booking') }}">
+            New booking
+        </a>
+    </div>
 </div>
 
 <form class="date-selector" method="get">
@@ -32,12 +41,22 @@
                     <div>
                         <strong>{{ booking.customer.name }}</strong>
                         <div class="muted">
-                            {{ booking.party_size }} people ·
-                            {{ booking.duration_minutes }} mins
+                            {{ booking.party_size }} people
+                            {% if booking.number_of_children %}
+                                · {{ booking.number_of_children }} under 13
+                            {% endif %}
+                            · 3 hours
                             {% if booking.occasion %}
                                 · {{ booking.occasion }}
                             {% endif %}
                         </div>
+
+                        {% if booking.deposit_required_amount %}
+                            <div class="deposit-inline">
+                                Deposit £{{ "%.2f"|format(booking.deposit_paid_amount or 0) }}
+                                / £{{ "%.2f"|format(booking.deposit_required_amount) }}
+                            </div>
+                        {% endif %}
                     </div>
 
                     <div>
@@ -46,8 +65,13 @@
                         {% endfor %}
                     </div>
 
-                    <div>
+                    <div class="row-actions">
                         {% if booking.status != "Cancelled" %}
+                            <a class="small-link"
+                               href="{{ url_for('main.edit_booking', booking_id=booking.id) }}">
+                                Edit
+                            </a>
+
                             <form method="post"
                                   action="{{ url_for('main.cancel_booking', booking_id=booking.id) }}"
                                   onsubmit="return confirm('Cancel this booking?');">

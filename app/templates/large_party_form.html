@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {% if inquiry %}Edit Large Party Enquiry{% else %}Large Party Enquiry{% endif %}
+    | Pub Booking System
+{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h1>
+            {% if inquiry %}
+                Edit large party enquiry
+            {% else %}
+                Large party enquiry
+            {% endif %}
+        </h1>
+        <p>
+            This is an enquiry, not a confirmed table booking. Only fill in the
+            details currently known — the record can be edited whenever the
+            customer calls back.
+        </p>
+    </div>
+</div>
+
+<form class="card form-grid"
+      method="post"
+      id="large-party-form">
+
+    <section class="form-section full-width">
+        <h2>Contact</h2>
+
+        <div class="nested-grid">
+            <label>
+                Name *
+                <input name="customer_name"
+                       value="{{ inquiry.customer_name if inquiry else '' }}"
+                       required>
+            </label>
+
+            <label>
+                Phone number *
+                <input name="customer_phone"
+                       inputmode="tel"
+                       value="{{ inquiry.customer_phone if inquiry else '' }}"
+                       required>
+            </label>
+        </div>
+    </section>
+
+    <section class="form-section full-width">
+        <h2>Party details</h2>
+
+        <div class="nested-grid">
+            <label>
+                Estimated number of people *
+                <input type="number"
+                       name="party_size"
+                       id="large-party-size"
+                       min="1"
+                       value="{{ inquiry.party_size if inquiry else '' }}"
+                       required>
+            </label>
+
+            <label>
+                Number of children
+                <input type="number"
+                       name="number_of_children"
+                       min="0"
+                       value="{{ inquiry.number_of_children if inquiry else 0 }}">
+                <span class="field-note">Children are counted as under 13 years old.</span>
+            </label>
+
+            <label>
+                Event date
+                <input type="date"
+                       name="event_date"
+                       value="{% if inquiry and inquiry.event_date %}{{ inquiry.event_date.isoformat() }}{% endif %}">
+                <span class="field-note">Leave blank if they have not decided yet.</span>
+            </label>
+
+            <label>
+                Approximate time
+                <input type="time"
+                       name="event_time"
+                       value="{% if inquiry and inquiry.event_time %}{{ inquiry.event_time.strftime('%H:%M') }}{% endif %}">
+            </label>
+
+            <label>
+                Occasion
+                <input name="occasion"
+                       value="{{ inquiry.occasion if inquiry and inquiry.occasion else '' }}"
+                       placeholder="Birthday, wake, celebration...">
+            </label>
+
+            <label>
+                Enquiry status
+                <select name="status">
+                    {% for status in ["Enquiry", "Awaiting customer", "Provisional", "Confirmed", "Cancelled"] %}
+                        <option value="{{ status }}"
+                            {% if inquiry and inquiry.status == status %}selected{% endif %}>
+                            {{ status }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+
+        <div id="large-deposit-warning"
+             class="deposit-warning"
+             data-existing-paid="{{ inquiry.deposit_paid_amount if inquiry else 0 }}"
+             hidden>
+        </div>
+
+        <div id="large-deposit-payment-field"
+             class="deposit-payment-field"
+             {% if not inquiry or inquiry.party_size <= 10 %}hidden{% endif %}>
+            <label>
+                Deposit paid (£)
+                <input type="number"
+                       name="deposit_paid_amount"
+                       id="large-deposit-paid"
+                       min="0"
+                       step="0.01"
+                       value="{{ '%.2f'|format(inquiry.deposit_paid_amount or 0) if inquiry else '0.00' }}">
+            </label>
+            <span class="field-note">
+                This can be left at £0 during the initial enquiry and updated later.
+            </span>
+        </div>
+    </section>
+
+    <section class="form-section full-width">
+        <h2>Food / buffet</h2>
+        <p class="muted">
+            This section can be left undecided and completed on a later call.
+        </p>
+
+        <div class="nested-grid">
+            <label>
+                Food type
+                <select name="food_type">
+                    <option value="">Not decided</option>
+                    <option value="Menu"
+                        {% if inquiry and inquiry.food_type == "Menu" %}selected{% endif %}>
+                        Menu
+                    </option>
+                    <option value="Buffet"
+                        {% if inquiry and inquiry.food_type == "Buffet" %}selected{% endif %}>
+                        Buffet
+                    </option>
+                </select>
+            </label>
+
+            <label>
+                Food option
+                <select name="menu_option_id" id="menu-option">
+                    <option value="">Not decided</option>
+                    {% for option in options %}
+                        <option value="{{ option.id }}"
+                                data-price="{{ option.price_per_head if option.price_per_head is not none else '' }}"
+                                {% if inquiry and inquiry.menu_option_id == option.id %}selected{% endif %}>
+                            {{ option.name }}
+                            {% if option.price_per_head is not none %}
+                                — £{{ "%.2f"|format(option.price_per_head) }} per head
+                            {% else %}
+                                — price not set
+                            {% endif %}
+                        </option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label>
+                Number of people having food
+                <input type="number"
+                       name="catered_people"
+                       id="catered-people"
+                       min="0"
+                       value="{{ inquiry.catered_people if inquiry and inquiry.catered_people is not none else '' }}"
+                       placeholder="e.g. 50">
+                <span class="field-note">
+                    This can be lower than the total party size, e.g. 70 attending but food for 50.
+                </span>
+            </label>
+
+            <div class="quote-preview">
+                <span class="field-note">Current food estimate</span>
+                <strong id="food-quote-preview">
+                    {% if inquiry and inquiry.quoted_food_total is not none %}
+                        £{{ "%.2f"|format(inquiry.quoted_food_total) }}
+                    {% else %}
+                        Not calculated
+                    {% endif %}
+                </strong>
+            </div>
+        </div>
+    </section>
+
+    <label class="full-width">
+        Enquiry notes / call history
+        <textarea name="notes"
+                  rows="8"
+                  placeholder="Add what was discussed, what still needs confirming, callback notes, etc.">{{ inquiry.notes if inquiry and inquiry.notes else '' }}</textarea>
+    </label>
+
+    <div class="full-width">
+        <button class="button" type="submit">
+            {% if inquiry %}Save enquiry changes{% else %}Create enquiry{% endif %}
+        </button>
+    </div>
+</form>
+{% endblock %}

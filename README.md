@@ -1,46 +1,42 @@
-# Pub Booking System - Starter
+# Pub Booking System - v3
 
-Local Flask/SQLite pub booking application.
+## New in this version
 
-## Current features
+### Normal bookings
+- Manual time entry instead of an interval dropdown
+- Earliest booking: 12:15pm
+- Latest Monday-Saturday: 7:30pm
+- Latest Sunday: 7:00pm
+- Invalid times are cleared immediately in the browser with a popup message
+- Server-side time validation remains in place too
+- Number of children field (under 13)
+- Automatic deposit calculation for parties over 10:
+  - £5 per head
+  - capped at £100
+- Customer-facing deposit callback warning shown before saving
+- Deposit paid can be tracked and edited
+- Existing bookings can now be edited
+- Existing table clash detection works correctly while editing
 
-- Dashboard showing today's bookings
-- Customer records created automatically when a booking is made
-- Returning customer recognition by phone number
-- Name/phone customer search
-- Saved seating preferences
-- Configurable pub areas
-- Configurable tables
-- Edit tables after creation
-- Table characteristics:
-  - capacity
-  - area
-  - near TV
-  - bench seating
-  - accessible
-  - active/inactive
-- Numerically ordered table numbers
-- Physically valid table pairings
-- Booking creation
-- 3-hour standard booking duration
-- Booking times from 12:15 to 19:30 in 15-minute intervals
-- Late food-order warning after 18:45
-- Sunday-specific 19:30 kitchen closing warning
-- Manual table assignment
-- Automatic single-table or paired-table allocation
-- Allocation preferences:
-  - area
-  - specific table
-  - near TV
-  - no bench seating
-- Booking overlap prevention
-- Booking cancellation
-- Date-based booking view
-- Local-network hosting support
+### Large party enquiries
+- Separate Large Party Enquiry workflow
+- Designed as an open/editable enquiry rather than a confirmed booking
+- Name + phone
+- Estimated party size
+- Number of children (under 13)
+- Optional date/time
+- Occasion
+- Status
+- Menu / Buffet selection
+- Options 1-4
+- Configurable price per head for each option
+- Number being catered for can be lower than total attendance
+- Automatic food estimate when a price has been configured
+- Deposit estimate/tracking
+- Notes / call history
+- Enquiries can be repeatedly edited as details are confirmed
 
-## Run on macOS
-
-From the project folder:
+## Run
 
 ```bash
 source .venv/bin/activate
@@ -52,15 +48,6 @@ Open:
 
 http://127.0.0.1:8000
 
-Another device on the same Wi-Fi can use the Mac's local address, e.g.:
-
-http://192.168.1.173:8000
-
-## Database
-
-The database is stored at:
+The app keeps using the existing SQLite database in:
 
 instance/pub_booking.db
-
-The revised starter includes a small compatibility step that adds the new
-bench-related columns to a database created by the earlier starter version.

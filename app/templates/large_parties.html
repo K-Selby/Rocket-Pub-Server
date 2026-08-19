@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Large Party Enquiries | Pub Booking System{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h1>Large party enquiries</h1>
+        <p>
+            Keep an enquiry open while details are confirmed over several calls.
+        </p>
+    </div>
+
+    <a class="button"
+       href="{{ url_for('main.new_large_party') }}">
+        New large party enquiry
+    </a>
+</div>
+
+<div class="card">
+    <h2>Open enquiries</h2>
+
+    {% if inquiries %}
+        <div class="inquiry-list">
+            {% for inquiry in inquiries %}
+                <div class="inquiry-row">
+                    <div>
+                        <strong>{{ inquiry.customer_name }}</strong>
+                        <div class="muted">
+                            {{ inquiry.party_size }} people
+                            {% if inquiry.number_of_children %}
+                                · {{ inquiry.number_of_children }} under 13
+                            {% endif %}
+                            {% if inquiry.event_date %}
+                                · {{ inquiry.event_date.strftime("%d/%m/%Y") }}
+                            {% else %}
+                                · Date not confirmed
+                            {% endif %}
+                            {% if inquiry.event_time %}
+                                · {{ inquiry.event_time.strftime("%H:%M") }}
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div>
+                        <span class="badge">{{ inquiry.status }}</span>
+                        {% if inquiry.food_type %}
+                            <span class="badge">{{ inquiry.food_type }}</span>
+                        {% endif %}
+                        {% if inquiry.menu_option %}
+                            <span class="badge">{{ inquiry.menu_option.name }}</span>
+                        {% endif %}
+                    </div>
+
+                    <div>
+                        {% if inquiry.deposit_required_amount %}
+                            Deposit:
+                            £{{ "%.2f"|format(inquiry.deposit_paid_amount or 0) }}
+                            / £{{ "%.2f"|format(inquiry.deposit_required_amount) }}
+                        {% endif %}
+                    </div>
+
+                    <a class="small-link"
+                       href="{{ url_for('main.edit_large_party', inquiry_id=inquiry.id) }}">
+                        Edit enquiry
+                    </a>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="muted">No large party enquiries yet.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Large party food prices</h2>
+    <p class="muted">
+        The four options are ready, but prices have been left blank until you
+        enter the pub's actual price per head.
+    </p>
+
+    <div class="option-price-grid">
+        {% for option in options %}
+            <form class="option-price-card"
+                  method="post"
+                  action="{{ url_for('main.update_large_party_option_price', option_id=option.id) }}">
+                <strong>{{ option.name }}</strong>
+
+                <label>
+                    Price per head (£)
+                    <input type="number"
+                           name="price_per_head"
+                           min="0"
+                           step="0.01"
+                           value="{% if option.price_per_head is not none %}{{ '%.2f'|format(option.price_per_head) }}{% endif %}"
+                           placeholder="Not set">
+                </label>
+
+                <button class="button secondary" type="submit">
+                    Save price
+                </button>
+            </form>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

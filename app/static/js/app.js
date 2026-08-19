@@ -1,9 +1,6 @@
 console.log("Pub Booking System loaded.");
 
 
-/**
- * Normalise a phone number in the browser using the same basic rules as Flask.
- */
 function normalisePhone(phone) {
     let cleaned = (phone || "").replace(/\D/g, "");
 
@@ -15,12 +12,17 @@ function normalisePhone(phone) {
 }
 
 
-/**
- * Refill saved preferences when an existing customer is recognised.
- *
- * Phone number is authoritative because two customers may share the same name.
- * An exact unique name match can also fill the phone number to speed up entry.
- */
+function calculateDeposit(partySize) {
+    const size = Number(partySize || 0);
+
+    if (size <= 10) {
+        return 0;
+    }
+
+    return Math.min(size * 5, 100);
+}
+
+
 function setupCustomerLookup() {
     const customers = window.PUB_CUSTOMERS || [];
     const nameInput = document.getElementById("customer-name");
@@ -72,7 +74,6 @@ function setupCustomerLookup() {
             item => item.name.trim().toLowerCase() === name
         );
 
-        // Only autofill from name if it identifies exactly one saved customer.
         if (matches.length === 1) {
             applyCustomer(matches[0]);
         }
@@ -80,11 +81,55 @@ function setupCustomerLookup() {
 }
 
 
-/**
- * Show the kitchen warning for bookings later than 18:45.
- *
- * Sunday has a 19:30 kitchen close; all other days use 20:00.
- */
+function setupBookingTimeValidation() {
+    const dateInput = document.getElementById("booking-date");
+    const timeInput = document.getElementById("booking-time");
+
+    if (!dateInput || !timeInput) return;
+
+    function latestTime() {
+        if (!dateInput.value) {
+            return "19:30";
+        }
+
+        const date = new Date(dateInput.value + "T12:00:00");
+        return date.getDay() === 0 ? "19:00" : "19:30";
+    }
+
+    function validateTime(showPopup = true) {
+        if (!timeInput.value) return true;
+
+        const latest = latestTime();
+        const tooEarly = timeInput.value < "12:15";
+        const tooLate = timeInput.value > latest;
+
+        if (tooEarly || tooLate) {
+            const latestDisplay = latest === "19:00" ? "7:00pm" : "7:30pm";
+            timeInput.value = "";
+
+            if (showPopup) {
+                alert(
+                    "The earliest available booking time is 12:15pm and " +
+                    `the latest available time is ${latestDisplay}.`
+                );
+            }
+
+            return false;
+        }
+
+        return true;
+    }
+
+    timeInput.addEventListener("change", () => validateTime(true));
+
+    dateInput.addEventListener("change", () => {
+        // If the date is changed to a Sunday, a previously valid 7:30pm time
+        // should immediately be rejected and cleared.
+        validateTime(true);
+    });
+}
+
+
 function setupKitchenWarning() {
     const dateInput = document.getElementById("booking-date");
     const timeInput = document.getElementById("booking-time");
@@ -102,8 +147,6 @@ function setupKitchenWarning() {
             return;
         }
 
-        // Appending T12:00 prevents timezone conversion from unexpectedly
-        // moving the selected date to the previous/next day.
         const selectedDate = new Date(dateValue + "T12:00:00");
         const isSunday = selectedDate.getDay() === 0;
         const closeTime = isSunday ? "7:30pm" : "8:00pm";
@@ -122,7 +165,111 @@ function setupKitchenWarning() {
 }
 
 
+function setupDepositWarning() {
+    const partyInput = document.getElementById("party-size");
+    const warning = document.getElementById("deposit-warning");
+    const paymentField = document.getElementById("deposit-payment-field");
+    const paidInput = document.getElementById("deposit-paid-amount");
+
+    if (!partyInput || !warning || !paymentField || !paidInput) return;
+
+    function update() {
+        const due = calculateDeposit(partyInput.value);
+
+        if (due <= 0) {
+            warning.hidden = true;
+            paymentField.hidden = true;
+            paidInput.max = "";
+            return;
+        }
+
+        warning.textContent =
+            `A deposit of £${due.toFixed(2)} may be required. ` +
+            "Please let the customer know that we will call them back to confirm the deposit.";
+
+        warning.hidden = false;
+        paymentField.hidden = false;
+        paidInput.max = due.toFixed(2);
+    }
+
+    partyInput.addEventListener("input", update);
+    update();
+}
+
+
+function setupLargePartyDepositWarning() {
+    const partyInput = document.getElementById("large-party-size");
+    const warning = document.getElementById("large-deposit-warning");
+    const paymentField = document.getElementById("large-deposit-payment-field");
+    const paidInput = document.getElementById("large-deposit-paid");
+
+    if (!partyInput || !warning || !paymentField || !paidInput) return;
+
+    function update() {
+        const due = calculateDeposit(partyInput.value);
+
+        if (due <= 0) {
+            warning.hidden = true;
+            paymentField.hidden = true;
+            paidInput.max = "";
+            return;
+        }
+
+        warning.textContent =
+            `If this enquiry proceeds, a deposit of £${due.toFixed(2)} may be required. ` +
+            "The customer can be called back once the details are confirmed.";
+
+        warning.hidden = false;
+        paymentField.hidden = false;
+        paidInput.max = due.toFixed(2);
+    }
+
+    partyInput.addEventListener("input", update);
+    update();
+}
+
+
+function setupLargePartyFoodQuote() {
+    const partyInput = document.getElementById("large-party-size");
+    const cateredInput = document.getElementById("catered-people");
+    const optionSelect = document.getElementById("menu-option");
+    const preview = document.getElementById("food-quote-preview");
+
+    if (!partyInput || !cateredInput || !optionSelect || !preview) return;
+
+    function update() {
+        const partySize = Number(partyInput.value || 0);
+        let catered = Number(cateredInput.value || 0);
+
+        if (partySize > 0 && catered > partySize) {
+            catered = partySize;
+            cateredInput.value = partySize;
+        }
+
+        const selected = optionSelect.options[optionSelect.selectedIndex];
+        const rawPrice = selected ? selected.dataset.price : "";
+        const price = rawPrice === "" ? null : Number(rawPrice);
+
+        if (!catered || price === null || Number.isNaN(price)) {
+            preview.textContent = "Not calculated";
+            return;
+        }
+
+        preview.textContent = `£${(price * catered).toFixed(2)}`;
+    }
+
+    partyInput.addEventListener("input", update);
+    cateredInput.addEventListener("input", update);
+    optionSelect.addEventListener("change", update);
+    update();
+}
+
+
 document.addEventListener("DOMContentLoaded", () => {
     setupCustomerLookup();
+    setupBookingTimeValidation();
     setupKitchenWarning();
+    setupDepositWarning();
+    setupLargePartyDepositWarning();
+    setupLargePartyFoodQuote();
 });

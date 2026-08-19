@@ -1,16 +1,26 @@
 {% extends "base.html" %}
 
-{% block title %}New Booking | Pub Booking System{% endblock %}
+{% block title %}
+    {% if booking %}Edit Booking{% else %}New Booking{% endif %}
+    | Pub Booking System
+{% endblock %}
 
 {% block content %}
 <div class="page-heading">
     <div>
-        <h1>New booking</h1>
+        <h1>{% if booking %}Edit booking{% else %}New booking{% endif %}</h1>
         <p>
-            Enter the customer's details here. New customers are saved
-            automatically and returning customers are recognised by phone number.
+            New customers are saved automatically and returning customers are
+            recognised by phone number.
         </p>
     </div>
+
+    {% if not booking %}
+        <a class="button secondary"
+           href="{{ url_for('main.new_large_party') }}">
+            Large party enquiry
+        </a>
+    {% endif %}
 </div>
 
 {% if not tables %}
@@ -31,6 +41,7 @@
                        id="customer-name"
                        list="customer-names"
                        autocomplete="off"
+                       value="{{ booking.customer.name if booking else '' }}"
                        required>
                 <datalist id="customer-names">
                     {% for customer in customer_lookup %}
@@ -45,6 +56,7 @@
                        id="customer-phone"
                        inputmode="tel"
                        autocomplete="tel"
+                       value="{{ booking.customer.phone if booking else '' }}"
                        required>
             </label>
         </div>
@@ -66,41 +78,78 @@
                        id="booking-date"
                        type="date"
                        name="booking_date"
-                       value="{{ today.isoformat() }}"
+                       value="{% if booking %}{{ booking.booking_date.isoformat() }}{% else %}{{ today.isoformat() }}{% endif %}"
                        required>
             </label>
 
             <label>
                 Time *
-                <select name="booking_time"
-                        id="booking-time"
-                        class="booking-time-select"
-                        required>
-                    <option value="">Choose a time</option>
-                    {% for time in booking_times %}
-                        <option value="{{ time }}">{{ time }}</option>
-                    {% endfor %}
-                </select>
+                <input class="booking-time-input"
+                       id="booking-time"
+                       type="time"
+                       name="booking_time"
+                       step="60"
+                       value="{% if booking %}{{ booking.booking_time.strftime('%H:%M') }}{% endif %}"
+                       required>
+                <span class="field-note">
+                    Earliest 12:15pm · latest 7:30pm, or 7:00pm on Sundays.
+                </span>
             </label>
 
             <label>
                 Number of people *
                 <input type="number"
                        name="party_size"
+                       id="party-size"
                        min="1"
                        max="50"
+                       value="{{ booking.party_size if booking else '' }}"
                        required>
+            </label>
+
+            <label>
+                Number of children
+                <input type="number"
+                       name="number_of_children"
+                       min="0"
+                       id="number-of-children"
+                       value="{{ booking.number_of_children if booking else 0 }}">
+                <span class="field-note">Children are counted as under 13 years old.</span>
             </label>
 
             <label>
                 Occasion
                 <input name="occasion"
+                       value="{{ booking.occasion if booking and booking.occasion else '' }}"
                        placeholder="Birthday, anniversary...">
             </label>
         </div>
 
         <div class="info-strip">
             Standard table time: <strong>3 hours</strong>
+        </div>
+
+        <div id="deposit-warning"
+             class="deposit-warning"
+             data-existing-paid="{{ booking.deposit_paid_amount if booking else 0 }}"
+             hidden>
+        </div>
+
+        <div id="deposit-payment-field"
+             class="deposit-payment-field"
+             {% if not booking or booking.party_size <= 10 %}hidden{% endif %}>
+            <label>
+                Deposit paid (£)
+                <input type="number"
+                       name="deposit_paid_amount"
+                       id="deposit-paid-amount"
+                       min="0"
+                       step="0.01"
+                       value="{{ '%.2f'|format(booking.deposit_paid_amount or 0) if booking else '0.00' }}">
+            </label>
+            <span class="field-note">
+                This can be updated later when the customer pays.
+            </span>
         </div>
 
         <div id="late-food-warning" class="late-food-warning" hidden></div>
@@ -115,7 +164,10 @@
                 <select name="preferred_area_id" id="preferred-area">
                     <option value="">No preference</option>
                     {% for area in areas %}
-                        <option value="{{ area.id }}">{{ area.name }}</option>
+                        <option value="{{ area.id }}"
+                            {% if booking and booking.preferred_area_id == area.id %}selected{% endif %}>
+                            {{ area.name }}
+                        </option>
                     {% endfor %}
                 </select>
             </label>
@@ -125,7 +177,8 @@
                 <select name="preferred_table_id" id="preferred-table">
                     <option value="">No preference</option>
                     {% for table in tables %}
-                        <option value="{{ table.id }}">
+                        <option value="{{ table.id }}"
+                            {% if booking and booking.preferred_table_id == table.id %}selected{% endif %}>
                             Table {{ table.number }} — {{ table.capacity }} seats
                         </option>
                     {% endfor %}
@@ -135,14 +188,16 @@
             <label class="checkbox-row">
                 <input type="checkbox"
                        name="wants_near_tv"
-                       id="wants-near-tv">
+                       id="wants-near-tv"
+                       {% if booking and booking.wants_near_tv %}checked{% endif %}>
                 Prefer to sit near a TV
             </label>
 
             <label class="checkbox-row">
                 <input type="checkbox"
                        name="avoids_bench"
-                       id="avoids-bench">
+                       id="avoids-bench"
+                       {% if booking and booking.avoids_bench %}checked{% endif %}>
                 Does not want bench seating
             </label>
         </div>
@@ -160,7 +215,8 @@
                 <label class="table-checkbox">
                     <input type="checkbox"
                            name="table_ids"
-                           value="{{ table.id }}">
+                           value="{{ table.id }}"
+                           {% if table.id in selected_table_ids %}checked{% endif %}>
 
                     <strong>T{{ table.number }}</strong>
 
@@ -176,20 +232,20 @@
 
     <label class="full-width">
         Booking notes
-        <textarea name="notes" rows="4"></textarea>
+        <textarea name="notes"
+                  rows="4">{{ booking.notes if booking and booking.notes else '' }}</textarea>
     </label>
 
     <div class="full-width">
         <button class="button"
                 type="submit"
                 {% if not tables %}disabled{% endif %}>
-            Create booking
+            {% if booking %}Save booking changes{% else %}Create booking{% endif %}
         </button>
     </div>
 </form>
 
 <script>
-    // Existing customer data is embedded locally; no internet/API call is needed.
     window.PUB_CUSTOMERS = {{ customer_lookup | tojson }};
 </script>
 {% endblock %}

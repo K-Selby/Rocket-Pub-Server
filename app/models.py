@@ -3,11 +3,7 @@ from app import db
 
 
 class Customer(db.Model):
-    """
-    Stores recurring customer details and useful seating preferences.
-
-    The phone number is the main unique identifier because names are not unique.
-    """
+    """Recurring customer details and saved seating preferences."""
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False, index=True)
@@ -32,7 +28,7 @@ class Customer(db.Model):
 
 
 class Area(db.Model):
-    """Named sections of the pub, such as Restaurant or Pool Room."""
+    """Named sections of the pub."""
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(80), nullable=False, unique=True)
@@ -41,7 +37,7 @@ class Area(db.Model):
 
 
 class PubTable(db.Model):
-    """Represents one physical table and the characteristics used for allocation."""
+    """One physical pub table and its allocation characteristics."""
 
     id = db.Column(db.Integer, primary_key=True)
     number = db.Column(db.String(20), nullable=False, unique=True, index=True)
@@ -53,7 +49,6 @@ class PubTable(db.Model):
     accessible = db.Column(db.Boolean, default=False)
     active = db.Column(db.Boolean, default=True)
 
-    # Kept ready for the visual drag-and-drop floor plan.
     x_position = db.Column(db.Float, default=0)
     y_position = db.Column(db.Float, default=0)
 
@@ -67,7 +62,7 @@ class PubTable(db.Model):
 
 
 class TablePairing(db.Model):
-    """Defines two tables that are physically able to be pushed together."""
+    """Two tables that can physically be pushed together."""
 
     id = db.Column(db.Integer, primary_key=True)
     table_a_id = db.Column(db.Integer, db.ForeignKey("pub_table.id"), nullable=False)
@@ -82,7 +77,7 @@ class TablePairing(db.Model):
 
 
 class Booking(db.Model):
-    """One reservation. Standard duration is three hours (180 minutes)."""
+    """A normal table booking. Standard table time is three hours."""
 
     id = db.Column(db.Integer, primary_key=True)
     customer_id = db.Column(db.Integer, db.ForeignKey("customer.id"), nullable=False)
@@ -92,12 +87,17 @@ class Booking(db.Model):
     duration_minutes = db.Column(db.Integer, nullable=False, default=180)
 
     party_size = db.Column(db.Integer, nullable=False)
+    number_of_children = db.Column(db.Integer, nullable=False, default=0)
     occasion = db.Column(db.String(120))
 
     preferred_area_id = db.Column(db.Integer, db.ForeignKey("area.id"))
     preferred_table_id = db.Column(db.Integer, db.ForeignKey("pub_table.id"))
     wants_near_tv = db.Column(db.Boolean, default=False)
     avoids_bench = db.Column(db.Boolean, default=False)
+
+    # For parties above 10 people the system calculates £5/head capped at £100.
+    deposit_required_amount = db.Column(db.Float, nullable=False, default=0)
+    deposit_paid_amount = db.Column(db.Float, nullable=False, default=0)
 
     notes = db.Column(db.Text)
     status = db.Column(db.String(30), nullable=False, default="Booked")
@@ -115,17 +115,19 @@ class Booking(db.Model):
 
     @property
     def tables(self):
-        """Convenient list of all physical tables assigned to this booking."""
         return [link.table for link in self.table_links]
+
+    @property
+    def deposit_balance(self):
+        return max(
+            float(self.deposit_required_amount or 0)
+            - float(self.deposit_paid_amount or 0),
+            0,
+        )
 
 
 class BookingTable(db.Model):
-    """
-    Join table between bookings and tables.
-
-    Keeping this separate means one booking can reserve Table 1 + Table 2
-    together without changing the Booking model.
-    """
+    """Join table allowing one booking to use one or more physical tables."""
 
     id = db.Column(db.Integer, primary_key=True)
     booking_id = db.Column(db.Integer, db.ForeignKey("booking.id"), nullable=False)
@@ -137,3 +139,70 @@ class BookingTable(db.Model):
     __table_args__ = (
         db.UniqueConstraint("booking_id", "table_id", name="uq_booking_table"),
     )
+
+
+class LargePartyMenuOption(db.Model):
+    """Configurable food/buffet option used for large-party enquiries."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(80), nullable=False, unique=True)
+    price_per_head = db.Column(db.Float)
+    active = db.Column(db.Boolean, nullable=False, default=True)
+
+
+class LargePartyInquiry(db.Model):
+    """
+    A flexible enquiry rather than a confirmed table booking.
+
+    Most details can be filled in later because callers may initially only ask
+    about availability and then call back with food/final-number information.
+    """
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    customer_name = db.Column(db.String(120), nullable=False)
+    customer_phone = db.Column(db.String(30), nullable=False, index=True)
+
+    event_date = db.Column(db.Date, index=True)
+    event_time = db.Column(db.Time)
+
+    party_size = db.Column(db.Integer, nullable=False)
+    number_of_children = db.Column(db.Integer, nullable=False, default=0)
+
+    # "Menu", "Buffet", or blank/undecided.
+    food_type = db.Column(db.String(30))
+
+    menu_option_id = db.Column(
+        db.Integer,
+        db.ForeignKey("large_party_menu_option.id")
+    )
+
+    # Food can be ordered for fewer people than the total party size.
+    catered_people = db.Column(db.Integer)
+
+    quoted_price_per_head = db.Column(db.Float)
+    quoted_food_total = db.Column(db.Float)
+
+    deposit_required_amount = db.Column(db.Float, nullable=False, default=0)
+    deposit_paid_amount = db.Column(db.Float, nullable=False, default=0)
+
+    occasion = db.Column(db.String(120))
+    notes = db.Column(db.Text)
+    status = db.Column(db.String(40), nullable=False, default="Enquiry")
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    menu_option = db.relationship("LargePartyMenuOption")
+
+    @property
+    def deposit_balance(self):
+        return max(
+            float(self.deposit_required_amount or 0)
+            - float(self.deposit_paid_amount or 0),
+            0,
+        )

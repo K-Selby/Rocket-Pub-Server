@@ -70,7 +70,19 @@ body {
     margin-bottom: 20px;
 }
 
-h1, h2 {
+.heading-actions,
+.row-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.row-actions form {
+    margin: 0;
+}
+
+h1,
+h2 {
     margin-top: 0;
 }
 
@@ -147,7 +159,9 @@ h1, h2 {
 
 .form-grid label,
 .form-grid fieldset,
-.nested-grid label {
+.nested-grid label,
+.deposit-payment-field label,
+.option-price-card label {
     display: flex;
     flex-direction: column;
     gap: 7px;
@@ -182,10 +196,16 @@ textarea {
 }
 
 .booking-date-input,
-.booking-time-select {
+.booking-time-input {
     min-height: 58px;
     font-size: 18px;
     padding: 13px 14px;
+}
+
+.field-note {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.35;
 }
 
 .info-strip {
@@ -195,7 +215,8 @@ textarea {
     background: #eef1ef;
 }
 
-.late-food-warning {
+.late-food-warning,
+.deposit-warning {
     margin-top: 14px;
     padding: 14px 16px;
     background: var(--warning-bg);
@@ -203,6 +224,11 @@ textarea {
     border-radius: 8px;
     font-weight: 600;
     line-height: 1.45;
+}
+
+.deposit-payment-field {
+    max-width: 320px;
+    margin-top: 14px;
 }
 
 .existing-customer-message {
@@ -258,7 +284,8 @@ textarea {
     font-weight: 700;
 }
 
-.booking-list {
+.booking-list,
+.inquiry-list {
     display: flex;
     flex-direction: column;
 }
@@ -272,12 +299,28 @@ textarea {
     border-bottom: 1px solid var(--border);
 }
 
-.booking-row:last-child {
+.inquiry-row {
+    display: grid;
+    grid-template-columns: minmax(240px, 1fr) auto auto auto;
+    gap: 18px;
+    align-items: center;
+    padding: 15px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.booking-row:last-child,
+.inquiry-row:last-child {
     border-bottom: 0;
 }
 
 .booking-row.cancelled {
     opacity: 0.55;
+}
+
+.deposit-inline {
+    margin-top: 4px;
+    font-size: 13px;
+    font-weight: 600;
 }
 
 .badge {
@@ -306,19 +349,21 @@ textarea {
     color: var(--danger);
 }
 
-.table-card-grid {
+.table-card-grid,
+.option-price-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     gap: 14px;
 }
 
-.table-card {
+.table-card,
+.option-price-card {
     border: 1px solid var(--border);
     border-radius: 10px;
     padding: 16px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 10px;
 }
 
 .table-card-header {
@@ -372,6 +417,21 @@ textarea {
     font-size: 13px;
 }
 
+.quote-preview {
+    border: 1px solid var(--border);
+    background: #f8f8f5;
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+}
+
+.quote-preview strong {
+    font-size: 22px;
+}
+
 @media (max-width: 720px) {
     .topbar {
         align-items: flex-start;
@@ -384,6 +444,11 @@ textarea {
         flex-direction: column;
     }
 
+    .heading-actions {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+
     .form-grid,
     .nested-grid {
         grid-template-columns: 1fr;
@@ -393,8 +458,9 @@ textarea {
         grid-column: auto;
     }
 
-    .booking-row {
-        grid-template-columns: 60px 1fr;
+    .booking-row,
+    .inquiry-row {
+        grid-template-columns: 1fr;
     }
 
     .data-table {
