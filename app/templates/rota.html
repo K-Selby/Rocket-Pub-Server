@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}Rota | Rocket Pub Server{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h1>Staff Rota</h1>
+        <p>Week from Sunday {{ week_start.strftime("%d %B %Y") }}</p>
+    </div>
+
+    {% if current_user.is_manager %}
+    <div class="heading-actions">
+        <a class="button secondary" href="{{ url_for('main.rota_profiles') }}">Staff Profiles</a>
+        <a class="button secondary" href="{{ url_for('main.rota_settings') }}">Rota Settings</a>
+    </div>
+    {% endif %}
+</div>
+
+<div class="week-switcher card">
+    <a class="button secondary"
+       href="{{ url_for('main.rota_home', week=previous_start.isoformat()) }}">← Previous</a>
+    <strong>{{ week_start.strftime("%d %b") }} – {{ days[-1].strftime("%d %b %Y") }}</strong>
+    <a class="button secondary"
+       href="{{ url_for('main.rota_home', week=next_start.isoformat()) }}">Next →</a>
+</div>
+
+{% if not week %}
+    <div class="card empty-rota">
+        <h2>No issued rota for this week</h2>
+
+        {% if current_user.is_manager %}
+            <p>Create it as a draft, build the shifts, then issue it when ready.</p>
+            <form method="post" action="{{ url_for('main.rota_create') }}">
+                <input type="hidden" name="week_start" value="{{ week_start.isoformat() }}">
+                <button class="button" type="submit">Create draft rota</button>
+            </form>
+        {% else %}
+            <p>The rota has not been issued yet.</p>
+        {% endif %}
+    </div>
+{% else %}
+    <div class="rota-status-strip">
+        <span class="rota-status rota-status-{{ week.status }}">{{ week.status|title }}</span>
+
+        {% if week.published_at %}
+            <span>Issued {{ week.published_at.strftime("%d/%m %H:%M") }}</span>
+        {% endif %}
+
+        <a class="button secondary"
+           href="{{ url_for('main.rota_image', rota_id=week.id) }}">
+            Save rota image
+        </a>
+
+        {% if current_user.is_manager %}
+            <a class="button" href="{{ url_for('main.rota_edit', rota_id=week.id) }}">
+                Edit rota
+            </a>
+        {% endif %}
+    </div>
+
+    {% if my_profile and my_shifts %}
+        <section class="my-rota-mobile card">
+            <h2>My shifts</h2>
+            {% for shift in my_shifts %}
+                <div class="my-shift-card">
+                    <div>
+                        <strong>{{ shift.shift_date.strftime("%A %d %B") }}</strong>
+                        <span>{{ shift_label(shift) }}</span>
+                        {% if shift.shift_role == "kitchen" %}
+                            <small>Kitchen</small>
+                        {% elif shift.shift_role == "glass_collector" %}
+                            <small>Glass collector</small>
+                        {% endif %}
+                    </div>
+
+                    {% if week.status == "published" %}
+                        <a class="small-link"
+                           href="{{ url_for('main.request_shift_swap', shift_id=shift.id) }}">
+                            Request swap
+                        </a>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </section>
+    {% endif %}
+
+    <div class="card rota-table-card">
+        <div class="rota-scroll">
+            <table class="rota-table">
+                <thead>
+                    <tr>
+                        <th>Staff</th>
+                        {% for day in days %}
+                            <th>
+                                {{ day.strftime("%a") }}
+                                <small>{{ day.strftime("%d") }}</small>
+                            </th>
+                        {% endfor %}
+                        <th>Est. hours</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for profile in profiles %}
+                    <tr>
+                        <th>
+                            {{ profile.display_name }}
+                            <small>{{ profile.work_role.replace("_", " ")|title }}</small>
+                        </th>
+                        {% for day in days %}
+                        <td>
+                            {% for shift in shift_map.get((profile.id, day), []) %}
+                                <span class="rota-shift-chip
+                                    {% if shift.shift_role == 'kitchen' %}kitchen{% endif %}
+                                    {% if shift.auto_suggested %}suggested{% endif %}">
+                                    {{ shift_label(shift) }}
+                                    {% if shift.shift_role == "kitchen" %} K{% endif %}
+                                </span>
+                            {% endfor %}
+                        </td>
+                        {% endfor %}
+                        <td class="rota-hours">{{ hours.get(profile.id, 0) }}h</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if swaps %}
+    <section class="card">
+        <h2>My shift swaps</h2>
+        <div class="swap-list">
+        {% for swap in swaps %}
+            <div class="swap-row">
+                <div>
+                    <strong>{{ swap.requester_staff.display_name }}</strong>
+                    {{ shift_label(swap.requester_shift) }}
+                    on {{ swap.requester_shift.shift_date.strftime("%a %d %b") }}
+                    →
+                    {{ swap.target_staff.display_name if swap.target_staff else "Open" }}
+                </div>
+
+                <span class="badge">{{ swap.status.replace("_", " ")|title }}</span>
+
+                {% if my_profile and swap.target_staff_id == my_profile.id and swap.status == "pending_target" %}
+                    <form method="post"
+                          action="{{ url_for('main.swap_target_response', swap_id=swap.id) }}"
+                          class="swap-response-form">
+                        <button class="button" name="action" value="accept" type="submit">Accept</button>
+                        <button class="button secondary" name="action" value="decline" type="submit">Decline</button>
+                    </form>
+                {% endif %}
+
+                {% if current_user.is_manager and swap.status == "pending_manager" %}
+                    <form method="post"
+                          action="{{ url_for('main.swap_manager_decision', swap_id=swap.id) }}"
+                          class="swap-response-form">
+                        <button class="button" name="action" value="approve" type="submit">Approve</button>
+                        <button class="button secondary" name="action" value="reject" type="submit">Reject</button>
+                    </form>
+                {% endif %}
+            </div>
+        {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+{% endif %}
+{% endblock %}

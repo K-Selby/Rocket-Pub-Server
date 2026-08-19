@@ -668,3 +668,315 @@ class InquiryExtraDish(db.Model):
             float(self.price_per_head or 0) * int(self.quantity_people or 0),
             2,
         )
+
+
+
+# ============================================================
+# Rota / Staff Diary
+# ============================================================
+
+class StaffProfile(db.Model):
+    """
+    Person who can appear on the rota.
+
+    A profile may be linked to a Rocket Pub Server login, but this is optional
+    so managers can rota staff who have not been given a login yet.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("app_user.id"),
+        unique=True,
+        index=True,
+    )
+
+    display_name = db.Column(db.String(100), nullable=False, unique=True, index=True)
+
+    # front_of_house, kitchen, both, glass_collector
+    work_role = db.Column(
+        db.String(30),
+        nullable=False,
+        default="front_of_house",
+        index=True,
+    )
+
+    # regular, casual
+    employment_type = db.Column(
+        db.String(20),
+        nullable=False,
+        default="regular",
+    )
+
+    target_hours = db.Column(db.Float, nullable=False, default=0)
+    max_hours = db.Column(db.Float, nullable=False, default=40)
+
+    # Small manager note such as "has another job" / "Friday-Sunday only".
+    rota_notes = db.Column(db.String(300))
+
+    active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship("AppUser")
+
+    availability_rules = db.relationship(
+        "StaffAvailabilityRule",
+        back_populates="staff",
+        cascade="all, delete-orphan",
+    )
+
+    diary_entries = db.relationship(
+        "StaffDiaryEntry",
+        back_populates="staff",
+        cascade="all, delete-orphan",
+    )
+
+    shifts = db.relationship(
+        "RotaShift",
+        back_populates="staff",
+        cascade="all, delete-orphan",
+    )
+
+
+class StaffAvailabilityRule(db.Model):
+    """Normal recurring weekly availability for a rota profile."""
+    id = db.Column(db.Integer, primary_key=True)
+    staff_id = db.Column(
+        db.Integer,
+        db.ForeignKey("staff_profile.id"),
+        nullable=False,
+        index=True,
+    )
+
+    # Python weekday: Monday=0 ... Sunday=6.
+    weekday = db.Column(db.Integer, nullable=False, index=True)
+
+    available = db.Column(db.Boolean, nullable=False, default=True)
+    available_from = db.Column(db.Time)
+    available_until = db.Column(db.Time)
+
+    staff = db.relationship("StaffProfile", back_populates="availability_rules")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "staff_id",
+            "weekday",
+            name="uq_staff_weekday_availability",
+        ),
+    )
+
+
+class StaffDiaryEntry(db.Model):
+    """
+    Date-specific availability / time-off / manager diary entry.
+
+    Types:
+      day_off_request
+      unavailable
+      available_window
+      note
+      no_one_off (global manager entry; staff_id is NULL)
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    staff_id = db.Column(
+        db.Integer,
+        db.ForeignKey("staff_profile.id"),
+        index=True,
+    )
+
+    entry_date = db.Column(db.Date, nullable=False, index=True)
+    entry_type = db.Column(db.String(30), nullable=False, index=True)
+
+    available_from = db.Column(db.Time)
+    available_until = db.Column(db.Time)
+
+    note = db.Column(db.String(400))
+
+    # requested / approved / rejected / info
+    status = db.Column(
+        db.String(20),
+        nullable=False,
+        default="requested",
+        index=True,
+    )
+
+    created_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("app_user.id"),
+    )
+    reviewed_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("app_user.id"),
+    )
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    reviewed_at = db.Column(db.DateTime)
+
+    staff = db.relationship("StaffProfile", back_populates="diary_entries")
+    created_by = db.relationship("AppUser", foreign_keys=[created_by_user_id])
+    reviewed_by = db.relationship("AppUser", foreign_keys=[reviewed_by_user_id])
+
+
+class RotaWeek(db.Model):
+    """One Sunday-Saturday rota."""
+    id = db.Column(db.Integer, primary_key=True)
+    week_start = db.Column(db.Date, nullable=False, unique=True, index=True)
+
+    # draft / published
+    status = db.Column(db.String(20), nullable=False, default="draft", index=True)
+
+    notes = db.Column(db.String(500))
+
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("app_user.id"))
+    published_by_user_id = db.Column(db.Integer, db.ForeignKey("app_user.id"))
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+    published_at = db.Column(db.DateTime)
+
+    created_by = db.relationship("AppUser", foreign_keys=[created_by_user_id])
+    published_by = db.relationship("AppUser", foreign_keys=[published_by_user_id])
+
+    shifts = db.relationship(
+        "RotaShift",
+        back_populates="rota_week",
+        cascade="all, delete-orphan",
+    )
+
+
+class RotaShift(db.Model):
+    """One person's shift on one date."""
+    id = db.Column(db.Integer, primary_key=True)
+
+    rota_week_id = db.Column(
+        db.Integer,
+        db.ForeignKey("rota_week.id"),
+        nullable=False,
+        index=True,
+    )
+    staff_id = db.Column(
+        db.Integer,
+        db.ForeignKey("staff_profile.id"),
+        nullable=False,
+        index=True,
+    )
+
+    shift_date = db.Column(db.Date, nullable=False, index=True)
+    start_time = db.Column(db.Time, nullable=False)
+
+    # NULL when end_is_finish is true.
+    end_time = db.Column(db.Time)
+    end_is_finish = db.Column(db.Boolean, nullable=False, default=False)
+
+    # front_of_house / kitchen / glass_collector
+    shift_role = db.Column(
+        db.String(30),
+        nullable=False,
+        default="front_of_house",
+    )
+
+    note = db.Column(db.String(250))
+    auto_suggested = db.Column(db.Boolean, nullable=False, default=False)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    rota_week = db.relationship("RotaWeek", back_populates="shifts")
+    staff = db.relationship("StaffProfile", back_populates="shifts")
+
+
+class ShiftSwapRequest(db.Model):
+    """
+    Staff-requested cover or two-way shift swap.
+
+    If target_shift_id is NULL, target staff is taking requester's shift.
+    If target_shift_id is set, assignments are exchanged on approval.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+
+    requester_shift_id = db.Column(
+        db.Integer,
+        db.ForeignKey("rota_shift.id"),
+        nullable=False,
+        index=True,
+    )
+    requester_staff_id = db.Column(
+        db.Integer,
+        db.ForeignKey("staff_profile.id"),
+        nullable=False,
+    )
+
+    target_staff_id = db.Column(
+        db.Integer,
+        db.ForeignKey("staff_profile.id"),
+    )
+    target_shift_id = db.Column(
+        db.Integer,
+        db.ForeignKey("rota_shift.id"),
+    )
+
+    # pending_target / pending_manager / approved / rejected / cancelled
+    status = db.Column(
+        db.String(30),
+        nullable=False,
+        default="pending_target",
+        index=True,
+    )
+
+    requester_note = db.Column(db.String(300))
+    target_response_note = db.Column(db.String(300))
+    manager_note = db.Column(db.String(300))
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    target_responded_at = db.Column(db.DateTime)
+    manager_responded_at = db.Column(db.DateTime)
+    manager_user_id = db.Column(db.Integer, db.ForeignKey("app_user.id"))
+
+    requester_shift = db.relationship(
+        "RotaShift",
+        foreign_keys=[requester_shift_id],
+    )
+    target_shift = db.relationship(
+        "RotaShift",
+        foreign_keys=[target_shift_id],
+    )
+    requester_staff = db.relationship(
+        "StaffProfile",
+        foreign_keys=[requester_staff_id],
+    )
+    target_staff = db.relationship(
+        "StaffProfile",
+        foreign_keys=[target_staff_id],
+    )
+    manager_user = db.relationship("AppUser", foreign_keys=[manager_user_id])
+
+
+class RotaFinishSetting(db.Model):
+    """Estimated 'F' time for projected-hour calculations."""
+    id = db.Column(db.Integer, primary_key=True)
+    weekday = db.Column(db.Integer, nullable=False, unique=True, index=True)
+    estimated_finish = db.Column(db.Time, nullable=False)
+
+
+class RotaShiftTemplate(db.Model):
+    """
+    Manager-editable default shift slots used by Auto-fill.
+
+    One row = one suggested staffing slot on a weekday.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    weekday = db.Column(db.Integer, nullable=False, index=True)
+    start_time = db.Column(db.Time, nullable=False)
+    end_time = db.Column(db.Time)
+    end_is_finish = db.Column(db.Boolean, nullable=False, default=False)
+
+    role = db.Column(
+        db.String(30),
+        nullable=False,
+        default="front_of_house",
+    )
+    quantity = db.Column(db.Integer, nullable=False, default=1)
+    active = db.Column(db.Boolean, nullable=False, default=True)
+

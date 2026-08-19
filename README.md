@@ -578,3 +578,64 @@ staff select allergen-free filters, Rocket Pub Server separately checks every
 linked side and suggests only sides confirmed Green for all selected allergens.
 The full side list can still be expanded so staff can see why another side was
 excluded.
+
+
+## v9 rota and staff diary
+
+### Rota
+- Sunday-Saturday weekly rota.
+- Managers create Draft rotas.
+- Staff cannot see a Draft.
+- Managers can manually add/edit/remove shifts.
+- `F` is stored as a variable Finish rather than a fake clock time.
+- Projected hours use manager-editable estimated Finish times:
+  Monday 22:00, Tuesday 23:00, Wednesday 22:00, Thursday 23:00,
+  Friday 00:00, Saturday 00:00 and Sunday 22:30.
+- Managers issue/publish the rota when ready.
+- Issued rotas can be downloaded as a high-resolution PNG.
+
+### Smart Auto-fill
+Auto-fill uses:
+- recurring staff availability
+- approved date-specific Staff Diary overrides
+- work role (Front of House, Kitchen, Both, Glass Collector)
+- maximum/target weekly hours
+- regular vs casual status
+- historical rota pattern bonuses inferred from the supplied June-August rota
+  photographs
+- manager-editable shift-slot templates
+
+Auto-fill only creates suggestions. It never publishes the rota.
+
+### Initial staff assumptions
+- Hannah, Charl/Charlotte and Erin are marked Casual / odd shifts.
+- Alara is marked Casual + Glass Collector and is normally available
+  Friday-Sunday only.
+- Historical scoring recognises recurring patterns for Brooke, Niamh, Lois,
+  Jenna, Maggie, Kieran and Scott.
+- All of these rules can be changed by a manager.
+
+### Staff Diary
+Staff can submit:
+- day-off/unavailable requests
+- a specific time window they can work on a date
+- notes
+
+Managers can:
+- add entries for anyone
+- approve/reject requests
+- mark a date NO ONE OFF
+- view diary entries alongside the rota builder
+
+### Shift swaps
+- Staff can request another person to take a shift.
+- They can alternatively choose one of the other person's shifts for a true
+  two-way swap.
+- The other staff member accepts/declines.
+- Accepted swaps go to a manager.
+- When approved, the live rota is changed automatically.
+
+### Navigation
+Rota is a primary navigation item.
+Staff Diary sits under More.
+Manager rota tools are accessible from the Rota screen.

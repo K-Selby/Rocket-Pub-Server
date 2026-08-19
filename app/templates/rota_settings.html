@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Rota Settings | Rocket Pub Server{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h1>Rota Settings</h1>
+        <p>Estimated Finish times and Auto-fill staffing slots.</p>
+    </div>
+</div>
+
+<form method="post" class="card">
+    <h2>Estimated Finish times</h2>
+    <p class="muted">
+        These are used only for projected hours. The rota still displays F.
+    </p>
+
+    <div class="finish-settings-grid">
+        {% for weekday, day_name in [
+            (0,"Monday"),(1,"Tuesday"),(2,"Wednesday"),(3,"Thursday"),
+            (4,"Friday"),(5,"Saturday"),(6,"Sunday")
+        ] %}
+        <label>
+            {{ day_name }}
+            <input type="time" name="finish_{{ weekday }}"
+                   value="{{ finish_settings[weekday].estimated_finish.strftime('%H:%M') }}">
+        </label>
+        {% endfor %}
+    </div>
+
+    <button class="button" type="submit">Save Finish estimates</button>
+</form>
+
+<section class="card">
+    <h2>Auto-fill shift slots</h2>
+    <p class="muted">
+        These are the staffing slots Auto-fill tries to cover. Delete/add them
+        as the normal pattern changes.
+    </p>
+
+    <div class="template-list">
+    {% for template in templates %}
+        <div class="template-row">
+            <strong>{{ weekday_names[template.weekday] }}</strong>
+            <span>
+                {{ template.start_time.strftime("%H:%M") }}
+                –
+                {{ "F" if template.end_is_finish else template.end_time.strftime("%H:%M") }}
+            </span>
+            <span>{{ template.role.replace("_", " ")|title }}</span>
+            <span>×{{ template.quantity }}</span>
+            <form method="post"
+                  action="{{ url_for('main.rota_template_delete', template_id=template.id) }}">
+                <button class="link-button danger" type="submit">Delete</button>
+            </form>
+        </div>
+    {% endfor %}
+    </div>
+
+    <h3>Add shift slot</h3>
+    <form method="post"
+          action="{{ url_for('main.rota_template_add') }}"
+          class="template-add-form">
+        <label>Day
+            <select name="weekday">
+                {% for index in range(7) %}
+                    <option value="{{ index }}">{{ weekday_names[index] }}</option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <label>Start
+            <input type="time" name="start_time" required>
+        </label>
+
+        <label>End
+            <input type="time" name="end_time">
+        </label>
+
+        <label class="checkbox-row">
+            <input type="checkbox" name="end_is_finish" value="1">
+            Finish
+        </label>
+
+        <label>Role
+            <select name="role">
+                <option value="front_of_house">Front of house</option>
+                <option value="kitchen">Kitchen</option>
+                <option value="glass_collector">Glass collector</option>
+            </select>
+        </label>
+
+        <label>People
+            <input type="number" name="quantity" min="1" value="1">
+        </label>
+
+        <button class="button" type="submit">Add slot</button>
+    </form>
+</section>
+{% endblock %}

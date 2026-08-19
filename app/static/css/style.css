@@ -3483,3 +3483,435 @@ main.container {
         grid-template-columns: 1fr;
     }
 }
+
+
+/* v9 rota + staff diary */
+.week-switcher {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.rota-status-strip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: rgba(255,255,255,0.94);
+}
+
+.rota-status {
+    display: inline-flex;
+    padding: 5px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 850;
+    text-transform: uppercase;
+}
+
+.rota-status-draft {
+    background: #fff0bd;
+    color: #6c5508;
+}
+
+.rota-status-published {
+    background: #dff1df;
+    color: #315f38;
+}
+
+.rota-table-card {
+    padding: 0;
+    overflow: hidden;
+}
+
+.rota-scroll {
+    overflow-x: auto;
+}
+
+.rota-table {
+    width: 100%;
+    min-width: 1050px;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.rota-table th,
+.rota-table td {
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 10px;
+    vertical-align: top;
+    min-width: 112px;
+}
+
+.rota-table thead th {
+    background: #edf5ea;
+    color: #234533;
+    text-align: center;
+}
+
+.rota-table th:first-child {
+    width: 160px;
+    text-align: left;
+    position: sticky;
+    left: 0;
+    z-index: 4;
+    background: #f7faf5;
+}
+
+.rota-table thead th:first-child {
+    background: #e6f0e2;
+    z-index: 5;
+}
+
+.rota-table th small,
+.rota-hours small {
+    display: block;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.rota-shift-chip {
+    display: inline-flex;
+    margin: 2px;
+    padding: 6px 7px;
+    border: 1px solid #b7cbb9;
+    border-radius: 7px;
+    background: #f3f8f1;
+    color: #254532;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.rota-shift-chip.kitchen {
+    background: #fff0bd;
+    border-color: #d6be68;
+}
+
+.rota-shift-chip.suggested,
+.editable-shift.suggested > summary {
+    border-color: #6da07b;
+    background: #e3f2df;
+}
+
+.rota-hours {
+    font-weight: 800;
+    text-align: center;
+}
+
+.rota-builder-notice {
+    margin-bottom: 16px;
+    padding: 13px 15px;
+    border: 1px solid #b8d0bb;
+    border-radius: 10px;
+    background: #eef6eb;
+}
+
+.rota-edit-cell {
+    min-height: 88px;
+}
+
+.editable-shift {
+    margin: 3px 0;
+    border: 1px solid #c7d4c8;
+    border-radius: 7px;
+    background: white;
+}
+
+.editable-shift > summary,
+.add-shift-inline > summary {
+    cursor: pointer;
+    padding: 6px;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.add-shift-inline {
+    margin-top: 5px;
+    color: #4d755b;
+}
+
+.mini-shift-form {
+    display: grid;
+    gap: 5px;
+    padding: 7px;
+}
+
+.mini-shift-form label {
+    font-size: 10px;
+}
+
+.mini-shift-form input,
+.mini-shift-form select {
+    padding: 5px;
+    font-size: 11px;
+}
+
+.rota-diary-strip {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(120px, 1fr));
+    gap: 8px;
+    overflow-x: auto;
+}
+
+.rota-diary-day {
+    min-width: 120px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.diary-mini {
+    margin-top: 6px;
+    padding: 6px;
+    border-radius: 6px;
+    background: #eef1ef;
+    font-size: 11px;
+}
+
+.diary-mini.requested {
+    background: #fff0bd;
+}
+
+.diary-mini.approved,
+.diary-mini.info {
+    background: #e2f0df;
+}
+
+.diary-mini small {
+    display: block;
+    margin-top: 3px;
+}
+
+.profile-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.staff-profile-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 18px;
+    align-items: center;
+    padding: 13px 6px;
+    border-bottom: 1px solid var(--border);
+}
+
+.staff-hours-summary {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.availability-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.availability-row {
+    display: grid;
+    grid-template-columns: 120px 120px minmax(130px, 1fr) minmax(130px, 1fr);
+    gap: 12px;
+    align-items: end;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #f9fbf8;
+}
+
+.availability-row label {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-size: 12px;
+}
+
+.staff-diary-week {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(145px, 1fr));
+    gap: 10px;
+    overflow-x: auto;
+}
+
+.diary-day-card {
+    min-width: 145px;
+    padding: 13px;
+}
+
+.diary-day-heading {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 10px;
+}
+
+.diary-entry {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 8px;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: #f6f8f5;
+    font-size: 11px;
+}
+
+.diary-entry > div:first-child {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.diary-requested {
+    background: #fff7dc;
+    border-color: #dfc96f;
+}
+
+.diary-approved,
+.diary-info {
+    background: #eaf4e7;
+    border-color: #b4cfb5;
+}
+
+.diary-rejected {
+    opacity: 0.58;
+}
+
+.diary-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.diary-entry-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    align-items: end;
+}
+
+.diary-entry-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.finish-settings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.finish-settings-grid label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.template-list {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 18px;
+}
+
+.template-row {
+    display: grid;
+    grid-template-columns: 120px 120px 1fr 50px auto;
+    gap: 10px;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.template-add-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px;
+    align-items: end;
+}
+
+.template-add-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.my-rota-mobile {
+    display: none;
+}
+
+.my-shift-card {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.my-shift-card > div {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.swap-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.swap-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.swap-response-form {
+    display: flex;
+    gap: 5px;
+}
+
+.empty-rota {
+    text-align: center;
+    padding: 34px;
+}
+
+@media (max-width: 760px) {
+    .my-rota-mobile {
+        display: block;
+    }
+
+    .rota-table-card {
+        display: none;
+    }
+
+    .staff-profile-row {
+        grid-template-columns: 1fr;
+    }
+
+    .availability-row {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .week-switcher {
+        font-size: 12px;
+    }
+
+    .week-switcher .button {
+        padding: 8px 10px;
+        font-size: 11px;
+    }
+
+    .rota-status-strip {
+        flex-wrap: wrap;
+    }
+}

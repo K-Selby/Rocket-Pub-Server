@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}Edit Rota | Rocket Pub Server{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h1>Rota Builder</h1>
+        <p>
+            Week from Sunday {{ week.week_start.strftime("%d %B %Y") }}
+            · {{ week.status|title }}
+        </p>
+    </div>
+
+    <div class="heading-actions">
+        <form method="post" action="{{ url_for('main.rota_autofill', rota_id=week.id) }}"
+              onsubmit="return confirm('Replace previous auto-fill suggestions? Manually entered shifts will stay.');">
+            <button class="button secondary" type="submit">Auto-fill suggestions</button>
+        </form>
+
+        {% if week.status == "draft" %}
+        <form method="post" action="{{ url_for('main.rota_publish', rota_id=week.id) }}"
+              onsubmit="return confirm('Issue this rota to all staff?');">
+            <button class="button" type="submit">Issue rota</button>
+        </form>
+        {% else %}
+        <form method="post" action="{{ url_for('main.rota_return_to_draft', rota_id=week.id) }}">
+            <button class="button secondary" type="submit">Return to draft</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+<div class="rota-builder-notice">
+    <strong>Auto-fill is only a suggestion.</strong>
+    Availability is treated as a hard rule; historical patterns and target hours
+    are used only to rank suitable staff. Nothing is issued until you press
+    <em>Issue rota</em>.
+</div>
+
+<div class="card rota-table-card">
+    <div class="rota-scroll">
+        <table class="rota-table rota-edit-table">
+            <thead>
+                <tr>
+                    <th>Staff</th>
+                    {% for day in days %}
+                        <th>{{ day.strftime("%a") }}<small>{{ day.strftime("%d %b") }}</small></th>
+                    {% endfor %}
+                    <th>Hours</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for profile in profiles %}
+                <tr>
+                    <th>
+                        {{ profile.display_name }}
+                        <small>
+                            {{ profile.employment_type|title }}
+                            · {{ profile.work_role.replace("_", " ")|title }}
+                        </small>
+                    </th>
+
+                    {% for day in days %}
+                    <td class="rota-edit-cell">
+                        {% for shift in shift_map.get((profile.id, day), []) %}
+                            <details class="editable-shift {% if shift.auto_suggested %}suggested{% endif %}">
+                                <summary>
+                                    {{ shift_label(shift) }}
+                                    {% if shift.shift_role == "kitchen" %} K{% endif %}
+                                    {% if shift.auto_suggested %} ★{% endif %}
+                                </summary>
+
+                                <form method="post"
+                                      action="{{ url_for('main.rota_edit_shift', shift_id=shift.id) }}"
+                                      class="mini-shift-form">
+                                    <input type="hidden" name="shift_date" value="{{ day.isoformat() }}">
+
+                                    <label>Start
+                                        <input type="time" name="start_time"
+                                               value="{{ shift.start_time.strftime('%H:%M') }}">
+                                    </label>
+
+                                    <label>End
+                                        <input type="time" name="end_time"
+                                               value="{{ shift.end_time.strftime('%H:%M') if shift.end_time else '' }}">
+                                    </label>
+
+                                    <label class="checkbox-row">
+                                        <input type="checkbox" name="end_is_finish" value="1"
+                                               {% if shift.end_is_finish %}checked{% endif %}>
+                                        Finish
+                                    </label>
+
+                                    <select name="shift_role">
+                                        <option value="front_of_house" {% if shift.shift_role == "front_of_house" %}selected{% endif %}>Front of house</option>
+                                        <option value="kitchen" {% if shift.shift_role == "kitchen" %}selected{% endif %}>Kitchen</option>
+                                        <option value="glass_collector" {% if shift.shift_role == "glass_collector" %}selected{% endif %}>Glass collector</option>
+                                    </select>
+
+                                    <button class="small-link" type="submit">Save</button>
+                                </form>
+
+                                <form method="post"
+                                      action="{{ url_for('main.rota_delete_shift', shift_id=shift.id) }}">
+                                    <button class="link-button danger" type="submit">Remove</button>
+                                </form>
+                            </details>
+                        {% endfor %}
+
+                        <details class="add-shift-inline">
+                            <summary>+ shift</summary>
+                            <form method="post"
+                                  action="{{ url_for('main.rota_add_shift', rota_id=week.id) }}"
+                                  class="mini-shift-form">
+                                <input type="hidden" name="staff_id" value="{{ profile.id }}">
+                                <input type="hidden" name="shift_date" value="{{ day.isoformat() }}">
+
+                                <input type="time" name="start_time" value="12:00" required>
+                                <input type="time" name="end_time">
+
+                                <label class="checkbox-row">
+                                    <input type="checkbox" name="end_is_finish" value="1">
+                                    F
+                                </label>
+
+                                <select name="shift_role">
+                                    <option value="front_of_house">FOH</option>
+                                    <option value="kitchen">Kitchen</option>
+                                    <option value="glass_collector">Glass</option>
+                                </select>
+
+                                <button class="small-link" type="submit">Add</button>
+                            </form>
+                        </details>
+                    </td>
+                    {% endfor %}
+
+                    <td class="rota-hours">
+                        {{ hours.get(profile.id, 0) }}h
+                        {% if profile.target_hours %}
+                            <small>target {{ profile.target_hours }}h</small>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<section class="card">
+    <h2>Diary / availability affecting this week</h2>
+
+    <div class="rota-diary-strip">
+        {% for day in days %}
+        <div class="rota-diary-day">
+            <strong>{{ day.strftime("%a %d") }}</strong>
+
+            {% for entry in diary_by_day.get(day, []) %}
+                <div class="diary-mini {{ entry.status }}">
+                    {% if entry.entry_type == "no_one_off" %}
+                        <strong>NO ONE OFF</strong>
+                    {% else %}
+                        {{ entry.staff.display_name }}:
+                        {{ entry.entry_type.replace("_", " ")|title }}
+                    {% endif %}
+                    {% if entry.note %}<small>{{ entry.note }}</small>{% endif %}
+                </div>
+            {% else %}
+                <span class="muted">No entries</span>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

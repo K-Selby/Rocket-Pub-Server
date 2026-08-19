@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Staff Diary | Rocket Pub Server{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h1>Staff Diary</h1>
+        <p>Availability, days off and manager notes.</p>
+    </div>
+</div>
+
+<div class="week-switcher card">
+    <a class="button secondary"
+       href="{{ url_for('main.staff_diary', week=previous_start.isoformat()) }}">← Previous</a>
+    <strong>Week from {{ week_start.strftime("%d %B %Y") }}</strong>
+    <a class="button secondary"
+       href="{{ url_for('main.staff_diary', week=next_start.isoformat()) }}">Next →</a>
+</div>
+
+<div class="card diary-add-card">
+    <h2>Add diary entry</h2>
+    <form method="post" class="diary-entry-form">
+        {% if current_user.is_manager %}
+        <label>Staff
+            <select name="staff_id">
+                {% for profile in profiles %}
+                    <option value="{{ profile.id }}">{{ profile.display_name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        {% endif %}
+
+        <label>Date
+            <input type="date" name="entry_date" required>
+        </label>
+
+        <label>Type
+            <select name="entry_type" id="diary-entry-type">
+                <option value="day_off_request">Day off / unavailable</option>
+                <option value="available_window">Can work specific times</option>
+                <option value="note">Note</option>
+                {% if current_user.is_manager %}
+                    <option value="unavailable">Mark unavailable</option>
+                    <option value="no_one_off">NO ONE OFF</option>
+                {% endif %}
+            </select>
+        </label>
+
+        <label class="diary-time-field">Available from
+            <input type="time" name="available_from">
+        </label>
+
+        <label class="diary-time-field">Available until
+            <input type="time" name="available_until">
+        </label>
+
+        <label>Note
+            <input name="note" placeholder="Optional detail">
+        </label>
+
+        <button class="button" type="submit">Add</button>
+    </form>
+</div>
+
+<div class="staff-diary-week">
+{% for day in days %}
+    <section class="card diary-day-card">
+        <div class="diary-day-heading">
+            <strong>{{ day.strftime("%A") }}</strong>
+            <span>{{ day.strftime("%d %b") }}</span>
+        </div>
+
+        {% for entry in by_day.get(day, []) %}
+            <div class="diary-entry diary-{{ entry.status }}">
+                <div>
+                    {% if entry.entry_type == "no_one_off" %}
+                        <strong>NO ONE OFF</strong>
+                    {% else %}
+                        <strong>{{ entry.staff.display_name }}</strong>
+                        <span>{{ entry.entry_type.replace("_", " ")|title }}</span>
+                    {% endif %}
+
+                    {% if entry.available_from or entry.available_until %}
+                        <small>
+                            {{ entry.available_from.strftime("%H:%M") if entry.available_from else "Any" }}
+                            –
+                            {{ entry.available_until.strftime("%H:%M") if entry.available_until else "Any" }}
+                        </small>
+                    {% endif %}
+
+                    {% if entry.note %}<small>{{ entry.note }}</small>{% endif %}
+                </div>
+
+                <span class="badge">{{ entry.status|title }}</span>
+
+                {% if current_user.is_manager %}
+                    <form method="post"
+                          action="{{ url_for('main.diary_manager_update', entry_id=entry.id) }}"
+                          class="diary-actions">
+                        {% if entry.status == "requested" %}
+                            <button class="small-link" name="action" value="approved" type="submit">Approve</button>
+                            <button class="link-button danger" name="action" value="rejected" type="submit">Reject</button>
+                        {% endif %}
+                        <button class="link-button danger" name="action" value="delete" type="submit">Delete</button>
+                    </form>
+                {% endif %}
+            </div>
+        {% else %}
+            <span class="muted">Nothing entered</span>
+        {% endfor %}
+    </section>
+{% endfor %}
+</div>
+
+<script>
+(function () {
+    const type = document.getElementById("diary-entry-type");
+    const timeFields = document.querySelectorAll(".diary-time-field");
+
+    function update() {
+        const show = type && type.value === "available_window";
+        timeFields.forEach(field => field.style.display = show ? "" : "none");
+    }
+
+    type?.addEventListener("change", update);
+    update();
+})();
+</script>
+{% endblock %}

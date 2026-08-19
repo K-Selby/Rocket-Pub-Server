@@ -35,6 +35,9 @@ def create_app():
         seed_floor_plan_settings()
         seed_default_admin()
         seed_allergen_test_menu()
+        seed_rota_finish_settings()
+        seed_rota_shift_templates()
+        seed_initial_staff_profiles()
 
     return app
 
@@ -503,5 +506,187 @@ def seed_allergen_test_menu():
                     side_id=by_name[side_name].id,
                 )
             )
+
+    db.session.commit()
+
+
+
+def seed_rota_finish_settings():
+    """Estimated Finish times used only for projected weekly hours."""
+    from datetime import time
+    from app.models import RotaFinishSetting
+
+    # Monday=0 ... Sunday=6.
+    defaults = {
+        0: time(22, 0),   # Monday
+        1: time(23, 0),   # Tuesday
+        2: time(22, 0),   # Wednesday
+        3: time(23, 0),   # Thursday
+        4: time(0, 0),    # Friday -> midnight
+        5: time(0, 0),    # Saturday -> midnight
+        6: time(22, 30),  # Sunday -> midpoint of 10-11pm
+    }
+
+    for weekday, finish_time in defaults.items():
+        row = db.session.scalar(
+            db.select(RotaFinishSetting).where(
+                RotaFinishSetting.weekday == weekday
+            )
+        )
+        if row is None:
+            db.session.add(
+                RotaFinishSetting(
+                    weekday=weekday,
+                    estimated_finish=finish_time,
+                )
+            )
+
+    db.session.commit()
+
+
+def seed_rota_shift_templates():
+    """
+    Initial shift slots inferred from the supplied historical rotas.
+
+    Managers can edit these in Rota Settings. They are suggestions only and
+    Auto-fill never publishes the rota automatically.
+    """
+    from datetime import time
+    from app.models import RotaShiftTemplate
+
+    if db.session.scalar(db.select(RotaShiftTemplate.id).limit(1)):
+        return
+
+    # weekday, start, end, finish?, role, qty
+    rows = [
+        # Monday
+        (0, time(12,0), time(15,0), False, "front_of_house", 1),
+        (0, time(17,0), None, True, "front_of_house", 1),
+
+        # Tuesday
+        (1, time(12,0), time(20,0), False, "front_of_house", 1),
+        (1, time(17,0), None, True, "front_of_house", 1),
+
+        # Wednesday
+        (2, time(12,0), time(15,0), False, "front_of_house", 1),
+        (2, time(17,0), None, True, "front_of_house", 1),
+
+        # Thursday
+        (3, time(12,0), time(16,0), False, "front_of_house", 1),
+        (3, time(17,0), None, True, "front_of_house", 1),
+
+        # Friday
+        (4, time(12,0), time(16,0), False, "front_of_house", 1),
+        (4, time(16,0), time(20,0), False, "front_of_house", 1),
+        (4, time(17,0), time(21,0), False, "front_of_house", 1),
+        (4, time(18,0), None, True, "front_of_house", 1),
+
+        # Saturday
+        (5, time(12,0), time(18,0), False, "front_of_house", 1),
+        (5, time(15,0), time(20,0), False, "front_of_house", 1),
+        (5, time(17,0), time(21,0), False, "front_of_house", 1),
+        (5, time(18,0), None, True, "front_of_house", 1),
+
+        # Sunday
+        (6, time(12,0), time(18,0), False, "front_of_house", 2),
+        (6, time(15,0), time(20,0), False, "front_of_house", 1),
+        (6, time(17,0), None, True, "front_of_house", 1),
+    ]
+
+    for weekday, start, end, is_finish, role, qty in rows:
+        db.session.add(
+            RotaShiftTemplate(
+                weekday=weekday,
+                start_time=start,
+                end_time=end,
+                end_is_finish=is_finish,
+                role=role,
+                quantity=qty,
+            )
+        )
+
+    db.session.commit()
+
+
+def seed_initial_staff_profiles():
+    """
+    Start with the names visible across the supplied historical rotas.
+
+    Existing login accounts are linked by username where possible. These are
+    rota profiles, not new login accounts.
+    """
+    from app.models import AppUser, StaffAvailabilityRule, StaffProfile
+
+    names = [
+        "Gemma", "Brooke", "Niamh", "Lois", "Hannah", "Jenna", "Maggie",
+        "Charl", "Charlotte", "Alara", "Scott", "Kieran", "Erin", "Matt",
+        "Leoni",
+    ]
+
+    # Avoid both Charl and Charlotte if one already exists; keep Charl as the
+    # historical rota spelling by default.
+    for name in names:
+        existing = db.session.scalar(
+            db.select(StaffProfile).where(
+                db.func.lower(StaffProfile.display_name) == name.lower()
+            )
+        )
+        if existing:
+            continue
+
+        if name == "Charlotte":
+            charl_exists = db.session.scalar(
+                db.select(StaffProfile).where(
+                    db.func.lower(StaffProfile.display_name) == "charl"
+                )
+            )
+            if charl_exists:
+                continue
+
+        user = db.session.scalar(
+            db.select(AppUser).where(
+                db.func.lower(AppUser.username) == name.lower()
+            )
+        )
+
+        employment_type = "regular"
+        work_role = "front_of_house"
+        target_hours = 0
+        max_hours = 40
+        note = None
+
+        if name.lower() in {"hannah", "charl", "charlotte", "erin"}:
+            employment_type = "casual"
+            max_hours = 12
+            note = "Occasional shifts; has another job."
+
+        if name.lower() == "alara":
+            employment_type = "casual"
+            work_role = "glass_collector"
+            max_hours = 12
+            note = "Glass collector; normally Friday to Sunday."
+
+        profile = StaffProfile(
+            user_id=user.id if user else None,
+            display_name=name,
+            work_role=work_role,
+            employment_type=employment_type,
+            target_hours=target_hours,
+            max_hours=max_hours,
+            rota_notes=note,
+        )
+        db.session.add(profile)
+        db.session.flush()
+
+        # Alara's normal availability is limited to Fri-Sun.
+        if name.lower() == "alara":
+            for weekday in range(7):
+                db.session.add(
+                    StaffAvailabilityRule(
+                        staff_id=profile.id,
+                        weekday=weekday,
+                        available=weekday in {4, 5, 6},
+                    )
+                )
 
     db.session.commit()

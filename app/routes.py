@@ -115,12 +115,23 @@ from flask import (
 )
 from sqlalchemy import Integer, cast
 from werkzeug.security import check_password_hash, generate_password_hash
+from PIL import Image, ImageDraw, ImageFont
+from io import BytesIO
+from flask import send_file
 
 from app import db
 from app.models import (
     AppUser,
     AllergenMealSide,
     AllergenMenuItem,
+    RotaFinishSetting,
+    RotaShift,
+    RotaShiftTemplate,
+    RotaWeek,
+    ShiftSwapRequest,
+    StaffAvailabilityRule,
+    StaffDiaryEntry,
+    StaffProfile,
     Area,
     Booking,
     BookingTable,
@@ -179,6 +190,24 @@ MANAGER_ENDPOINTS = {
     "main.allergen_new",
     "main.allergen_edit",
     "main.allergen_delete",
+
+    # Rota management.
+    "main.rota_profiles",
+    "main.rota_profile_new",
+    "main.rota_profile_edit",
+    "main.rota_profile_delete",
+    "main.rota_create",
+    "main.rota_edit",
+    "main.rota_add_shift",
+    "main.rota_edit_shift",
+    "main.rota_delete_shift",
+    "main.rota_autofill",
+    "main.rota_publish",
+    "main.rota_settings",
+    "main.rota_template_add",
+    "main.rota_template_delete",
+    "main.diary_manager_update",
+    "main.swap_manager_decision",
 }
 
 
@@ -2179,6 +2208,1328 @@ def change_user_role(user_id):
     )
     return redirect(url_for("main.users"))
 
+
+
+
+# ============================================================
+# Rota / Staff Diary
+# ============================================================
+
+WEEKDAY_NAMES = [
+    "Monday", "Tuesday", "Wednesday", "Thursday",
+    "Friday", "Saturday", "Sunday",
+]
+
+
+def sunday_for_date(value):
+    """Return the Sunday starting the rota week containing value."""
+    days_since_sunday = (value.weekday() + 1) % 7
+    return value - timedelta(days=days_since_sunday)
+
+
+def current_staff_profile():
+    user = current_user()
+    if not user:
+        return None
+
+    return db.session.scalar(
+        db.select(StaffProfile).where(
+            StaffProfile.user_id == user.id
+        )
+    )
+
+
+def time_label(value):
+    if value is None:
+        return ""
+    hour = value.hour
+    minute = value.minute
+    suffix = ""
+    display_hour = hour
+    if hour == 0:
+        display_hour = 12
+    elif hour > 12:
+        display_hour = hour - 12
+    return (
+        str(display_hour)
+        if minute == 0
+        else f"{display_hour}:{minute:02d}"
+    )
+
+
+def shift_label(shift):
+    end = "F" if shift.end_is_finish else time_label(shift.end_time)
+    return f"{time_label(shift.start_time)}-{end}"
+
+
+def estimated_finish_for_date(shift_date):
+    row = db.session.scalar(
+        db.select(RotaFinishSetting).where(
+            RotaFinishSetting.weekday == shift_date.weekday()
+        )
+    )
+    return row.estimated_finish if row else None
+
+
+def projected_shift_hours(shift):
+    """
+    Estimate a shift length. F uses the weekday's configurable estimate.
+    Midnight is treated as the following day.
+    """
+    end = (
+        estimated_finish_for_date(shift.shift_date)
+        if shift.end_is_finish
+        else shift.end_time
+    )
+    if not end:
+        return 0
+
+    start_minutes = shift.start_time.hour * 60 + shift.start_time.minute
+    end_minutes = end.hour * 60 + end.minute
+
+    if end_minutes <= start_minutes:
+        end_minutes += 24 * 60
+
+    return round((end_minutes - start_minutes) / 60, 2)
+
+
+def availability_for(profile, target_date):
+    """
+    Return (available, earliest, latest, reason).
+
+    Approved date-specific diary entries override recurring availability.
+    """
+    global_block = db.session.scalar(
+        db.select(StaffDiaryEntry).where(
+            StaffDiaryEntry.entry_date == target_date,
+            StaffDiaryEntry.entry_type == "no_one_off",
+            StaffDiaryEntry.status.in_(["approved", "info"]),
+        )
+    )
+
+    entries = db.session.scalars(
+        db.select(StaffDiaryEntry).where(
+            StaffDiaryEntry.staff_id == profile.id,
+            StaffDiaryEntry.entry_date == target_date,
+            StaffDiaryEntry.status.in_(["approved", "info"]),
+        )
+    ).all()
+
+    for entry in entries:
+        if entry.entry_type in {"day_off_request", "unavailable"}:
+            return False, None, None, entry.note or "Unavailable"
+
+    for entry in entries:
+        if entry.entry_type == "available_window":
+            return (
+                True,
+                entry.available_from,
+                entry.available_until,
+                entry.note or "Date-specific availability",
+            )
+
+    rule = db.session.scalar(
+        db.select(StaffAvailabilityRule).where(
+            StaffAvailabilityRule.staff_id == profile.id,
+            StaffAvailabilityRule.weekday == target_date.weekday(),
+        )
+    )
+
+    if rule and not rule.available:
+        return False, None, None, "Normally unavailable"
+
+    if rule:
+        return True, rule.available_from, rule.available_until, None
+
+    # No rule = available by default. Casual staff still get penalised by
+    # Auto-fill rather than being treated as unavailable.
+    return True, None, None, None
+
+
+def time_within_window(start, end, earliest, latest, end_is_finish=False):
+    if earliest and start < earliest:
+        return False
+
+    if latest:
+        comparison_end = end
+        if end_is_finish:
+            # We cannot know the real F, so use the estimated finish elsewhere.
+            comparison_end = None
+
+        if comparison_end and comparison_end > latest:
+            return False
+
+    return True
+
+
+def historical_pattern_bonus(profile, weekday, start_time, end_is_finish):
+    """
+    Lightweight pattern prior inferred from the supplied June-August rotas.
+
+    This never overrides availability. It only helps rank otherwise suitable
+    staff for a suggested shift.
+    """
+    name = profile.display_name.strip().lower()
+    bonus = 0
+
+    # Brooke: Mon-Wed daytime, often Friday close.
+    if name == "brooke":
+        if weekday in {0, 1, 2} and start_time.hour == 12:
+            bonus += 34
+        if weekday == 4 and end_is_finish:
+            bonus += 24
+
+    # Niamh: evening/finish heavy.
+    if name == "niamh":
+        if start_time.hour >= 17:
+            bonus += 30
+        if end_is_finish:
+            bonus += 18
+
+    # Lois: 3-8 / 5-F patterns; kitchen markings are handled by role matching.
+    if name == "lois":
+        if start_time.hour in {15, 17}:
+            bonus += 22
+
+    # Jenna/Maggie: regular Sunday daytime presence.
+    if name in {"jenna", "maggie"} and weekday == 6 and start_time.hour <= 12:
+        bonus += 28
+
+    # Kieran and Scott: later-week/evening heavy.
+    if name in {"kieran", "scott"}:
+        if weekday in {3, 4, 5, 6} and start_time.hour >= 15:
+            bonus += 28
+        if weekday in {4, 5} and end_is_finish:
+            bonus += 16
+
+    # Casual staff are intentionally not aggressively selected.
+    if profile.employment_type == "casual":
+        bonus -= 18
+
+    # Glass collector: Friday-Sunday evening.
+    if profile.work_role == "glass_collector":
+        if weekday in {4, 5, 6} and start_time.hour >= 17:
+            bonus += 35
+        else:
+            bonus -= 50
+
+    return bonus
+
+
+def role_compatible(profile, role):
+    if role == "front_of_house":
+        return profile.work_role in {"front_of_house", "both"}
+    if role == "kitchen":
+        return profile.work_role in {"kitchen", "both"}
+    if role == "glass_collector":
+        return profile.work_role == "glass_collector"
+    return False
+
+
+def projected_hours_for_profile(profile, week):
+    return round(
+        sum(
+            projected_shift_hours(shift)
+            for shift in week.shifts
+            if shift.staff_id == profile.id
+        ),
+        2,
+    )
+
+
+def rota_candidate_score(profile, week, target_date, start, end, end_is_finish, role):
+    available, earliest, latest, _ = availability_for(profile, target_date)
+
+    if not available or not role_compatible(profile, role):
+        return None
+
+    effective_end = (
+        estimated_finish_for_date(target_date)
+        if end_is_finish
+        else end
+    )
+
+    if not time_within_window(
+        start,
+        effective_end,
+        earliest,
+        latest,
+        end_is_finish=False,
+    ):
+        return None
+
+    # Don't overlap another shift on the same day.
+    existing_same_day = [
+        s for s in week.shifts
+        if s.staff_id == profile.id and s.shift_date == target_date
+    ]
+    if existing_same_day:
+        return None
+
+    hours_so_far = projected_hours_for_profile(profile, week)
+
+    dummy = type("ShiftLike", (), {
+        "shift_date": target_date,
+        "start_time": start,
+        "end_time": end,
+        "end_is_finish": end_is_finish,
+    })()
+    shift_hours = projected_shift_hours(dummy)
+
+    if profile.max_hours and hours_so_far + shift_hours > profile.max_hours:
+        return None
+
+    score = 50
+    score += historical_pattern_bonus(
+        profile,
+        target_date.weekday(),
+        start,
+        end_is_finish,
+    )
+
+    # Prefer people still below their target hours.
+    if profile.target_hours:
+        remaining = profile.target_hours - hours_so_far
+        if remaining > 0:
+            score += min(remaining * 2, 28)
+        else:
+            score -= 12
+
+    # Regular staff rank ahead of casual workers when both are suitable.
+    if profile.employment_type == "regular":
+        score += 10
+
+    # Slight fairness penalty for every existing shift.
+    score -= sum(1 for s in week.shifts if s.staff_id == profile.id) * 5
+
+    return score
+
+
+def rota_context(week):
+    profiles = db.session.scalars(
+        db.select(StaffProfile)
+        .where(StaffProfile.active.is_(True))
+        .order_by(StaffProfile.display_name)
+    ).all()
+
+    days = [week.week_start + timedelta(days=i) for i in range(7)]
+
+    shift_map = {
+        (profile.id, day): []
+        for profile in profiles
+        for day in days
+    }
+
+    for shift in week.shifts:
+        shift_map.setdefault(
+            (shift.staff_id, shift.shift_date),
+            [],
+        ).append(shift)
+
+    hours = {
+        profile.id: projected_hours_for_profile(profile, week)
+        for profile in profiles
+    }
+
+    return profiles, days, shift_map, hours
+
+
+@main.route("/rota")
+def rota_home():
+    selected_text = request.args.get("week")
+    if selected_text:
+        try:
+            selected = datetime.strptime(selected_text, "%Y-%m-%d").date()
+        except ValueError:
+            selected = date.today()
+    else:
+        selected = date.today()
+
+    week_start = sunday_for_date(selected)
+
+    week = db.session.scalar(
+        db.select(RotaWeek).where(
+            RotaWeek.week_start == week_start
+        )
+    )
+
+    # Staff only see an issued rota. Managers can see drafts too.
+    if week and week.status == "draft" and not current_user().is_manager:
+        week = None
+
+    previous_start = week_start - timedelta(days=7)
+    next_start = week_start + timedelta(days=7)
+
+    my_profile = current_staff_profile()
+    my_shifts = []
+
+    if week and my_profile:
+        my_shifts = sorted(
+            [
+                shift for shift in week.shifts
+                if shift.staff_id == my_profile.id
+            ],
+            key=lambda s: (s.shift_date, s.start_time),
+        )
+
+    profiles = days = shift_map = hours = None
+    if week:
+        profiles, days, shift_map, hours = rota_context(week)
+
+    swaps = []
+    if my_profile:
+        swaps = db.session.scalars(
+            db.select(ShiftSwapRequest)
+            .where(
+                db.or_(
+                    ShiftSwapRequest.requester_staff_id == my_profile.id,
+                    ShiftSwapRequest.target_staff_id == my_profile.id,
+                )
+            )
+            .order_by(ShiftSwapRequest.created_at.desc())
+        ).all()
+
+    return render_template(
+        "rota.html",
+        week=week,
+        week_start=week_start,
+        previous_start=previous_start,
+        next_start=next_start,
+        profiles=profiles or [],
+        days=days or [week_start + timedelta(days=i) for i in range(7)],
+        shift_map=shift_map or {},
+        hours=hours or {},
+        my_profile=my_profile,
+        my_shifts=my_shifts,
+        swaps=swaps,
+        shift_label=shift_label,
+    )
+
+
+@main.route("/rota/create", methods=["POST"])
+def rota_create():
+    start_text = request.form.get("week_start", "")
+    try:
+        chosen = datetime.strptime(start_text, "%Y-%m-%d").date()
+    except ValueError:
+        flash("Choose a valid week.", "error")
+        return redirect(url_for("main.rota_home"))
+
+    chosen = sunday_for_date(chosen)
+
+    week = db.session.scalar(
+        db.select(RotaWeek).where(RotaWeek.week_start == chosen)
+    )
+
+    if week is None:
+        week = RotaWeek(
+            week_start=chosen,
+            status="draft",
+            created_by_user_id=current_user().id,
+        )
+        db.session.add(week)
+        db.session.commit()
+
+    return redirect(url_for("main.rota_edit", rota_id=week.id))
+
+
+@main.route("/rota/<int:rota_id>/edit")
+def rota_edit(rota_id):
+    week = db.get_or_404(RotaWeek, rota_id)
+    profiles, days, shift_map, hours = rota_context(week)
+
+    diary_by_day = {}
+    for day in days:
+        diary_by_day[day] = db.session.scalars(
+            db.select(StaffDiaryEntry)
+            .where(
+                StaffDiaryEntry.entry_date == day,
+                StaffDiaryEntry.status.in_(["approved", "info", "requested"]),
+            )
+            .order_by(StaffDiaryEntry.created_at)
+        ).all()
+
+    return render_template(
+        "rota_edit.html",
+        week=week,
+        profiles=profiles,
+        days=days,
+        shift_map=shift_map,
+        hours=hours,
+        diary_by_day=diary_by_day,
+        shift_label=shift_label,
+    )
+
+
+def parse_shift_form():
+    shift_date = datetime.strptime(
+        request.form["shift_date"],
+        "%Y-%m-%d",
+    ).date()
+
+    start_time = datetime.strptime(
+        request.form["start_time"],
+        "%H:%M",
+    ).time()
+
+    end_is_finish = request.form.get("end_is_finish") == "1"
+    end_time = None
+
+    if not end_is_finish:
+        end_text = request.form.get("end_time", "")
+        if not end_text:
+            raise ValueError("Enter an end time or select Finish.")
+        end_time = datetime.strptime(end_text, "%H:%M").time()
+
+    return shift_date, start_time, end_time, end_is_finish
+
+
+@main.route("/rota/<int:rota_id>/shift/add", methods=["POST"])
+def rota_add_shift(rota_id):
+    week = db.get_or_404(RotaWeek, rota_id)
+
+    try:
+        shift_date, start, end, is_finish = parse_shift_form()
+        staff_id = int(request.form["staff_id"])
+    except (ValueError, KeyError):
+        flash("Check the shift details.", "error")
+        return redirect(url_for("main.rota_edit", rota_id=rota_id))
+
+    if not (
+        week.week_start
+        <= shift_date
+        <= week.week_start + timedelta(days=6)
+    ):
+        flash("That date is outside this rota week.", "error")
+        return redirect(url_for("main.rota_edit", rota_id=rota_id))
+
+    profile = db.get_or_404(StaffProfile, staff_id)
+
+    available, earliest, latest, reason = availability_for(
+        profile,
+        shift_date,
+    )
+
+    if not available:
+        flash(
+            f"{profile.display_name} is marked unavailable: {reason or 'Unavailable'}.",
+            "error",
+        )
+        return redirect(url_for("main.rota_edit", rota_id=rota_id))
+
+    db.session.add(
+        RotaShift(
+            rota_week_id=week.id,
+            staff_id=profile.id,
+            shift_date=shift_date,
+            start_time=start,
+            end_time=end,
+            end_is_finish=is_finish,
+            shift_role=request.form.get("shift_role", "front_of_house"),
+            note=request.form.get("note", "").strip() or None,
+        )
+    )
+    db.session.commit()
+
+    return redirect(url_for("main.rota_edit", rota_id=rota_id))
+
+
+@main.route("/rota/shift/<int:shift_id>/edit", methods=["POST"])
+def rota_edit_shift(shift_id):
+    shift = db.get_or_404(RotaShift, shift_id)
+
+    try:
+        _, start, end, is_finish = parse_shift_form()
+    except (ValueError, KeyError):
+        flash("Check the shift details.", "error")
+        return redirect(url_for("main.rota_edit", rota_id=shift.rota_week_id))
+
+    shift.start_time = start
+    shift.end_time = end
+    shift.end_is_finish = is_finish
+    shift.shift_role = request.form.get(
+        "shift_role",
+        shift.shift_role,
+    )
+    shift.note = request.form.get("note", "").strip() or None
+    shift.auto_suggested = False
+
+    db.session.commit()
+
+    return redirect(url_for("main.rota_edit", rota_id=shift.rota_week_id))
+
+
+@main.route("/rota/shift/<int:shift_id>/delete", methods=["POST"])
+def rota_delete_shift(shift_id):
+    shift = db.get_or_404(RotaShift, shift_id)
+    rota_id = shift.rota_week_id
+    db.session.delete(shift)
+    db.session.commit()
+    return redirect(url_for("main.rota_edit", rota_id=rota_id))
+
+
+@main.route("/rota/<int:rota_id>/autofill", methods=["POST"])
+def rota_autofill(rota_id):
+    week = db.get_or_404(RotaWeek, rota_id)
+
+    # Remove previous auto-suggestions only; manager-entered shifts remain.
+    for shift in list(week.shifts):
+        if shift.auto_suggested:
+            db.session.delete(shift)
+    db.session.flush()
+
+    profiles = db.session.scalars(
+        db.select(StaffProfile)
+        .where(StaffProfile.active.is_(True))
+        .order_by(StaffProfile.display_name)
+    ).all()
+
+    templates = db.session.scalars(
+        db.select(RotaShiftTemplate)
+        .where(RotaShiftTemplate.active.is_(True))
+        .order_by(
+            RotaShiftTemplate.weekday,
+            RotaShiftTemplate.start_time,
+        )
+    ).all()
+
+    created = 0
+    skipped = 0
+
+    for template in templates:
+        target_date = week.week_start + timedelta(
+            days=(template.weekday - 6) % 7
+        )
+
+        for _ in range(max(template.quantity, 1)):
+            ranked = []
+
+            for profile in profiles:
+                score = rota_candidate_score(
+                    profile,
+                    week,
+                    target_date,
+                    template.start_time,
+                    template.end_time,
+                    template.end_is_finish,
+                    template.role,
+                )
+
+                if score is not None:
+                    ranked.append((score, profile))
+
+            ranked.sort(
+                key=lambda pair: (
+                    pair[0],
+                    -pair[1].id,
+                ),
+                reverse=True,
+            )
+
+            if not ranked:
+                skipped += 1
+                continue
+
+            chosen = ranked[0][1]
+
+            db.session.add(
+                RotaShift(
+                    rota_week_id=week.id,
+                    staff_id=chosen.id,
+                    shift_date=target_date,
+                    start_time=template.start_time,
+                    end_time=template.end_time,
+                    end_is_finish=template.end_is_finish,
+                    shift_role=template.role,
+                    auto_suggested=True,
+                    note="Auto-fill suggestion",
+                )
+            )
+            db.session.flush()
+            created += 1
+
+    db.session.commit()
+
+    flash(
+        f"Auto-fill suggested {created} shifts"
+        + (f"; {skipped} slots need manual cover." if skipped else "."),
+        "success",
+    )
+
+    return redirect(url_for("main.rota_edit", rota_id=rota_id))
+
+
+@main.route("/rota/<int:rota_id>/publish", methods=["POST"])
+def rota_publish(rota_id):
+    week = db.get_or_404(RotaWeek, rota_id)
+    week.status = "published"
+    week.published_at = datetime.now()
+    week.published_by_user_id = current_user().id
+    db.session.commit()
+
+    flash("Rota issued to staff.", "success")
+    return redirect(url_for("main.rota_home", week=week.week_start.isoformat()))
+
+
+@main.route("/rota/<int:rota_id>/return-to-draft", methods=["POST"])
+def rota_return_to_draft(rota_id):
+    if not current_user().is_manager:
+        flash("Manager access is required.", "error")
+        return redirect(url_for("main.rota_home"))
+
+    week = db.get_or_404(RotaWeek, rota_id)
+    week.status = "draft"
+    db.session.commit()
+
+    flash("Rota returned to draft.", "success")
+    return redirect(url_for("main.rota_edit", rota_id=rota_id))
+
+
+@main.route("/rota/<int:rota_id>/image")
+def rota_image(rota_id):
+    week = db.get_or_404(RotaWeek, rota_id)
+
+    if week.status != "published" and not current_user().is_manager:
+        flash("That rota has not been issued.", "error")
+        return redirect(url_for("main.rota_home"))
+
+    profiles, days, shift_map, hours = rota_context(week)
+
+    # High-resolution, phone-friendly PNG generated locally.
+    width = 2200
+    row_h = 92
+    header_h = 220
+    footer_h = 120
+    height = header_h + max(len(profiles), 1) * row_h + footer_h
+
+    image = Image.new("RGB", (width, height), "white")
+    draw = ImageDraw.Draw(image)
+
+    try:
+        title_font = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial Bold.ttf", 60)
+        head_font = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial Bold.ttf", 34)
+        text_font = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial.ttf", 30)
+        small_font = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial.ttf", 24)
+    except Exception:
+        title_font = ImageFont.load_default()
+        head_font = ImageFont.load_default()
+        text_font = ImageFont.load_default()
+        small_font = ImageFont.load_default()
+
+    deep = (14, 53, 40)
+    pale = (236, 245, 234)
+    line = (190, 205, 194)
+    text = (25, 48, 37)
+
+    draw.rectangle((0, 0, width, 130), fill=deep)
+    draw.text(
+        (55, 32),
+        "THE ROCKET PUB — STAFF ROTA",
+        fill="white",
+        font=title_font,
+    )
+
+    draw.text(
+        (55, 150),
+        f"Week from Sunday {week.week_start.strftime('%d %B %Y')}",
+        fill=text,
+        font=head_font,
+    )
+
+    name_w = 330
+    hours_w = 150
+    day_w = (width - name_w - hours_w - 80) // 7
+    x0 = 40
+    y0 = header_h
+
+    headers = ["Staff"] + [d.strftime("%a\n%d") for d in days] + ["Hours"]
+    widths = [name_w] + [day_w]*7 + [hours_w]
+
+    x = x0
+    for label, col_w in zip(headers, widths):
+        draw.rectangle((x, y0, x+col_w, y0+row_h), fill=pale, outline=line, width=2)
+        draw.multiline_text(
+            (x+12, y0+18),
+            label,
+            fill=text,
+            font=head_font if label in {"Staff", "Hours"} else small_font,
+            spacing=4,
+        )
+        x += col_w
+
+    y = y0 + row_h
+
+    for profile in profiles:
+        x = x0
+        draw.rectangle((x, y, x+name_w, y+row_h), fill="white", outline=line, width=2)
+        draw.text((x+12, y+26), profile.display_name, fill=text, font=text_font)
+        x += name_w
+
+        for day in days:
+            draw.rectangle((x, y, x+day_w, y+row_h), fill="white", outline=line, width=2)
+            labels = [
+                shift_label(s)
+                + (" K" if s.shift_role == "kitchen" else "")
+                for s in shift_map.get((profile.id, day), [])
+            ]
+            draw.multiline_text(
+                (x+10, y+25),
+                "\n".join(labels) if labels else "",
+                fill=text,
+                font=text_font,
+                spacing=3,
+            )
+            x += day_w
+
+        draw.rectangle((x, y, x+hours_w, y+row_h), fill="white", outline=line, width=2)
+        draw.text(
+            (x+18, y+26),
+            f"{hours.get(profile.id, 0):g}",
+            fill=text,
+            font=text_font,
+        )
+
+        y += row_h
+
+    draw.text(
+        (45, height-75),
+        "F = Finish (actual finishing time varies) • Hours are projected",
+        fill=(90, 105, 96),
+        font=small_font,
+    )
+
+    output = BytesIO()
+    image.save(output, format="PNG", optimize=True)
+    output.seek(0)
+
+    filename = f"rocket-rota-{week.week_start.isoformat()}.png"
+
+    return send_file(
+        output,
+        mimetype="image/png",
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
+# -------------------------
+# Staff profiles
+# -------------------------
+
+@main.route("/rota/staff")
+def rota_profiles():
+    profiles = db.session.scalars(
+        db.select(StaffProfile)
+        .order_by(StaffProfile.active.desc(), StaffProfile.display_name)
+    ).all()
+
+    users = db.session.scalars(
+        db.select(AppUser)
+        .where(AppUser.active.is_(True))
+        .order_by(AppUser.username)
+    ).all()
+
+    return render_template(
+        "rota_profiles.html",
+        profiles=profiles,
+        users=users,
+    )
+
+
+@main.route("/rota/staff/new", methods=["GET", "POST"])
+def rota_profile_new():
+    if request.method == "POST":
+        return save_rota_profile()
+
+    users = db.session.scalars(
+        db.select(AppUser).where(AppUser.active.is_(True))
+    ).all()
+
+    return render_template(
+        "rota_profile_form.html",
+        profile=None,
+        users=users,
+        rules={},
+    )
+
+
+@main.route("/rota/staff/<int:profile_id>/edit", methods=["GET", "POST"])
+def rota_profile_edit(profile_id):
+    profile = db.get_or_404(StaffProfile, profile_id)
+
+    if request.method == "POST":
+        return save_rota_profile(profile)
+
+    rules = {
+        rule.weekday: rule
+        for rule in profile.availability_rules
+    }
+
+    users = db.session.scalars(
+        db.select(AppUser).where(AppUser.active.is_(True))
+    ).all()
+
+    return render_template(
+        "rota_profile_form.html",
+        profile=profile,
+        users=users,
+        rules=rules,
+    )
+
+
+def save_rota_profile(profile=None):
+    name = request.form.get("display_name", "").strip()
+
+    if not name:
+        flash("Enter the staff member's name.", "error")
+        return redirect(request.url)
+
+    if profile is None:
+        profile = StaffProfile(display_name=name)
+        db.session.add(profile)
+    else:
+        profile.display_name = name
+
+    user_id_text = request.form.get("user_id", "")
+    profile.user_id = int(user_id_text) if user_id_text else None
+    profile.work_role = request.form.get("work_role", "front_of_house")
+    profile.employment_type = request.form.get("employment_type", "regular")
+
+    try:
+        profile.target_hours = float(request.form.get("target_hours", 0) or 0)
+        profile.max_hours = float(request.form.get("max_hours", 40) or 40)
+    except ValueError:
+        flash("Hours must be numbers.", "error")
+        return redirect(request.url)
+
+    profile.rota_notes = request.form.get("rota_notes", "").strip() or None
+    profile.active = request.form.get("active", "1") == "1"
+
+    db.session.flush()
+
+    for weekday in range(7):
+        rule = db.session.scalar(
+            db.select(StaffAvailabilityRule).where(
+                StaffAvailabilityRule.staff_id == profile.id,
+                StaffAvailabilityRule.weekday == weekday,
+            )
+        )
+
+        if rule is None:
+            rule = StaffAvailabilityRule(
+                staff_id=profile.id,
+                weekday=weekday,
+            )
+            db.session.add(rule)
+
+        rule.available = request.form.get(
+            f"available_{weekday}"
+        ) == "1"
+
+        from_text = request.form.get(f"available_from_{weekday}", "")
+        until_text = request.form.get(f"available_until_{weekday}", "")
+
+        rule.available_from = (
+            datetime.strptime(from_text, "%H:%M").time()
+            if from_text else None
+        )
+        rule.available_until = (
+            datetime.strptime(until_text, "%H:%M").time()
+            if until_text else None
+        )
+
+    db.session.commit()
+
+    flash("Staff rota profile saved.", "success")
+    return redirect(url_for("main.rota_profiles"))
+
+
+@main.route("/rota/staff/<int:profile_id>/delete", methods=["POST"])
+def rota_profile_delete(profile_id):
+    profile = db.get_or_404(StaffProfile, profile_id)
+
+    if profile.shifts:
+        profile.active = False
+        flash(
+            "This person has rota history, so they were archived rather than deleted.",
+            "success",
+        )
+    else:
+        db.session.delete(profile)
+        flash("Staff rota profile deleted.", "success")
+
+    db.session.commit()
+    return redirect(url_for("main.rota_profiles"))
+
+
+# -------------------------
+# Staff diary
+# -------------------------
+
+@main.route("/staff-diary", methods=["GET", "POST"])
+def staff_diary():
+    selected_text = request.args.get("week")
+
+    try:
+        selected = (
+            datetime.strptime(selected_text, "%Y-%m-%d").date()
+            if selected_text
+            else date.today()
+        )
+    except ValueError:
+        selected = date.today()
+
+    week_start = sunday_for_date(selected)
+    days = [week_start + timedelta(days=i) for i in range(7)]
+
+    profile = current_staff_profile()
+
+    if request.method == "POST":
+        if profile is None and not current_user().is_manager:
+            flash(
+                "Your login is not linked to a rota staff profile yet.",
+                "error",
+            )
+            return redirect(request.url)
+
+        target_profile_id = (
+            int(request.form["staff_id"])
+            if current_user().is_manager and request.form.get("staff_id")
+            else profile.id
+        )
+
+        entry_type = request.form.get("entry_type", "day_off_request")
+        entry_date = datetime.strptime(
+            request.form["entry_date"],
+            "%Y-%m-%d",
+        ).date()
+
+        if entry_type == "no_one_off" and not current_user().is_manager:
+            flash("Only managers can add No one off.", "error")
+            return redirect(request.url)
+
+        available_from = None
+        available_until = None
+
+        if entry_type == "available_window":
+            from_text = request.form.get("available_from", "")
+            until_text = request.form.get("available_until", "")
+            available_from = (
+                datetime.strptime(from_text, "%H:%M").time()
+                if from_text else None
+            )
+            available_until = (
+                datetime.strptime(until_text, "%H:%M").time()
+                if until_text else None
+            )
+
+        entry = StaffDiaryEntry(
+            staff_id=None if entry_type == "no_one_off" else target_profile_id,
+            entry_date=entry_date,
+            entry_type=entry_type,
+            available_from=available_from,
+            available_until=available_until,
+            note=request.form.get("note", "").strip() or None,
+            status=(
+                "approved"
+                if current_user().is_manager
+                else "requested"
+            ),
+            created_by_user_id=current_user().id,
+        )
+
+        db.session.add(entry)
+        db.session.commit()
+
+        flash("Diary entry added.", "success")
+        return redirect(
+            url_for("main.staff_diary", week=week_start.isoformat())
+        )
+
+    entries = db.session.scalars(
+        db.select(StaffDiaryEntry)
+        .where(
+            StaffDiaryEntry.entry_date >= week_start,
+            StaffDiaryEntry.entry_date <= week_start + timedelta(days=6),
+        )
+        .order_by(StaffDiaryEntry.entry_date, StaffDiaryEntry.created_at)
+    ).all()
+
+    profiles = db.session.scalars(
+        db.select(StaffProfile)
+        .where(StaffProfile.active.is_(True))
+        .order_by(StaffProfile.display_name)
+    ).all()
+
+    by_day = {day: [] for day in days}
+    for entry in entries:
+        by_day.setdefault(entry.entry_date, []).append(entry)
+
+    return render_template(
+        "staff_diary.html",
+        week_start=week_start,
+        days=days,
+        by_day=by_day,
+        profiles=profiles,
+        my_profile=profile,
+        previous_start=week_start - timedelta(days=7),
+        next_start=week_start + timedelta(days=7),
+    )
+
+
+@main.route("/staff-diary/<int:entry_id>/update", methods=["POST"])
+def diary_manager_update(entry_id):
+    entry = db.get_or_404(StaffDiaryEntry, entry_id)
+    action = request.form.get("action")
+
+    if action in {"approved", "rejected"}:
+        entry.status = action
+        entry.reviewed_by_user_id = current_user().id
+        entry.reviewed_at = datetime.now()
+    elif action == "delete":
+        db.session.delete(entry)
+
+    db.session.commit()
+
+    return redirect(
+        url_for(
+            "main.staff_diary",
+            week=sunday_for_date(entry.entry_date).isoformat(),
+        )
+    )
+
+
+# -------------------------
+# Shift swaps
+# -------------------------
+
+@main.route("/rota/shift/<int:shift_id>/swap", methods=["GET", "POST"])
+def request_shift_swap(shift_id):
+    shift = db.get_or_404(RotaShift, shift_id)
+    my_profile = current_staff_profile()
+
+    if not my_profile or shift.staff_id != my_profile.id:
+        flash("You can only request a swap for your own shift.", "error")
+        return redirect(url_for("main.rota_home"))
+
+    other_profiles = db.session.scalars(
+        db.select(StaffProfile)
+        .where(
+            StaffProfile.active.is_(True),
+            StaffProfile.id != my_profile.id,
+        )
+        .order_by(StaffProfile.display_name)
+    ).all()
+
+    week = shift.rota_week
+
+    if request.method == "POST":
+        target_id = int(request.form["target_staff_id"])
+        target_shift_text = request.form.get("target_shift_id", "")
+        target_shift_id = int(target_shift_text) if target_shift_text else None
+
+        request_row = ShiftSwapRequest(
+            requester_shift_id=shift.id,
+            requester_staff_id=my_profile.id,
+            target_staff_id=target_id,
+            target_shift_id=target_shift_id,
+            status="pending_target",
+            requester_note=request.form.get("note", "").strip() or None,
+        )
+
+        db.session.add(request_row)
+        db.session.commit()
+
+        flash("Swap request sent.", "success")
+        return redirect(
+            url_for("main.rota_home", week=week.week_start.isoformat())
+        )
+
+    target_shifts = {
+        profile.id: sorted(
+            [
+                s for s in week.shifts
+                if s.staff_id == profile.id
+            ],
+            key=lambda s: (s.shift_date, s.start_time),
+        )
+        for profile in other_profiles
+    }
+
+    return render_template(
+        "shift_swap.html",
+        shift=shift,
+        other_profiles=other_profiles,
+        target_shifts=target_shifts,
+        shift_label=shift_label,
+    )
+
+
+@main.route("/rota/swap/<int:swap_id>/respond", methods=["POST"])
+def swap_target_response(swap_id):
+    swap = db.get_or_404(ShiftSwapRequest, swap_id)
+    my_profile = current_staff_profile()
+
+    if not my_profile or swap.target_staff_id != my_profile.id:
+        flash("That swap request is not assigned to you.", "error")
+        return redirect(url_for("main.rota_home"))
+
+    action = request.form.get("action")
+
+    if action == "accept":
+        swap.status = "pending_manager"
+    else:
+        swap.status = "rejected"
+
+    swap.target_response_note = (
+        request.form.get("note", "").strip() or None
+    )
+    swap.target_responded_at = datetime.now()
+    db.session.commit()
+
+    flash(
+        "Swap accepted and sent to a manager."
+        if action == "accept"
+        else "Swap declined.",
+        "success",
+    )
+
+    return redirect(url_for("main.rota_home"))
+
+
+@main.route("/rota/swap/<int:swap_id>/manager", methods=["POST"])
+def swap_manager_decision(swap_id):
+    swap = db.get_or_404(ShiftSwapRequest, swap_id)
+    action = request.form.get("action")
+
+    if action == "approve":
+        requester_shift = swap.requester_shift
+
+        if swap.target_shift:
+            # True two-way swap.
+            target_shift = swap.target_shift
+            requester_staff_id = requester_shift.staff_id
+            requester_shift.staff_id = target_shift.staff_id
+            target_shift.staff_id = requester_staff_id
+        else:
+            # Target simply covers/takes the shift.
+            requester_shift.staff_id = swap.target_staff_id
+
+        swap.status = "approved"
+    else:
+        swap.status = "rejected"
+
+    swap.manager_note = request.form.get("note", "").strip() or None
+    swap.manager_user_id = current_user().id
+    swap.manager_responded_at = datetime.now()
+
+    db.session.commit()
+
+    flash(
+        "Swap approved and the published rota has been updated."
+        if action == "approve"
+        else "Swap rejected.",
+        "success",
+    )
+
+    return redirect(url_for("main.rota_home"))
+
+
+# -------------------------
+# Rota settings
+# -------------------------
+
+@main.route("/rota/settings", methods=["GET", "POST"])
+def rota_settings():
+    if request.method == "POST":
+        for weekday in range(7):
+            row = db.session.scalar(
+                db.select(RotaFinishSetting).where(
+                    RotaFinishSetting.weekday == weekday
+                )
+            )
+
+            text_value = request.form.get(
+                f"finish_{weekday}",
+                "",
+            )
+
+            if row and text_value:
+                row.estimated_finish = datetime.strptime(
+                    text_value,
+                    "%H:%M",
+                ).time()
+
+        db.session.commit()
+        flash("Estimated Finish times saved.", "success")
+        return redirect(url_for("main.rota_settings"))
+
+    finish_settings = {
+        row.weekday: row
+        for row in db.session.scalars(
+            db.select(RotaFinishSetting)
+        ).all()
+    }
+
+    templates = db.session.scalars(
+        db.select(RotaShiftTemplate)
+        .order_by(
+            RotaShiftTemplate.weekday,
+            RotaShiftTemplate.start_time,
+        )
+    ).all()
+
+    return render_template(
+        "rota_settings.html",
+        finish_settings=finish_settings,
+        templates=templates,
+        weekday_names=WEEKDAY_NAMES,
+    )
+
+
+@main.route("/rota/settings/template/add", methods=["POST"])
+def rota_template_add():
+    try:
+        weekday = int(request.form["weekday"])
+        start = datetime.strptime(
+            request.form["start_time"],
+            "%H:%M",
+        ).time()
+        is_finish = request.form.get("end_is_finish") == "1"
+        end = (
+            None
+            if is_finish
+            else datetime.strptime(
+                request.form["end_time"],
+                "%H:%M",
+            ).time()
+        )
+        quantity = max(int(request.form.get("quantity", 1)), 1)
+    except (ValueError, KeyError):
+        flash("Check the template details.", "error")
+        return redirect(url_for("main.rota_settings"))
+
+    db.session.add(
+        RotaShiftTemplate(
+            weekday=weekday,
+            start_time=start,
+            end_time=end,
+            end_is_finish=is_finish,
+            role=request.form.get("role", "front_of_house"),
+            quantity=quantity,
+        )
+    )
+    db.session.commit()
+
+    return redirect(url_for("main.rota_settings"))
+
+
+@main.route("/rota/settings/template/<int:template_id>/delete", methods=["POST"])
+def rota_template_delete(template_id):
+    row = db.get_or_404(RotaShiftTemplate, template_id)
+    db.session.delete(row)
+    db.session.commit()
+    return redirect(url_for("main.rota_settings"))
 
 
 # -------------------------
