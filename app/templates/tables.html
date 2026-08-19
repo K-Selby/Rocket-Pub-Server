@@ -9,7 +9,13 @@
         <p>Configure capacities, areas, characteristics and table pairings.</p>
     </div>
 
-    <a class="button" href="{{ url_for('main.new_table') }}">Add table</a>
+    <div class="heading-actions">
+        <a class="button secondary"
+           href="{{ url_for('main.table_layout') }}">
+            Open layout editor
+        </a>
+        <a class="button" href="{{ url_for('main.new_table') }}">Add table</a>
+    </div>
 </div>
 
 <div class="card">

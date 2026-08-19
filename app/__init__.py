@@ -28,6 +28,7 @@ def create_app():
         seed_default_areas()
         seed_buffet_options()
         seed_extra_dishes()
+        seed_floor_plan_settings()
 
     return app
 
@@ -63,6 +64,16 @@ def ensure_starter_schema_updates():
     add_column_if_missing(
         inspector, "pub_table", "unsuitable_for_food", "BOOLEAN DEFAULT 0"
     )
+
+    pub_table_layout_additions = {
+        "layout_width": "FLOAT DEFAULT 90",
+        "layout_height": "FLOAT DEFAULT 60",
+        "layout_shape": "VARCHAR(20) DEFAULT 'rectangle'",
+        "layout_rotation": "FLOAT DEFAULT 0",
+    }
+
+    for name, sql_type in pub_table_layout_additions.items():
+        add_column_if_missing(inspector, "pub_table", name, sql_type)
 
     add_column_if_missing(
         inspector, "customer", "avoids_bench", "BOOLEAN DEFAULT 0"
@@ -248,3 +259,24 @@ def seed_extra_dishes():
         option.active = True
 
     db.session.commit()
+
+
+
+def seed_floor_plan_settings():
+    """Create the single main floor-plan settings row on first launch."""
+    from app.models import FloorPlanSetting
+
+    settings = db.session.scalar(
+        db.select(FloorPlanSetting).where(FloorPlanSetting.name == "main")
+    )
+
+    if settings is None:
+        db.session.add(
+            FloorPlanSetting(
+                name="main",
+                canvas_width=1200,
+                canvas_height=760,
+                background_note="Main pub floor",
+            )
+        )
+        db.session.commit()

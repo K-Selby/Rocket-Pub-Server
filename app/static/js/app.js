@@ -619,6 +619,691 @@ function setupNormalTableAvailability() {
 }
 
 
+
+
+function setupTableLayoutEditor() {
+    const stage = document.getElementById("floor-plan-stage");
+    const saveButton = document.getElementById("layout-save");
+
+    if (!stage || !saveButton) return;
+
+    const svg = document.getElementById("pairing-lines");
+    const editMode = document.getElementById("layout-edit-mode");
+    const selectedLabel = document.getElementById("selected-table-label");
+    const shapeSelect = document.getElementById("layout-shape");
+    const rotateLeft = document.getElementById("layout-rotate-left");
+    const rotateRight = document.getElementById("layout-rotate-right");
+    const fitButton = document.getElementById("layout-fit-view");
+    const layerControls = document.getElementById("object-layer-controls");
+    const bringForward = document.getElementById("bring-forward");
+    const sendBackward = document.getElementById("send-backward");
+
+    const inspectorEmpty = document.getElementById("layout-inspector-empty");
+    const tableInspector = document.getElementById("layout-table-inspector");
+    const objectInspector = document.getElementById("layout-object-inspector");
+    const pairingPanel = document.getElementById("table-pairing-panel");
+
+    const inspectorNumber = document.getElementById("inspector-number");
+    const inspectorCapacity = document.getElementById("inspector-capacity");
+    const inspectorArea = document.getElementById("inspector-area");
+    const inspectorNearTv = document.getElementById("inspector-near-tv");
+    const inspectorBench = document.getElementById("inspector-bench");
+    const inspectorAccessible = document.getElementById("inspector-accessible");
+    const inspectorFood = document.getElementById("inspector-food-unsuitable");
+    const inspectorActive = document.getElementById("inspector-active");
+
+    const objectTypeBadge = document.getElementById("object-type-badge");
+    const objectLabel = document.getElementById("object-label");
+    const objectArea = document.getElementById("object-area");
+    const duplicateObject = document.getElementById("duplicate-object");
+    const deleteObject = document.getElementById("delete-object");
+
+    const pairFirstButton = document.getElementById("pair-first");
+    const pairCreateButton = document.getElementById("pair-create");
+    const pairFirstLabel = document.getElementById("pair-first-label");
+    const pairingList = document.getElementById("pairing-list");
+
+    let selected = null;
+    let firstPairTable = null;
+    let pairings = Array.isArray(window.FLOOR_PAIRINGS)
+        ? [...window.FLOOR_PAIRINGS]
+        : [];
+
+    const objectNames = {
+        wall: "Wall",
+        door: "Door / opening",
+        bar: "Bar",
+        pillar: "Pillar",
+        tv: "TV",
+        fixed_table: "Non-bookable table",
+        pool_table: "Pool table",
+        stairs: "Stairs",
+        label: "Label",
+        area: "Area block",
+    };
+
+    function allEditableElements() {
+        return Array.from(
+            stage.querySelectorAll(".layout-table, .floor-object")
+        );
+    }
+
+    function tableById(id) {
+        return stage.querySelector(
+            `.layout-table[data-table-id="${id}"]`
+        );
+    }
+
+    function rectRelativeToStage(element) {
+        const stageRect = stage.getBoundingClientRect();
+        const rect = element.getBoundingClientRect();
+
+        return {
+            x: rect.left - stageRect.left + rect.width / 2,
+            y: rect.top - stageRect.top + rect.height / 2,
+        };
+    }
+
+    function drawPairings() {
+        if (!svg) return;
+
+        svg.innerHTML = "";
+
+        pairings.forEach(pairing => {
+            const a = tableById(pairing.a);
+            const b = tableById(pairing.b);
+
+            if (!a || !b) return;
+
+            const p1 = rectRelativeToStage(a);
+            const p2 = rectRelativeToStage(b);
+
+            const line = document.createElementNS(
+                "http://www.w3.org/2000/svg",
+                "line"
+            );
+
+            line.setAttribute("x1", p1.x);
+            line.setAttribute("y1", p1.y);
+            line.setAttribute("x2", p2.x);
+            line.setAttribute("y2", p2.y);
+            line.setAttribute("class", "pairing-line");
+
+            svg.appendChild(line);
+        });
+    }
+
+    function clearSelectionStyles() {
+        allEditableElements().forEach(item => {
+            item.classList.remove(
+                "layout-table-selected",
+                "floor-object-selected"
+            );
+        });
+    }
+
+    function showNothingSelected() {
+        selected = null;
+        selectedLabel.textContent = "None";
+        inspectorEmpty.hidden = false;
+        tableInspector.hidden = true;
+        objectInspector.hidden = true;
+        pairingPanel.hidden = true;
+        layerControls.hidden = true;
+    }
+
+    function selectElement(element) {
+        clearSelectionStyles();
+        selected = element;
+
+        if (!element) {
+            showNothingSelected();
+            return;
+        }
+
+        const kind = element.dataset.kind;
+        inspectorEmpty.hidden = true;
+        shapeSelect.value = element.dataset.shape || "rectangle";
+
+        if (kind === "table") {
+            element.classList.add("layout-table-selected");
+            selectedLabel.textContent = `Table ${element.dataset.number}`;
+
+            tableInspector.hidden = false;
+            objectInspector.hidden = true;
+            pairingPanel.hidden = false;
+            layerControls.hidden = true;
+
+            inspectorNumber.value = element.dataset.number;
+            inspectorCapacity.value = element.dataset.capacity;
+            inspectorArea.value = element.dataset.areaId;
+            inspectorNearTv.checked = element.dataset.nearTv === "1";
+            inspectorBench.checked = element.dataset.hasBench === "1";
+            inspectorAccessible.checked = element.dataset.accessible === "1";
+            inspectorFood.checked = element.dataset.unsuitableFood === "1";
+            inspectorActive.checked = element.dataset.active === "1";
+        } else {
+            element.classList.add("floor-object-selected");
+
+            const type = element.dataset.objectType;
+            selectedLabel.textContent =
+                `${objectNames[type] || "Object"}: ${element.dataset.label || ""}`;
+
+            tableInspector.hidden = true;
+            objectInspector.hidden = false;
+            pairingPanel.hidden = true;
+            layerControls.hidden = false;
+
+            objectTypeBadge.textContent =
+                objectNames[type] || type.replaceAll("_", " ");
+            objectLabel.value = element.dataset.label || "";
+            objectArea.value = element.dataset.areaId || "";
+        }
+    }
+
+    function setShape(element, shape) {
+        if (!element) return;
+
+        element.classList.remove(
+            "shape-rectangle",
+            "shape-square",
+            "shape-round",
+            "shape-oval"
+        );
+
+        element.classList.add(`shape-${shape}`);
+        element.dataset.shape = shape;
+
+        if (shape === "square" || shape === "round") {
+            const size = Math.max(
+                parseFloat(element.style.width || "90"),
+                parseFloat(element.style.height || "60")
+            );
+
+            element.style.width = `${size}px`;
+            element.style.height = `${size}px`;
+        }
+
+        drawPairings();
+    }
+
+    function rotateSelected(amount) {
+        if (!selected) return;
+
+        const current = Number(selected.dataset.rotation || 0);
+        const next = (current + amount + 360) % 360;
+
+        selected.dataset.rotation = String(next);
+        selected.style.transform = `rotate(${next}deg)`;
+        drawPairings();
+    }
+
+    function makeInteractive(element) {
+        element.addEventListener("pointerdown", event => {
+            if (event.target.classList.contains("resize-handle")) {
+                return;
+            }
+
+            selectElement(element);
+
+            if (!editMode.checked) return;
+
+            const startX = event.clientX;
+            const startY = event.clientY;
+            const startLeft = parseFloat(element.style.left || "0");
+            const startTop = parseFloat(element.style.top || "0");
+
+            element.setPointerCapture(event.pointerId);
+
+            function move(moveEvent) {
+                const dx = moveEvent.clientX - startX;
+                const dy = moveEvent.clientY - startY;
+
+                const maxLeft = stage.clientWidth - element.offsetWidth;
+                const maxTop = stage.clientHeight - element.offsetHeight;
+
+                element.style.left = `${Math.min(
+                    Math.max(startLeft + dx, 0),
+                    Math.max(maxLeft, 0)
+                )}px`;
+
+                element.style.top = `${Math.min(
+                    Math.max(startTop + dy, 0),
+                    Math.max(maxTop, 0)
+                )}px`;
+
+                drawPairings();
+            }
+
+            function finish() {
+                element.removeEventListener("pointermove", move);
+                element.removeEventListener("pointerup", finish);
+                element.removeEventListener("pointercancel", finish);
+            }
+
+            element.addEventListener("pointermove", move);
+            element.addEventListener("pointerup", finish);
+            element.addEventListener("pointercancel", finish);
+        });
+
+        const handle = element.querySelector(".resize-handle");
+
+        if (!handle) return;
+
+        handle.addEventListener("pointerdown", event => {
+            if (!editMode.checked) return;
+
+            event.stopPropagation();
+            selectElement(element);
+
+            const startX = event.clientX;
+            const startY = event.clientY;
+            const startWidth = element.offsetWidth;
+            const startHeight = element.offsetHeight;
+
+            handle.setPointerCapture(event.pointerId);
+
+            function resize(moveEvent) {
+                let width = Math.max(
+                    16,
+                    Math.min(
+                        1000,
+                        startWidth + moveEvent.clientX - startX
+                    )
+                );
+
+                let height = Math.max(
+                    10,
+                    Math.min(
+                        800,
+                        startHeight + moveEvent.clientY - startY
+                    )
+                );
+
+                if (
+                    element.dataset.shape === "square" ||
+                    element.dataset.shape === "round"
+                ) {
+                    const size = Math.max(width, height);
+                    width = size;
+                    height = size;
+                }
+
+                element.style.width = `${width}px`;
+                element.style.height = `${height}px`;
+                drawPairings();
+            }
+
+            function finish() {
+                handle.removeEventListener("pointermove", resize);
+                handle.removeEventListener("pointerup", finish);
+                handle.removeEventListener("pointercancel", finish);
+            }
+
+            handle.addEventListener("pointermove", resize);
+            handle.addEventListener("pointerup", finish);
+            handle.addEventListener("pointercancel", finish);
+        });
+    }
+
+    allEditableElements().forEach(makeInteractive);
+
+    shapeSelect.addEventListener("change", () => {
+        if (selected) {
+            setShape(selected, shapeSelect.value);
+        }
+    });
+
+    rotateLeft.addEventListener("click", () => rotateSelected(-15));
+    rotateRight.addEventListener("click", () => rotateSelected(15));
+
+    bringForward.addEventListener("click", () => {
+        if (!selected || selected.dataset.kind !== "object") return;
+
+        const next = Math.min(
+            Number(selected.dataset.zIndex || 1) + 1,
+            100
+        );
+
+        selected.dataset.zIndex = String(next);
+        selected.style.zIndex = next;
+    });
+
+    sendBackward.addEventListener("click", () => {
+        if (!selected || selected.dataset.kind !== "object") return;
+
+        const next = Math.max(
+            Number(selected.dataset.zIndex || 1) - 1,
+            -50
+        );
+
+        selected.dataset.zIndex = String(next);
+        selected.style.zIndex = next;
+    });
+
+    tableInspector.addEventListener("submit", async event => {
+        event.preventDefault();
+
+        if (!selected || selected.dataset.kind !== "table") return;
+
+        const tableId = Number(selected.dataset.tableId);
+
+        const response = await fetch(
+            `/api/table-layout/table/${tableId}`,
+            {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    number: inspectorNumber.value,
+                    capacity: Number(inspectorCapacity.value),
+                    area_id: Number(inspectorArea.value),
+                    near_tv: inspectorNearTv.checked,
+                    has_bench: inspectorBench.checked,
+                    accessible: inspectorAccessible.checked,
+                    unsuitable_for_food: inspectorFood.checked,
+                    active: inspectorActive.checked,
+                }),
+            }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok || !result.ok) {
+            alert(result.error || "Could not update table.");
+            return;
+        }
+
+        selected.dataset.number = inspectorNumber.value;
+        selected.dataset.capacity = inspectorCapacity.value;
+        selected.dataset.areaId = inspectorArea.value;
+        selected.dataset.areaName =
+            inspectorArea.options[inspectorArea.selectedIndex].textContent;
+        selected.dataset.nearTv = inspectorNearTv.checked ? "1" : "0";
+        selected.dataset.hasBench = inspectorBench.checked ? "1" : "0";
+        selected.dataset.accessible = inspectorAccessible.checked ? "1" : "0";
+        selected.dataset.unsuitableFood = inspectorFood.checked ? "1" : "0";
+        selected.dataset.active = inspectorActive.checked ? "1" : "0";
+
+        selected.classList.toggle(
+            "layout-table-inactive",
+            !inspectorActive.checked
+        );
+
+        selected.querySelector("strong").textContent =
+            `T${inspectorNumber.value}`;
+        selected.querySelector("span").textContent =
+            `${inspectorCapacity.value} seats`;
+        selected.querySelector("small").textContent =
+            inspectorArea.options[inspectorArea.selectedIndex].textContent;
+
+        selectedLabel.textContent = `Table ${inspectorNumber.value}`;
+    });
+
+    objectInspector.addEventListener("submit", async event => {
+        event.preventDefault();
+
+        if (!selected || selected.dataset.kind !== "object") return;
+
+        const objectId = Number(selected.dataset.objectId);
+
+        const response = await fetch(
+            `/api/floor-objects/${objectId}`,
+            {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    label: objectLabel.value,
+                    area_id: objectArea.value || null,
+                }),
+            }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok || !result.ok) {
+            alert(result.error || "Could not update object.");
+            return;
+        }
+
+        selected.dataset.label = objectLabel.value;
+        selected.dataset.areaId = objectArea.value || "";
+
+        const label = selected.querySelector(".floor-object-label");
+        if (label) label.textContent = objectLabel.value;
+
+        selectElement(selected);
+    });
+
+    duplicateObject.addEventListener("click", async () => {
+        if (!selected || selected.dataset.kind !== "object") return;
+
+        const response = await fetch(
+            `/api/floor-objects/${selected.dataset.objectId}/duplicate`,
+            {method: "POST"}
+        );
+
+        const result = await response.json();
+
+        if (!response.ok || !result.ok) {
+            alert("Could not duplicate object.");
+            return;
+        }
+
+        await saveLayout();
+        window.location.reload();
+    });
+
+    deleteObject.addEventListener("click", async () => {
+        if (!selected || selected.dataset.kind !== "object") return;
+
+        if (!confirm("Delete this floor-plan object?")) return;
+
+        const response = await fetch(
+            `/api/floor-objects/${selected.dataset.objectId}`,
+            {method: "DELETE"}
+        );
+
+        const result = await response.json();
+
+        if (!response.ok || !result.ok) {
+            alert("Could not delete object.");
+            return;
+        }
+
+        selected.remove();
+        showNothingSelected();
+    });
+
+    document.querySelectorAll("[data-add-object]").forEach(button => {
+        button.addEventListener("click", async () => {
+            const objectType = button.dataset.addObject;
+
+            const response = await fetch(
+                "/api/floor-objects",
+                {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        object_type: objectType,
+                        x: 80 + Math.random() * 80,
+                        y: 80 + Math.random() * 80,
+                    }),
+                }
+            );
+
+            const result = await response.json();
+
+            if (!response.ok || !result.ok) {
+                alert(result.error || "Could not add object.");
+                return;
+            }
+
+            // Reload keeps the HTML/data structure simple and guarantees the
+            // newly assigned database ID is represented everywhere.
+            window.location.reload();
+        });
+    });
+
+    pairFirstButton.addEventListener("click", () => {
+        if (!selected || selected.dataset.kind !== "table") {
+            alert("Select a bookable table first.");
+            return;
+        }
+
+        firstPairTable = Number(selected.dataset.tableId);
+        pairFirstLabel.textContent = `T${selected.dataset.number}`;
+    });
+
+    pairCreateButton.addEventListener("click", async () => {
+        if (
+            !selected ||
+            selected.dataset.kind !== "table" ||
+            !firstPairTable
+        ) {
+            alert("Set the first table, then select the second table.");
+            return;
+        }
+
+        const second = Number(selected.dataset.tableId);
+
+        if (second === firstPairTable) {
+            alert("Choose a different second table.");
+            return;
+        }
+
+        const response = await fetch(
+            "/api/table-layout/pair",
+            {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    table_a_id: firstPairTable,
+                    table_b_id: second,
+                }),
+            }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok || !result.ok) {
+            alert(result.error || "Could not create pairing.");
+            return;
+        }
+
+        window.location.reload();
+    });
+
+    pairingList?.addEventListener("click", async event => {
+        const button = event.target.closest(".delete-pairing");
+
+        if (!button) return;
+
+        const pairingId = button.dataset.pairingId;
+
+        const response = await fetch(
+            `/api/table-layout/pair/${pairingId}`,
+            {method: "DELETE"}
+        );
+
+        const result = await response.json();
+
+        if (!response.ok || !result.ok) {
+            alert(result.error || "Could not remove pairing.");
+            return;
+        }
+
+        pairings = pairings.filter(
+            pairing => String(pairing.id) !== String(pairingId)
+        );
+
+        button.closest(".pairing-row")?.remove();
+        drawPairings();
+    });
+
+    async function saveLayout() {
+        const tables = Array.from(
+            stage.querySelectorAll(".layout-table")
+        );
+
+        const objects = Array.from(
+            stage.querySelectorAll(".floor-object")
+        );
+
+        const payload = {
+            canvas_width: stage.clientWidth,
+            canvas_height: stage.clientHeight,
+
+            tables: tables.map(table => ({
+                id: Number(table.dataset.tableId),
+                x: parseFloat(table.style.left || "0"),
+                y: parseFloat(table.style.top || "0"),
+                width: table.offsetWidth,
+                height: table.offsetHeight,
+                shape: table.dataset.shape || "rectangle",
+                rotation: Number(table.dataset.rotation || 0),
+            })),
+
+            objects: objects.map(object => ({
+                id: Number(object.dataset.objectId),
+                x: parseFloat(object.style.left || "0"),
+                y: parseFloat(object.style.top || "0"),
+                width: object.offsetWidth,
+                height: object.offsetHeight,
+                shape: object.dataset.shape || "rectangle",
+                rotation: Number(object.dataset.rotation || 0),
+                z_index: Number(object.dataset.zIndex || 1),
+            })),
+        };
+
+        const response = await fetch(
+            "/api/table-layout/save",
+            {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(payload),
+            }
+        );
+
+        return response.json();
+    }
+
+    saveButton.addEventListener("click", async () => {
+        const result = await saveLayout();
+
+        if (!result.ok) {
+            alert("Could not save the floor plan.");
+            return;
+        }
+
+        const original = saveButton.textContent;
+        saveButton.textContent = "Saved";
+        setTimeout(() => {
+            saveButton.textContent = original;
+        }, 1200);
+    });
+
+    fitButton.addEventListener("click", () => {
+        stage.parentElement.scrollTo({
+            left: 0,
+            top: 0,
+            behavior: "smooth",
+        });
+    });
+
+    stage.addEventListener("pointerdown", event => {
+        if (
+            event.target === stage ||
+            event.target.classList.contains("floor-plan-grid")
+        ) {
+            showNothingSelected();
+        }
+    });
+
+    window.addEventListener("resize", drawPairings);
+    drawPairings();
+}
+
+
 document.addEventListener("DOMContentLoaded", () => {
     setupCustomerLookup();
     setupBookingTimeValidation();
@@ -631,4 +1316,5 @@ document.addEventListener("DOMContentLoaded", () => {
     setupLargePartyAreaFiltering();
     setupInquiryReminders();
     setupNormalTableAvailability();
+    setupTableLayoutEditor();
 });

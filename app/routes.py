@@ -18,6 +18,8 @@ from app.models import (
     BookingTable,
     Customer,
     ExtraDishOption,
+    FloorPlanObject,
+    FloorPlanSetting,
     InquiryExtraDish,
     InquiryReminder,
     LargePartyInquiry,
@@ -835,6 +837,444 @@ def delete_customer(customer_id):
 
     flash("Customer and their linked booking history were deleted.", "success")
     return redirect(url_for("main.customers"))
+
+
+
+@main.route("/table-layout")
+def table_layout():
+    """
+    Master visual pub floor-plan editor.
+
+    Bookable tables use PubTable; everything structural/decorative is stored as
+    FloorPlanObject so it never enters the booking allocator.
+    """
+    tables = db.session.scalars(
+        db.select(PubTable).order_by(*table_order_clause())
+    ).all()
+
+    areas = db.session.scalars(
+        db.select(Area).order_by(Area.name)
+    ).all()
+
+    pairings = db.session.scalars(
+        db.select(TablePairing)
+    ).all()
+
+    settings = db.session.scalar(
+        db.select(FloorPlanSetting).where(
+            FloorPlanSetting.name == "main"
+        )
+    )
+
+    floor_objects = db.session.scalars(
+        db.select(FloorPlanObject)
+        .order_by(FloorPlanObject.z_index, FloorPlanObject.id)
+    ).all()
+
+    return render_template(
+        "table_layout.html",
+        tables=tables,
+        areas=areas,
+        pairings=pairings,
+        settings=settings,
+        floor_objects=floor_objects,
+    )
+
+
+@main.route("/api/table-layout/save", methods=["POST"])
+def save_table_layout():
+    """
+    Save drag/resize/shape changes from the floor-plan editor.
+
+    Payload:
+    {
+      "tables": [
+        {
+          "id": 1,
+          "x": 120,
+          "y": 100,
+          "width": 90,
+          "height": 60,
+          "shape": "rectangle",
+          "rotation": 0
+        }
+      ],
+      "canvas_width": 1200,
+      "canvas_height": 760
+    }
+    """
+    payload = request.get_json(silent=True) or {}
+    table_rows = payload.get("tables", [])
+
+    settings = db.session.scalar(
+        db.select(FloorPlanSetting).where(
+            FloorPlanSetting.name == "main"
+        )
+    )
+
+    if settings is None:
+        settings = FloorPlanSetting(name="main")
+        db.session.add(settings)
+
+    canvas_width = payload.get("canvas_width")
+    canvas_height = payload.get("canvas_height")
+
+    if isinstance(canvas_width, (int, float)) and canvas_width >= 600:
+        settings.canvas_width = int(canvas_width)
+
+    if isinstance(canvas_height, (int, float)) and canvas_height >= 400:
+        settings.canvas_height = int(canvas_height)
+
+    allowed_shapes = {"rectangle", "round", "square", "oval"}
+
+    for row in table_rows:
+        table_id = row.get("id")
+
+        if not isinstance(table_id, int):
+            continue
+
+        table = db.session.get(PubTable, table_id)
+
+        if table is None:
+            continue
+
+        try:
+            x = float(row.get("x", table.x_position or 0))
+            y = float(row.get("y", table.y_position or 0))
+            width = float(row.get("width", table.layout_width or 90))
+            height = float(row.get("height", table.layout_height or 60))
+            rotation = float(row.get("rotation", table.layout_rotation or 0))
+        except (TypeError, ValueError):
+            continue
+
+        shape = row.get("shape", table.layout_shape or "rectangle")
+        if shape not in allowed_shapes:
+            shape = "rectangle"
+
+        table.x_position = max(0, x)
+        table.y_position = max(0, y)
+        table.layout_width = min(max(width, 46), 400)
+        table.layout_height = min(max(height, 46), 300)
+        table.layout_shape = shape
+        table.layout_rotation = rotation % 360
+
+    for row in payload.get("objects", []):
+        object_id = row.get("id")
+
+        if not isinstance(object_id, int):
+            continue
+
+        floor_object = db.session.get(FloorPlanObject, object_id)
+
+        if floor_object is None:
+            continue
+
+        try:
+            x = float(row.get("x", floor_object.x_position))
+            y = float(row.get("y", floor_object.y_position))
+            width = float(row.get("width", floor_object.layout_width))
+            height = float(row.get("height", floor_object.layout_height))
+            rotation = float(
+                row.get("rotation", floor_object.layout_rotation)
+            )
+            z_index = int(row.get("z_index", floor_object.z_index))
+        except (TypeError, ValueError):
+            continue
+
+        shape = row.get("shape", floor_object.layout_shape or "rectangle")
+        if shape not in allowed_shapes:
+            shape = "rectangle"
+
+        floor_object.x_position = max(0, x)
+        floor_object.y_position = max(0, y)
+        floor_object.layout_width = min(max(width, 16), 1000)
+        floor_object.layout_height = min(max(height, 10), 800)
+        floor_object.layout_rotation = rotation % 360
+        floor_object.layout_shape = shape
+        floor_object.z_index = max(-50, min(z_index, 100))
+
+    db.session.commit()
+
+    return {"ok": True}
+
+
+@main.route("/api/table-layout/table/<int:table_id>", methods=["POST"])
+def update_layout_table(table_id):
+    """
+    Update table metadata directly from the floor-plan side panel.
+    """
+    table = db.get_or_404(PubTable, table_id)
+    payload = request.get_json(silent=True) or {}
+
+    number = str(payload.get("number", table.number)).strip()
+    capacity = payload.get("capacity", table.capacity)
+    area_id = payload.get("area_id", table.area_id)
+
+    try:
+        capacity = int(capacity)
+        area_id = int(area_id)
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "Invalid table details."}, 400
+
+    if not number or capacity < 1:
+        return {"ok": False, "error": "Table number and capacity are required."}, 400
+
+    duplicate = db.session.scalar(
+        db.select(PubTable).where(
+            PubTable.number == number,
+            PubTable.id != table.id,
+        )
+    )
+
+    if duplicate:
+        return {"ok": False, "error": "Another table already uses that number."}, 400
+
+    table.number = number
+    table.capacity = capacity
+    table.area_id = area_id
+    table.near_tv = bool(payload.get("near_tv", False))
+    table.has_bench = bool(payload.get("has_bench", False))
+    table.accessible = bool(payload.get("accessible", False))
+    table.unsuitable_for_food = bool(
+        payload.get("unsuitable_for_food", False)
+    )
+    table.active = bool(payload.get("active", True))
+
+    db.session.commit()
+
+    return {"ok": True}
+
+
+
+@main.route("/api/floor-objects", methods=["POST"])
+def create_floor_object():
+    """Create a new non-bookable object in the floor-plan editor."""
+    payload = request.get_json(silent=True) or {}
+
+    allowed_types = {
+        "wall",
+        "door",
+        "bar",
+        "pillar",
+        "tv",
+        "fixed_table",
+        "pool_table",
+        "stairs",
+        "label",
+        "area",
+    }
+
+    object_type = str(payload.get("object_type", "")).strip()
+
+    if object_type not in allowed_types:
+        return {"ok": False, "error": "Unsupported floor-plan object."}, 400
+
+    defaults = {
+        "wall": {
+            "width": 220,
+            "height": 16,
+            "shape": "rectangle",
+            "label": "Wall",
+            "z": 1,
+        },
+        "door": {
+            "width": 80,
+            "height": 16,
+            "shape": "rectangle",
+            "label": "Door",
+            "z": 2,
+        },
+        "bar": {
+            "width": 240,
+            "height": 70,
+            "shape": "rectangle",
+            "label": "Bar",
+            "z": 2,
+        },
+        "pillar": {
+            "width": 50,
+            "height": 50,
+            "shape": "square",
+            "label": "Pillar",
+            "z": 2,
+        },
+        "tv": {
+            "width": 70,
+            "height": 26,
+            "shape": "rectangle",
+            "label": "TV",
+            "z": 3,
+        },
+        "fixed_table": {
+            "width": 85,
+            "height": 55,
+            "shape": "rectangle",
+            "label": "Non-bookable table",
+            "z": 3,
+        },
+        "pool_table": {
+            "width": 190,
+            "height": 105,
+            "shape": "rectangle",
+            "label": "Pool table",
+            "z": 2,
+        },
+        "stairs": {
+            "width": 110,
+            "height": 80,
+            "shape": "rectangle",
+            "label": "Stairs",
+            "z": 1,
+        },
+        "label": {
+            "width": 150,
+            "height": 40,
+            "shape": "rectangle",
+            "label": "Label",
+            "z": 5,
+        },
+        "area": {
+            "width": 300,
+            "height": 220,
+            "shape": "rectangle",
+            "label": "Area",
+            "z": -5,
+        },
+    }
+
+    default = defaults[object_type]
+
+    floor_object = FloorPlanObject(
+        object_type=object_type,
+        label=str(payload.get("label") or default["label"]),
+        x_position=float(payload.get("x", 80)),
+        y_position=float(payload.get("y", 80)),
+        layout_width=float(payload.get("width", default["width"])),
+        layout_height=float(payload.get("height", default["height"])),
+        layout_shape=str(payload.get("shape", default["shape"])),
+        layout_rotation=float(payload.get("rotation", 0)),
+        z_index=int(payload.get("z_index", default["z"])),
+        area_id=payload.get("area_id"),
+    )
+
+    db.session.add(floor_object)
+    db.session.commit()
+
+    return {
+        "ok": True,
+        "object": {
+            "id": floor_object.id,
+            "object_type": floor_object.object_type,
+            "label": floor_object.label,
+            "x": floor_object.x_position,
+            "y": floor_object.y_position,
+            "width": floor_object.layout_width,
+            "height": floor_object.layout_height,
+            "shape": floor_object.layout_shape,
+            "rotation": floor_object.layout_rotation,
+            "z_index": floor_object.z_index,
+            "area_id": floor_object.area_id,
+        },
+    }
+
+
+@main.route("/api/floor-objects/<int:object_id>", methods=["POST"])
+def update_floor_object(object_id):
+    """Update floor-plan object metadata from the inspector."""
+    floor_object = db.get_or_404(FloorPlanObject, object_id)
+    payload = request.get_json(silent=True) or {}
+
+    label = str(payload.get("label", floor_object.label or "")).strip()
+    area_id = payload.get("area_id")
+
+    if area_id in ("", None):
+        area_id = None
+    else:
+        try:
+            area_id = int(area_id)
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "Invalid area."}, 400
+
+    floor_object.label = label or floor_object.object_type.replace("_", " ").title()
+    floor_object.area_id = area_id
+
+    db.session.commit()
+
+    return {"ok": True}
+
+
+@main.route("/api/floor-objects/<int:object_id>", methods=["DELETE"])
+def delete_floor_object(object_id):
+    floor_object = db.get_or_404(FloorPlanObject, object_id)
+    db.session.delete(floor_object)
+    db.session.commit()
+    return {"ok": True}
+
+
+@main.route("/api/floor-objects/<int:object_id>/duplicate", methods=["POST"])
+def duplicate_floor_object(object_id):
+    source = db.get_or_404(FloorPlanObject, object_id)
+
+    duplicate = FloorPlanObject(
+        object_type=source.object_type,
+        label=source.label,
+        x_position=source.x_position + 24,
+        y_position=source.y_position + 24,
+        layout_width=source.layout_width,
+        layout_height=source.layout_height,
+        layout_rotation=source.layout_rotation,
+        layout_shape=source.layout_shape,
+        z_index=source.z_index,
+        area_id=source.area_id,
+    )
+
+    db.session.add(duplicate)
+    db.session.commit()
+
+    return {"ok": True, "id": duplicate.id}
+
+
+@main.route("/api/table-layout/pair", methods=["POST"])
+def create_layout_pairing():
+    """Create a physical pairing relationship from the visual editor."""
+    payload = request.get_json(silent=True) or {}
+
+    table_a_id = payload.get("table_a_id")
+    table_b_id = payload.get("table_b_id")
+
+    try:
+        first, second = sorted([int(table_a_id), int(table_b_id)])
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "Choose two tables."}, 400
+
+    if first == second:
+        return {"ok": False, "error": "Choose two different tables."}, 400
+
+    existing = db.session.scalar(
+        db.select(TablePairing).where(
+            TablePairing.table_a_id == first,
+            TablePairing.table_b_id == second,
+        )
+    )
+
+    if existing is None:
+        db.session.add(
+            TablePairing(
+                table_a_id=first,
+                table_b_id=second,
+            )
+        )
+        db.session.commit()
+
+    return {"ok": True}
+
+
+@main.route("/api/table-layout/pair/<int:pairing_id>", methods=["DELETE"])
+def delete_layout_pairing(pairing_id):
+    pairing = db.get_or_404(TablePairing, pairing_id)
+    db.session.delete(pairing)
+    db.session.commit()
+    return {"ok": True}
 
 
 # -------------------------

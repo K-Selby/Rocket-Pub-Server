@@ -1,0 +1,377 @@
+{% extends "base.html" %}
+
+{% block title %}Floor Plan Editor | Pub Booking System{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h1>Pub floor plan editor</h1>
+        <p>
+            Build the actual pub layout, then position the bookable tables inside it.
+            Structural objects never enter the booking allocator.
+        </p>
+    </div>
+
+    <div class="heading-actions">
+        <button class="button secondary"
+                type="button"
+                id="layout-fit-view">
+            Fit layout
+        </button>
+        <button class="button"
+                type="button"
+                id="layout-save">
+            Save layout
+        </button>
+    </div>
+</div>
+
+<div class="floor-editor-toolbar card">
+    <div class="floor-editor-tool-group">
+        <strong>Add object</strong>
+
+        <button type="button" class="floor-tool-button" data-add-object="wall">
+            Wall
+        </button>
+        <button type="button" class="floor-tool-button" data-add-object="door">
+            Door / opening
+        </button>
+        <button type="button" class="floor-tool-button" data-add-object="bar">
+            Bar
+        </button>
+        <button type="button" class="floor-tool-button" data-add-object="pillar">
+            Pillar
+        </button>
+        <button type="button" class="floor-tool-button" data-add-object="tv">
+            TV
+        </button>
+        <button type="button" class="floor-tool-button" data-add-object="fixed_table">
+            Non-bookable table
+        </button>
+        <button type="button" class="floor-tool-button" data-add-object="pool_table">
+            Pool table
+        </button>
+        <button type="button" class="floor-tool-button" data-add-object="stairs">
+            Stairs
+        </button>
+        <button type="button" class="floor-tool-button" data-add-object="area">
+            Area block
+        </button>
+        <button type="button" class="floor-tool-button" data-add-object="label">
+            Label
+        </button>
+    </div>
+</div>
+
+<div class="layout-toolbar card">
+    <div class="layout-toolbar-group">
+        <strong>Editor</strong>
+        <label class="checkbox-row">
+            <input type="checkbox" id="layout-edit-mode" checked>
+            Edit mode
+        </label>
+    </div>
+
+    <div class="layout-toolbar-group">
+        <strong>Selected</strong>
+        <span id="selected-table-label" class="muted">None</span>
+    </div>
+
+    <div class="layout-toolbar-group">
+        <strong>Shape</strong>
+        <select id="layout-shape">
+            <option value="rectangle">Rectangle</option>
+            <option value="square">Square</option>
+            <option value="round">Round</option>
+            <option value="oval">Oval</option>
+        </select>
+    </div>
+
+    <div class="layout-toolbar-group">
+        <strong>Rotate</strong>
+        <button type="button" class="button secondary compact-button" id="layout-rotate-left">
+            ↶ 15°
+        </button>
+        <button type="button" class="button secondary compact-button" id="layout-rotate-right">
+            ↷ 15°
+        </button>
+    </div>
+
+    <div class="layout-toolbar-group" id="object-layer-controls" hidden>
+        <strong>Layer</strong>
+        <button type="button" class="button secondary compact-button" id="send-backward">
+            Back
+        </button>
+        <button type="button" class="button secondary compact-button" id="bring-forward">
+            Forward
+        </button>
+    </div>
+</div>
+
+<div class="layout-workspace">
+    <section class="floor-plan-shell">
+        <div class="floor-plan-stage"
+             id="floor-plan-stage"
+             style="
+                width: {{ settings.canvas_width if settings else 1200 }}px;
+                height: {{ settings.canvas_height if settings else 760 }}px;
+             ">
+
+            <div class="floor-plan-grid"></div>
+
+            {% for floor_object in floor_objects %}
+                <div class="floor-object
+                            object-{{ floor_object.object_type }}
+                            shape-{{ floor_object.layout_shape or 'rectangle' }}"
+                     data-kind="object"
+                     data-object-id="{{ floor_object.id }}"
+                     data-object-type="{{ floor_object.object_type }}"
+                     data-label="{{ floor_object.label or '' }}"
+                     data-area-id="{{ floor_object.area_id or '' }}"
+                     data-shape="{{ floor_object.layout_shape or 'rectangle' }}"
+                     data-rotation="{{ floor_object.layout_rotation or 0 }}"
+                     data-z-index="{{ floor_object.z_index or 1 }}"
+                     style="
+                        left: {{ floor_object.x_position }}px;
+                        top: {{ floor_object.y_position }}px;
+                        width: {{ floor_object.layout_width }}px;
+                        height: {{ floor_object.layout_height }}px;
+                        transform: rotate({{ floor_object.layout_rotation or 0 }}deg);
+                        z-index: {{ floor_object.z_index or 1 }};
+                     ">
+
+                    <div class="floor-object-content">
+                        {% if floor_object.object_type == "tv" %}
+                            <span class="floor-icon">TV</span>
+                        {% elif floor_object.object_type == "pillar" %}
+                            <span class="floor-icon">●</span>
+                        {% elif floor_object.object_type == "stairs" %}
+                            <span class="floor-icon">≋</span>
+                        {% elif floor_object.object_type == "pool_table" %}
+                            <span class="floor-icon">POOL</span>
+                        {% endif %}
+
+                        <span class="floor-object-label">
+                            {{ floor_object.label }}
+                        </span>
+                    </div>
+
+                    <div class="resize-handle" title="Resize"></div>
+                </div>
+            {% endfor %}
+
+            {% for table in tables %}
+                <div class="layout-table
+                            shape-{{ table.layout_shape or 'rectangle' }}
+                            {% if not table.active %}layout-table-inactive{% endif %}"
+                     data-kind="table"
+                     data-table-id="{{ table.id }}"
+                     data-number="{{ table.number }}"
+                     data-capacity="{{ table.capacity }}"
+                     data-area-id="{{ table.area_id }}"
+                     data-area-name="{{ table.area.name }}"
+                     data-near-tv="{{ '1' if table.near_tv else '0' }}"
+                     data-has-bench="{{ '1' if table.has_bench else '0' }}"
+                     data-accessible="{{ '1' if table.accessible else '0' }}"
+                     data-unsuitable-food="{{ '1' if table.unsuitable_for_food else '0' }}"
+                     data-active="{{ '1' if table.active else '0' }}"
+                     data-shape="{{ table.layout_shape or 'rectangle' }}"
+                     data-rotation="{{ table.layout_rotation or 0 }}"
+                     style="
+                        left: {{ table.x_position or 40 }}px;
+                        top: {{ table.y_position or 40 }}px;
+                        width: {{ table.layout_width or 90 }}px;
+                        height: {{ table.layout_height or 60 }}px;
+                        transform: rotate({{ table.layout_rotation or 0 }}deg);
+                     ">
+
+                    <div class="layout-table-content">
+                        <strong>T{{ table.number }}</strong>
+                        <span>{{ table.capacity }} seats</span>
+                        <small>{{ table.area.name }}</small>
+                    </div>
+
+                    <div class="resize-handle" title="Resize table"></div>
+                </div>
+            {% endfor %}
+
+            <svg class="pairing-lines"
+                 id="pairing-lines"
+                 width="100%"
+                 height="100%"
+                 aria-hidden="true"></svg>
+        </div>
+    </section>
+
+    <aside class="layout-inspector card">
+        <h2>Inspector</h2>
+
+        <div id="layout-inspector-empty" class="muted">
+            Select a table or floor-plan object.
+        </div>
+
+        <form id="layout-table-inspector" hidden>
+            <div class="inspector-type-badge">Bookable table</div>
+
+            <label>
+                Table number
+                <input id="inspector-number">
+            </label>
+
+            <label>
+                Capacity
+                <input id="inspector-capacity" type="number" min="1">
+            </label>
+
+            <label>
+                Area
+                <select id="inspector-area">
+                    {% for area in areas %}
+                        <option value="{{ area.id }}">{{ area.name }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label class="checkbox-row">
+                <input id="inspector-near-tv" type="checkbox">
+                Near TV
+            </label>
+
+            <label class="checkbox-row">
+                <input id="inspector-bench" type="checkbox">
+                Bench seating
+            </label>
+
+            <label class="checkbox-row">
+                <input id="inspector-accessible" type="checkbox">
+                Accessible
+            </label>
+
+            <label class="checkbox-row">
+                <input id="inspector-food-unsuitable" type="checkbox">
+                Food last resort
+            </label>
+
+            <label class="checkbox-row">
+                <input id="inspector-active" type="checkbox">
+                Active
+            </label>
+
+            <button class="button" type="submit">
+                Save table details
+            </button>
+        </form>
+
+        <form id="layout-object-inspector" hidden>
+            <div class="inspector-type-badge" id="object-type-badge">
+                Floor object
+            </div>
+
+            <label>
+                Label
+                <input id="object-label">
+            </label>
+
+            <label>
+                Linked area
+                <select id="object-area">
+                    <option value="">None</option>
+                    {% for area in areas %}
+                        <option value="{{ area.id }}">{{ area.name }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <div class="inspector-button-grid">
+                <button type="submit" class="button">
+                    Save object
+                </button>
+
+                <button type="button"
+                        class="button secondary"
+                        id="duplicate-object">
+                    Duplicate
+                </button>
+
+                <button type="button"
+                        class="button danger-button"
+                        id="delete-object">
+                    Delete
+                </button>
+            </div>
+        </form>
+
+        <div id="table-pairing-panel" hidden>
+            <hr>
+
+            <h2>Pair tables</h2>
+            <p class="field-note">
+                Pairings describe tables that can physically be pushed together.
+            </p>
+
+            <div class="pair-controls">
+                <button type="button"
+                        class="button secondary"
+                        id="pair-first">
+                    Set selected as first
+                </button>
+
+                <div class="pair-status">
+                    First: <strong id="pair-first-label">None</strong>
+                </div>
+
+                <button type="button"
+                        class="button"
+                        id="pair-create">
+                    Pair with selected
+                </button>
+            </div>
+
+            <div class="existing-pairings">
+                <h3>Current pairings</h3>
+
+                <div id="pairing-list">
+                    {% for pairing in pairings %}
+                        <div class="pairing-row"
+                             data-pairing-id="{{ pairing.id }}">
+                            <span>
+                                T{{ pairing.table_a.number }}
+                                ↔
+                                T{{ pairing.table_b.number }}
+                            </span>
+
+                            <button type="button"
+                                    class="link-button danger delete-pairing"
+                                    data-pairing-id="{{ pairing.id }}">
+                                Remove
+                            </button>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </aside>
+</div>
+
+<div class="card">
+    <h2>Floor-plan objects</h2>
+    <p class="muted">
+        Walls, doors, the bar, pillars, TVs, fixed tables, the pool table,
+        stairs, area blocks and labels are purely visual. They are never offered
+        to a customer as a bookable table. Bookable tables are the numbered
+        table objects already stored in the Tables section.
+    </p>
+</div>
+
+<script>
+window.FLOOR_PAIRINGS = [
+    {% for pairing in pairings %}
+    {
+        id: {{ pairing.id }},
+        a: {{ pairing.table_a_id }},
+        b: {{ pairing.table_b_id }}
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+];
+</script>
+{% endblock %}

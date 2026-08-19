@@ -59,9 +59,14 @@ class PubTable(db.Model):
 
     active = db.Column(db.Boolean, default=True)
 
-    # Reserved for the future drag-and-drop floor plan.
-    x_position = db.Column(db.Float, default=0)
-    y_position = db.Column(db.Float, default=0)
+    # Visual floor-plan layout values are stored as percentages/pixels within
+    # the editable canvas so the same layout works on different screen sizes.
+    x_position = db.Column(db.Float, default=40)
+    y_position = db.Column(db.Float, default=40)
+    layout_width = db.Column(db.Float, default=90)
+    layout_height = db.Column(db.Float, default=60)
+    layout_shape = db.Column(db.String(20), default="rectangle")
+    layout_rotation = db.Column(db.Float, default=0)
 
     area = db.relationship("Area", back_populates="tables")
 
@@ -71,6 +76,52 @@ class PubTable(db.Model):
         cascade="all, delete-orphan"
     )
 
+
+
+class FloorPlanSetting(db.Model):
+    """Stores global visual settings for the pub layout editor."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False, unique=True, default="main")
+    canvas_width = db.Column(db.Integer, nullable=False, default=1200)
+    canvas_height = db.Column(db.Integer, nullable=False, default=760)
+    background_note = db.Column(db.String(200))
+
+
+
+class FloorPlanObject(db.Model):
+    """
+    A non-bookable object drawn on the master pub floor plan.
+
+    Examples: walls, doors, bar counters, pillars, TVs, fixed tables, pool
+    tables, stairs, area blocks and text labels.
+    """
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    object_type = db.Column(db.String(40), nullable=False, index=True)
+    label = db.Column(db.String(120))
+
+    x_position = db.Column(db.Float, nullable=False, default=80)
+    y_position = db.Column(db.Float, nullable=False, default=80)
+    layout_width = db.Column(db.Float, nullable=False, default=100)
+    layout_height = db.Column(db.Float, nullable=False, default=60)
+    layout_rotation = db.Column(db.Float, nullable=False, default=0)
+
+    # rectangle, square, round or oval. Some object types visually override
+    # this but it remains editable for flexibility.
+    layout_shape = db.Column(
+        db.String(20),
+        nullable=False,
+        default="rectangle"
+    )
+
+    z_index = db.Column(db.Integer, nullable=False, default=1)
+
+    # Optional area link is useful for area blocks/labels and future filtering.
+    area_id = db.Column(db.Integer, db.ForeignKey("area.id"))
+
+    area = db.relationship("Area")
 
 class TablePairing(db.Model):
     """Two tables that can physically be pushed together."""
