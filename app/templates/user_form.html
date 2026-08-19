@@ -16,6 +16,16 @@
     </label>
 
     <label>
+        Email address (optional)
+        <input type="email"
+               name="email"
+               placeholder="name@example.com">
+        <span class="field-note">
+            If entered, a verification code will be generated immediately.
+        </span>
+    </label>
+
+    <label>
         Account type
         <select name="role">
             {% for role in allowed_roles %}

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Email Setup | Rocket Pub Server{% endblock %}
+
+{% block content %}
+<div class="auth-page">
+    <div class="auth-card auth-card-wide">
+        <div class="auth-heading">
+            <h1>Add your email</h1>
+
+            {% if first_login %}
+                <p>
+                    Your password is set. Add an email address for account
+                    verification and future account recovery.
+                </p>
+            {% else %}
+                <p>
+                    Add or replace the email address attached to your account.
+                </p>
+            {% endif %}
+        </div>
+
+        {% if current_user.email_verified and current_user.email %}
+            <div class="verified-email-card">
+                <span>Verified email</span>
+                <strong>{{ current_user.email }}</strong>
+            </div>
+        {% endif %}
+
+        <form method="post" class="auth-form">
+            <label>
+                Email address
+                <input type="email"
+                       name="email"
+                       autocomplete="email"
+                       placeholder="name@example.com"
+                       required>
+            </label>
+
+            <p class="field-note">
+                We will send a six-digit verification code to this address.
+            </p>
+
+            <button class="button auth-submit"
+                    type="submit"
+                    name="action"
+                    value="send">
+                Send verification code
+            </button>
+
+            {% if first_login %}
+                <button class="button secondary auth-submit"
+                        type="submit"
+                        name="action"
+                        value="later"
+                        formnovalidate>
+                    Do this later
+                </button>
+            {% endif %}
+        </form>
+    </div>
+</div>
+{% endblock %}

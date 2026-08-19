@@ -1,5 +1,107 @@
 from datetime import date, datetime, timedelta
+
+import msal
+import requests
 import re
+import secrets
+import os
+
+MICROSOFT_CLIENT_ID = os.getenv("MICROSOFT_CLIENT_ID")
+MICROSOFT_CLIENT_SECRET = os.getenv("MICROSOFT_CLIENT_SECRET")
+MICROSOFT_TENANT_ID = os.getenv("MICROSOFT_TENANT_ID")
+
+# The sender mailbox is a personal Outlook.com account, so use the consumers
+# authority. The redirect URI must exactly match the URI registered in Entra.
+MICROSOFT_AUTHORITY = "https://login.microsoftonline.com/consumers"
+MICROSOFT_REDIRECT_URI = os.getenv(
+    "MICROSOFT_REDIRECT_URI",
+    "http://localhost:8000/auth/microsoft/callback",
+)
+MICROSOFT_SCOPES = ["Mail.Send"]
+
+
+def microsoft_token_cache_path():
+    """
+    Store Microsoft's OAuth token cache locally beside the SQLite database.
+
+    The cache may contain refresh-token material, so it is deliberately kept
+    out of Git via .gitignore.
+    """
+    project_root = os.path.dirname(os.path.dirname(__file__))
+    return os.path.join(
+        project_root,
+        "instance",
+        "microsoft_token_cache.bin",
+    )
+
+
+def load_microsoft_token_cache():
+    cache = msal.SerializableTokenCache()
+    path = microsoft_token_cache_path()
+
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as file:
+            cache.deserialize(file.read())
+
+    return cache
+
+
+def save_microsoft_token_cache(cache):
+    if not cache.has_state_changed:
+        return
+
+    path = microsoft_token_cache_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    with open(path, "w", encoding="utf-8") as file:
+        file.write(cache.serialize())
+
+
+def build_cached_msal_app():
+    cache = load_microsoft_token_cache()
+
+    app = msal.ConfidentialClientApplication(
+        MICROSOFT_CLIENT_ID,
+        authority=MICROSOFT_AUTHORITY,
+        client_credential=MICROSOFT_CLIENT_SECRET,
+        token_cache=cache,
+    )
+
+    return app, cache
+
+
+def get_microsoft_access_token():
+    """
+    Silently obtain a current Microsoft Graph access token.
+
+    MSAL uses the cached account/refresh token and refreshes access tokens when
+    required, so the pub mailbox does not need to sign in for every email.
+    """
+    if not MICROSOFT_CLIENT_ID or not MICROSOFT_CLIENT_SECRET:
+        return None
+
+    app, cache = build_cached_msal_app()
+    accounts = app.get_accounts()
+
+    if not accounts:
+        return None
+
+    result = app.acquire_token_silent(
+        MICROSOFT_SCOPES,
+        account=accounts[0],
+    )
+
+    save_microsoft_token_cache(cache)
+
+    if result and "access_token" in result:
+        return result["access_token"]
+
+    return None
+
+
+def microsoft_email_connected():
+    return get_microsoft_access_token() is not None
+
 
 from flask import (
     Blueprint,
@@ -71,6 +173,162 @@ MANAGER_ENDPOINTS = {
     "main.delete_cancelled_booking",
     "main.delete_cancelled_large_party",
 }
+
+
+
+def normalise_email(value):
+    return (value or "").strip().lower()
+
+
+def email_delivery_mode():
+    """
+    Use Microsoft Graph by default.
+
+    Setting ROCKET_EMAIL_MODE=console remains useful for development/testing
+    without actually sending an email.
+    """
+    return os.environ.get(
+        "ROCKET_EMAIL_MODE",
+        "microsoft",
+    ).strip().lower()
+
+
+def send_verification_email(recipient, code):
+    """
+    Send a six-digit verification code.
+
+    Production/default mode uses the connected
+    rocketpubserver@outlook.com Microsoft account via Graph.
+    """
+    sender = os.environ.get(
+        "ROCKET_EMAIL_FROM",
+        "rocketpubserver@outlook.com",
+    )
+
+    subject = "Rocket Pub Server email verification"
+    body = (
+        "Your Rocket Pub Server verification code is:\n\n"
+        f"{code}\n\n"
+        "This code expires in 15 minutes.\n\n"
+        "If you did not request this code, you can ignore this email."
+    )
+
+    if email_delivery_mode() == "console":
+        print("\n" + "=" * 60)
+        print("ROCKET PUB SERVER EMAIL VERIFICATION")
+        print(f"To: {recipient}")
+        print(f"From: {sender}")
+        print(f"Code: {code}")
+        print("=" * 60 + "\n")
+
+        return True, (
+            "Development email mode is enabled. "
+            "The verification code was printed in the server Terminal."
+        )
+
+    access_token = get_microsoft_access_token()
+
+    if not access_token:
+        return False, (
+            "Rocket Pub Server email is not connected. "
+            "An administrator needs to connect the Outlook mailbox first."
+        )
+
+    payload = {
+        "message": {
+            "subject": subject,
+            "body": {
+                "contentType": "Text",
+                "content": body,
+            },
+            "toRecipients": [
+                {
+                    "emailAddress": {
+                        "address": recipient,
+                    }
+                }
+            ],
+        },
+        "saveToSentItems": True,
+    }
+
+    try:
+        response = requests.post(
+            "https://graph.microsoft.com/v1.0/me/sendMail",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=20,
+        )
+    except requests.RequestException as exc:
+        print(f"Microsoft Graph email request failed: {exc}")
+        return False, "The verification email could not be sent."
+
+    if response.status_code == 202:
+        return True, f"Verification code sent to {recipient}."
+
+    print(
+        "Microsoft Graph sendMail failed:",
+        response.status_code,
+        response.text,
+    )
+
+    return False, (
+        "Microsoft could not send the verification email. "
+        "Check the Rocket Email connection in Users."
+    )
+
+
+
+def start_email_verification(user, email):
+    email = normalise_email(email)
+
+    if not email or "@" not in email or "." not in email.rsplit("@", 1)[-1]:
+        return False, "Enter a valid email address."
+
+    duplicate = db.session.scalar(
+        db.select(AppUser).where(
+            db.or_(
+                AppUser.email == email,
+                AppUser.pending_email == email,
+            ),
+            AppUser.id != user.id,
+        )
+    )
+
+    if duplicate:
+        return False, "That email address is already attached to another user."
+
+    code = f"{secrets.randbelow(1000000):06d}"
+
+    user.pending_email = email
+    user.email_verification_code_hash = generate_password_hash(code)
+    user.email_verification_expires_at = (
+        datetime.now() + timedelta(minutes=15)
+    )
+    db.session.commit()
+
+    success, delivery_message = send_verification_email(email, code)
+
+    if not success:
+        return False, delivery_message
+
+    return True, delivery_message
+
+
+def manager_can_manage_user(target):
+    user = current_user()
+
+    if user is None or not user.is_manager:
+        return False
+
+    if user.is_admin:
+        return target.role != "admin" or target.id == user.id
+
+    return target.role == "staff"
+
 
 
 def current_user():
@@ -191,6 +449,7 @@ def logout():
 @main.route("/change-password", methods=["GET", "POST"])
 def change_password():
     user = current_user()
+    first_login_was_required = bool(user.must_change_password)
 
     if request.method == "POST":
         current_password = request.form.get("current_password", "")
@@ -221,6 +480,11 @@ def change_password():
         db.session.commit()
 
         flash("Password changed successfully.", "success")
+
+        # First-login sequence: password first, then optional email setup.
+        if first_login_was_required:
+            return redirect(url_for("main.email_setup", first_login="1"))
+
         return redirect(url_for("main.dashboard"))
 
     return render_template(
@@ -1189,6 +1453,215 @@ def archive():
 
 
 
+
+
+# -------------------------
+# Rocket Outlook connection
+# -------------------------
+
+@main.route("/auth/microsoft/connect")
+def microsoft_connect():
+    if not current_user().is_admin:
+        flash("Administrator access is required.", "error")
+        return redirect(url_for("main.dashboard"))
+
+    if not MICROSOFT_CLIENT_ID or not MICROSOFT_CLIENT_SECRET:
+        flash(
+            "Microsoft Client ID / Client Secret are not configured in .env.",
+            "error",
+        )
+        return redirect(url_for("main.users"))
+
+    app, cache = build_cached_msal_app()
+
+    flow = app.initiate_auth_code_flow(
+        MICROSOFT_SCOPES,
+        redirect_uri=MICROSOFT_REDIRECT_URI,
+    )
+
+    save_microsoft_token_cache(cache)
+
+    # This contains OAuth state/PKCE information for the callback.
+    session["microsoft_auth_flow"] = flow
+
+    return redirect(flow["auth_uri"])
+
+
+@main.route("/auth/microsoft/callback")
+def microsoft_callback():
+    if not current_user().is_admin:
+        flash("Administrator access is required.", "error")
+        return redirect(url_for("main.dashboard"))
+
+    flow = session.pop("microsoft_auth_flow", None)
+
+    if not flow:
+        flash(
+            "The Microsoft sign-in session expired. "
+            "Press Connect Microsoft Email and try again.",
+            "error",
+        )
+        return redirect(url_for("main.users"))
+
+    app, cache = build_cached_msal_app()
+
+    try:
+        result = app.acquire_token_by_auth_code_flow(
+            flow,
+            request.args,
+        )
+    except ValueError:
+        flash("Microsoft rejected the sign-in response.", "error")
+        return redirect(url_for("main.users"))
+
+    save_microsoft_token_cache(cache)
+
+    if "access_token" not in result:
+        flash(
+            result.get(
+                "error_description",
+                "Microsoft authentication failed.",
+            ),
+            "error",
+        )
+        return redirect(url_for("main.users"))
+
+    flash(
+        "rocketpubserver@outlook.com is now connected.",
+        "success",
+    )
+
+    return redirect(url_for("main.users"))
+
+
+@main.route("/auth/microsoft/disconnect", methods=["POST"])
+def microsoft_disconnect():
+    if not current_user().is_admin:
+        flash("Administrator access is required.", "error")
+        return redirect(url_for("main.dashboard"))
+
+    path = microsoft_token_cache_path()
+
+    if os.path.exists(path):
+        os.remove(path)
+
+    session.pop("microsoft_auth_flow", None)
+
+    flash("Rocket Email disconnected.", "success")
+    return redirect(url_for("main.users"))
+
+
+# -------------------------
+# Email setup / verification
+# -------------------------
+
+@main.route("/my-email", methods=["GET", "POST"])
+def email_setup():
+    user = current_user()
+
+    if request.method == "POST":
+        action = request.form.get("action", "send")
+
+        if action == "later":
+            flash(
+                "Email setup skipped for now. You can add it later from your account.",
+                "success",
+            )
+            return redirect(url_for("main.dashboard"))
+
+        email = normalise_email(request.form.get("email"))
+
+        success, message = start_email_verification(user, email)
+        flash(message, "success" if success else "error")
+
+        if success:
+            return redirect(url_for("main.verify_email"))
+
+        return redirect(request.url)
+
+    return render_template(
+        "email_setup.html",
+        first_login=request.args.get("first_login") == "1",
+    )
+
+
+@main.route("/verify-email", methods=["GET", "POST"])
+def verify_email():
+    user = current_user()
+
+    if not user.pending_email:
+        flash("There is no email waiting to be verified.", "error")
+        return redirect(url_for("main.email_setup"))
+
+    if request.method == "POST":
+        action = request.form.get("action", "verify")
+
+        if action == "resend":
+            success, message = start_email_verification(
+                user,
+                user.pending_email,
+            )
+            flash(message, "success" if success else "error")
+            return redirect(request.url)
+
+        code = request.form.get("code", "").strip()
+
+        if (
+            not user.email_verification_code_hash
+            or not user.email_verification_expires_at
+        ):
+            flash("Request a new verification code.", "error")
+            return redirect(request.url)
+
+        if datetime.now() > user.email_verification_expires_at:
+            flash(
+                "That verification code has expired. Request a new one.",
+                "error",
+            )
+            return redirect(request.url)
+
+        if not check_password_hash(
+            user.email_verification_code_hash,
+            code,
+        ):
+            flash("Incorrect verification code.", "error")
+            return redirect(request.url)
+
+        user.email = user.pending_email
+        user.pending_email = None
+        user.email_verified = True
+        user.email_verification_code_hash = None
+        user.email_verification_expires_at = None
+        db.session.commit()
+
+        flash("Email address verified.", "success")
+        return redirect(url_for("main.dashboard"))
+
+    return render_template("verify_email.html")
+
+
+@main.route("/users/<int:user_id>/email", methods=["POST"])
+def set_user_email(user_id):
+    target = db.get_or_404(AppUser, user_id)
+
+    if not manager_can_manage_user(target):
+        flash("You cannot change that user's email.", "error")
+        return redirect(url_for("main.users"))
+
+    email = normalise_email(request.form.get("email"))
+
+    success, message = start_email_verification(target, email)
+    flash(message, "success" if success else "error")
+
+    if success:
+        flash(
+            f"{target.username} must enter the verification code sent to {email}.",
+            "success",
+        )
+
+    return redirect(url_for("main.users"))
+
+
 # -------------------------
 # Users
 # -------------------------
@@ -1219,6 +1692,11 @@ def users():
     return render_template(
         "users.html",
         users=user_list,
+        microsoft_email_connected=(
+            microsoft_email_connected()
+            if current_user().is_admin
+            else False
+        ),
     )
 
 
@@ -1237,6 +1715,7 @@ def new_user():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         role = request.form.get("role", "staff").strip()
+        email = normalise_email(request.form.get("email"))
 
         if not username:
             flash("Enter a username.", "error")
@@ -1270,6 +1749,11 @@ def new_user():
             f"{username} created. Their temporary password is Password.",
             "success",
         )
+
+        if email:
+            success, message = start_email_verification(user, email)
+            flash(message, "success" if success else "error")
+
         return redirect(url_for("main.users"))
 
     return render_template(

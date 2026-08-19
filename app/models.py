@@ -32,6 +32,14 @@ class AppUser(db.Model):
         nullable=False,
         default=True,
     )
+
+    # Email is optional for now, but can be verified using a six-digit code.
+    email = db.Column(db.String(255), unique=True, index=True)
+    pending_email = db.Column(db.String(255))
+    email_verified = db.Column(db.Boolean, nullable=False, default=False)
+    email_verification_code_hash = db.Column(db.String(255))
+    email_verification_expires_at = db.Column(db.DateTime)
+
     active = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login_at = db.Column(db.DateTime)

@@ -2867,3 +2867,130 @@ main.container {
         gap: 8px;
     }
 }
+
+
+/* v6.1 email setup and verification */
+.verified-email-card {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 12px 14px;
+    margin-bottom: 18px;
+    border-radius: 9px;
+    border: 1px solid #b9d3bc;
+    background: #edf6ea;
+}
+
+.verified-email-card span {
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 750;
+}
+
+.verification-code-input {
+    text-align: center;
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: 0.30em;
+    font-variant-numeric: tabular-nums;
+}
+
+.user-email-line {
+    margin-top: 5px;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.email-status {
+    display: inline-flex;
+    padding: 3px 6px;
+    margin-right: 5px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.email-status.verified {
+    background: #e4f2e3;
+    color: #3d6946;
+}
+
+.email-status.pending {
+    background: #fff1c9;
+    color: #71590d;
+}
+
+.email-status.missing {
+    background: #eceeeb;
+    color: #6a716c;
+}
+
+.inline-user-email-form {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.inline-user-email-form input {
+    width: 150px;
+    padding: 6px 8px;
+    font-size: 12px;
+}
+
+.topbar-account-link {
+    border: 1px solid rgba(221, 239, 214, 0.25);
+    border-radius: 7px !important;
+    background: rgba(255,255,255,0.06);
+    color: white !important;
+    padding: 7px 9px !important;
+    font-size: 12px !important;
+}
+
+.topbar-account-link:hover {
+    background: rgba(255,255,255,0.14) !important;
+}
+
+
+/* v6.2 Microsoft Graph email connection */
+.microsoft-email-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 16px;
+    border-color: #bcd3bf;
+    background: rgba(248, 252, 247, 0.96);
+}
+
+.microsoft-email-card h2 {
+    margin: 0;
+}
+
+.microsoft-email-card p {
+    margin: 7px 0 0;
+}
+
+.microsoft-email-title-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.email-connection-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.email-connection-actions form {
+    margin: 0;
+}
+
+@media (max-width: 700px) {
+    .microsoft-email-card {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}

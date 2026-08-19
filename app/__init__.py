@@ -1,8 +1,11 @@
 from flask import Flask
 import os
+from dotenv import load_dotenv
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from sqlalchemy import inspect, text
+
+load_dotenv()
 
 db = SQLAlchemy()
 migrate = Migrate()
@@ -99,6 +102,18 @@ def ensure_starter_schema_updates():
     add_column_if_missing(
         inspector, "repeat_booking", "high_chairs_required", "INTEGER DEFAULT 0"
     )
+
+    app_user_additions = {
+        "email": "VARCHAR(255)",
+        "pending_email": "VARCHAR(255)",
+        "email_verified": "BOOLEAN DEFAULT 0",
+        "email_verification_code_hash": "VARCHAR(255)",
+        "email_verification_expires_at": "DATETIME",
+    }
+
+    for name, sql_type in app_user_additions.items():
+        add_column_if_missing(inspector, "app_user", name, sql_type)
+
 
     add_column_if_missing(
         inspector,

@@ -1,4 +1,4 @@
-# Rocket Pub Server - v6 User Accounts & Permissions
+# Rocket Pub Server - v6.1 Email Verification
 
 ## Added in v4
 
@@ -436,3 +436,55 @@ plain text.
 Forgotten-password self-service is intentionally deferred. Managers/Admin can
 currently reset accounts back to the temporary password `Password`, after which
 the user is again forced to change it.
+
+
+## v6.1 email verification
+
+- After a user's mandatory first password change, Rocket Pub Server prompts them
+  to add an email address.
+- Email setup is optional and can be skipped with "Do this later".
+- Users can later add/change their own email from the Email link in the header.
+- Verification uses a six-digit one-time code valid for 15 minutes.
+- Codes are stored hashed rather than in plain text.
+- Managers can add/change email addresses for Staff accounts.
+- Admin can do the same for Staff and Manager accounts.
+- New-user creation includes an optional email field.
+- Email states in Users:
+  - Verified
+  - Pending verification
+  - No email
+
+### Sending verification mail
+
+The application defaults to `ROCKET_EMAIL_MODE=console` so email verification
+can be tested immediately without putting mail credentials into source code.
+The six-digit code is printed in the Flask terminal.
+
+The sender address defaults to:
+
+`rocketpubserver@outlook.com`
+
+A generic STARTTLS SMTP backend is present for providers that support password
+SMTP authentication. Outlook.com itself now requires Microsoft Modern
+Authentication/OAuth2, so the live `rocketpubserver@outlook.com` sender still
+needs a Microsoft OAuth connection before production email delivery is enabled.
+No Outlook password is stored in this repository.
+
+
+## v6.2 Microsoft Outlook / Graph email
+
+The Admin Users screen now includes a Rocket Email connection card.
+
+1. Keep the Microsoft Client ID, Client Secret and Tenant ID in local `.env`.
+2. Sign in to Rocket Pub Server as Admin.
+3. Open Users.
+4. Press **Connect Microsoft Email**.
+5. Sign in as `rocketpubserver@outlook.com` and approve access.
+6. Microsoft tokens are stored locally in
+   `instance/microsoft_token_cache.bin`.
+7. Verification codes are then sent through Microsoft Graph `/me/sendMail`.
+
+Both `.env` and `instance/microsoft_token_cache.bin` are ignored by Git.
+
+The returned project ZIP intentionally does not contain the real `.env` file
+or Microsoft token cache.

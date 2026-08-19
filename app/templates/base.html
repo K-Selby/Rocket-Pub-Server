@@ -60,6 +60,11 @@
                 <small>{{ current_user.role|title }}</small>
             </span>
 
+            <a class="topbar-account-link"
+               href="{{ url_for('main.email_setup') }}">
+                Email
+            </a>
+
             <form method="post" action="{{ url_for('main.logout') }}">
                 <button type="submit" class="topbar-logout">Log out</button>
             </form>
