@@ -209,9 +209,16 @@ function setupDepositWarning() {
         warning.hidden = false;
         paymentField.hidden = false;
         paidInput.max = due.toFixed(2);
+
+        const remainder = document.getElementById("deposit-remainder-preview");
+        if (remainder) {
+            const paid = Number(paidInput.value || 0);
+            remainder.textContent = `£${Math.max(due - paid, 0).toFixed(2)}`;
+        }
     }
 
     partyInput.addEventListener("input", update);
+    paidInput.addEventListener("input", update);
     update();
 }
 
@@ -273,6 +280,8 @@ function setupLargePartyFoodQuote() {
                 ? `£${(price * catered).toFixed(2)}`
                 : "Not calculated"
         );
+
+        document.dispatchEvent(new CustomEvent("largePartyQuoteChanged"));
     }
 
     partyInput.addEventListener("input", update);
@@ -305,6 +314,27 @@ function setupExtraDishes() {
         });
 
         totalPreview.textContent = `£${total.toFixed(2)}`;
+
+        const mainPreview = document.getElementById("food-quote-preview");
+        const grandPreview = document.getElementById("large-grand-total-preview");
+        const remainderPreview = document.getElementById("large-total-remainder-preview");
+        const depositPaidInput = document.getElementById("large-deposit-paid");
+
+        const mainTotal = mainPreview && mainPreview.textContent.startsWith("£")
+            ? Number(mainPreview.textContent.replace("£", ""))
+            : 0;
+
+        const grandTotal = mainTotal + total;
+
+        if (grandPreview) {
+            grandPreview.textContent = `£${grandTotal.toFixed(2)}`;
+        }
+
+        if (remainderPreview) {
+            const paid = Number(depositPaidInput?.value || 0);
+            remainderPreview.textContent =
+                `£${Math.max(grandTotal - paid, 0).toFixed(2)}`;
+        }
     }
 
     function configureRow(row) {
@@ -362,7 +392,38 @@ function setupExtraDishes() {
         configureRow(row);
     });
 
+    document.addEventListener("largePartyQuoteChanged", updateTotal);
+
+    const depositPaidInput = document.getElementById("large-deposit-paid");
+    if (depositPaidInput) {
+        depositPaidInput.addEventListener("input", updateTotal);
+    }
+
     updateTotal();
+}
+
+
+
+function setupLargePartyEndTime() {
+    const restOfDay = document.getElementById("reserve-for-rest-of-day");
+    const endField = document.getElementById("expected-end-time-field");
+    const endInput = document.getElementById("expected-end-time");
+
+    if (!restOfDay || !endField || !endInput) return;
+
+    function update() {
+        if (restOfDay.checked) {
+            endField.hidden = true;
+            endInput.value = "";
+            endInput.required = false;
+        } else {
+            endField.hidden = false;
+            endInput.required = true;
+        }
+    }
+
+    restOfDay.addEventListener("change", update);
+    update();
 }
 
 
@@ -374,4 +435,5 @@ document.addEventListener("DOMContentLoaded", () => {
     setupLargePartyDepositWarning();
     setupLargePartyFoodQuote();
     setupExtraDishes();
+    setupLargePartyEndTime();
 });

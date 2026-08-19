@@ -21,6 +21,8 @@ from app.models import (
     InquiryExtraDish,
     LargePartyInquiry,
     LargePartyMenuOption,
+    LargePartyReservedArea,
+    LargePartyReservedTable,
     PubTable,
     RepeatBooking,
     RepeatBookingOccurrence,
@@ -97,6 +99,105 @@ def booking_time_error_message(date_value, booking_time=None):
     )
 
 
+
+def large_party_datetime_range(inquiry):
+    """
+    Return the blocking window for a large-party enquiry.
+
+    - If "rest of day" is selected, the reservation runs until 23:59:59.
+    - Otherwise it uses the expected end time.
+    - For older enquiries without an end time, fall back to three hours so
+      existing test records remain usable.
+    """
+    if not inquiry.event_date or not inquiry.event_time:
+        return None, None
+
+    start = datetime.combine(inquiry.event_date, inquiry.event_time)
+
+    if inquiry.reserve_for_rest_of_day:
+        end = datetime.combine(
+            inquiry.event_date,
+            datetime.strptime("23:59:59", "%H:%M:%S").time(),
+        )
+    elif inquiry.expected_end_time:
+        end = datetime.combine(inquiry.event_date, inquiry.expected_end_time)
+
+        # If an end time earlier than the start somehow exists on an old/test
+        # record, fall back rather than creating a negative reservation window.
+        if end <= start:
+            end = start + timedelta(minutes=STANDARD_BOOKING_DURATION)
+    else:
+        end = start + timedelta(minutes=STANDARD_BOOKING_DURATION)
+
+    return start, end
+
+
+def large_party_blocked_table_ids(
+    date_value,
+    time_value,
+    duration_minutes,
+    exclude_inquiry_id=None,
+):
+    """
+    Return tables blocked by overlapping large-party reservations.
+
+    Reserving an area blocks every active table in that area. Explicitly
+    selected tables are also blocked.
+    """
+    requested_start = datetime.combine(date_value, time_value)
+    requested_end = requested_start + timedelta(minutes=duration_minutes)
+
+    stmt = db.select(LargePartyInquiry).where(
+        LargePartyInquiry.event_date == date_value,
+        LargePartyInquiry.status != "Cancelled",
+    )
+
+    if exclude_inquiry_id:
+        stmt = stmt.where(LargePartyInquiry.id != exclude_inquiry_id)
+
+    blocked = set()
+
+    for inquiry in db.session.scalars(stmt).all():
+        start, end = large_party_datetime_range(inquiry)
+
+        if start is None:
+            continue
+
+        if requested_start < end and requested_end > start:
+            blocked.update(link.table_id for link in inquiry.reserved_tables)
+
+            area_ids = [link.area_id for link in inquiry.reserved_areas]
+
+            if area_ids:
+                area_tables = db.session.scalars(
+                    db.select(PubTable.id).where(
+                        PubTable.area_id.in_(area_ids),
+                        PubTable.active.is_(True),
+                    )
+                ).all()
+                blocked.update(area_tables)
+
+    return blocked
+
+
+def selected_large_party_blocked_table_ids(inquiry):
+    """Expand this enquiry's reserved areas + reserved tables into table IDs."""
+    blocked = {link.table_id for link in inquiry.reserved_tables}
+    area_ids = [link.area_id for link in inquiry.reserved_areas]
+
+    if area_ids:
+        blocked.update(
+            db.session.scalars(
+                db.select(PubTable.id).where(
+                    PubTable.area_id.in_(area_ids),
+                    PubTable.active.is_(True),
+                )
+            ).all()
+        )
+
+    return blocked
+
+
 def booking_datetime_range(booking):
     start = datetime.combine(booking.booking_date, booking.booking_time)
     end = start + timedelta(minutes=booking.duration_minutes)
@@ -112,6 +213,13 @@ def table_is_available(
 ):
     requested_start = datetime.combine(date_value, time_value)
     requested_end = requested_start + timedelta(minutes=duration_minutes)
+
+    if table_id in large_party_blocked_table_ids(
+        date_value,
+        time_value,
+        duration_minutes,
+    ):
+        return False
 
     stmt = (
         db.select(BookingTable)
@@ -190,6 +298,7 @@ def suggest_tables(
     avoids_bench=False,
     is_eating_food=True,
     exclude_booking_id=None,
+    excluded_table_ids=None,
 ):
     tables = db.session.scalars(
         db.select(PubTable)
@@ -198,8 +307,11 @@ def suggest_tables(
     ).all()
 
     candidates = []
+    excluded_table_ids = set(excluded_table_ids or [])
 
     for table in tables:
+        if table.id in excluded_table_ids:
+            continue
         if not table_is_available(
             table.id,
             date_value,
@@ -224,6 +336,9 @@ def suggest_tables(
 
     for pairing in db.session.scalars(db.select(TablePairing)).all():
         pair = [pairing.table_a, pairing.table_b]
+
+        if any(table.id in excluded_table_ids for table in pair):
+            continue
 
         if not all(table.active for table in pair):
             continue
@@ -375,6 +490,86 @@ def repeat_prompts_for_dashboard(selected_date):
             prompts.append(rule)
 
     return target_date, prompts
+
+
+
+def relocate_bookings_conflicting_with_large_party(inquiry):
+    """
+    Move existing normal bookings away from tables/areas now reserved by a
+    large-party enquiry.
+
+    The booking keeps its original customer/date/time/preferences; only the
+    assigned table(s) change. If no alternative exists, the save is rejected
+    rather than silently leaving a conflict.
+    """
+    if not inquiry.event_date or not inquiry.event_time:
+        return []
+
+    blocked = selected_large_party_blocked_table_ids(inquiry)
+
+    if not blocked:
+        return []
+
+    inquiry_start, inquiry_end = large_party_datetime_range(inquiry)
+
+    bookings = db.session.scalars(
+        db.select(Booking)
+        .where(
+            Booking.booking_date == inquiry.event_date,
+            Booking.status != "Cancelled",
+        )
+        .order_by(Booking.booking_time)
+    ).all()
+
+    moved = []
+
+    for booking in bookings:
+        booking_start, booking_end = booking_datetime_range(booking)
+
+        if not (
+            booking_start < inquiry_end and
+            booking_end > inquiry_start
+        ):
+            continue
+
+        current_ids = {table.id for table in booking.tables}
+
+        if not current_ids.intersection(blocked):
+            continue
+
+        alternatives = suggest_tables(
+            booking.party_size,
+            booking.booking_date,
+            booking.booking_time,
+            booking.duration_minutes,
+            booking.preferred_area_id,
+            booking.preferred_table_id,
+            booking.wants_near_tv,
+            booking.avoids_bench,
+            booking.is_eating_food,
+            exclude_booking_id=booking.id,
+            excluded_table_ids=blocked,
+        )
+
+        if not alternatives:
+            raise ValueError(
+                f"{booking.customer.name}'s {booking.booking_time.strftime('%H:%M')} "
+                "booking cannot be moved because no alternative table is available."
+            )
+
+        BookingTable.query.filter_by(booking_id=booking.id).delete()
+
+        for table in alternatives:
+            db.session.add(
+                BookingTable(booking_id=booking.id, table_id=table.id)
+            )
+
+        moved.append(
+            f"{booking.customer.name} at {booking.booking_time.strftime('%H:%M')} "
+            f"→ {' + '.join('T' + table.number for table in alternatives)}"
+        )
+
+    return moved
 
 
 @main.route("/")
@@ -1155,6 +1350,16 @@ def large_party_form_handler(inquiry=None):
         .order_by(ExtraDishOption.name)
     ).all()
 
+    areas = db.session.scalars(
+        db.select(Area).order_by(Area.name)
+    ).all()
+
+    tables = db.session.scalars(
+        db.select(PubTable)
+        .where(PubTable.active.is_(True))
+        .order_by(*table_order_clause())
+    ).all()
+
     if request.method == "POST":
         customer_name = request.form.get("customer_name", "").strip()
         customer_phone = normalise_phone(request.form.get("customer_phone", ""))
@@ -1196,6 +1401,36 @@ def large_party_form_handler(inquiry=None):
                 flash("Please enter a valid event time.", "error")
                 return redirect(request.url)
 
+        reserve_for_rest_of_day = (
+            request.form.get("reserve_for_rest_of_day") == "on"
+        )
+
+        expected_end_time = None
+
+        if not reserve_for_rest_of_day and request.form.get("expected_end_time"):
+            try:
+                expected_end_time = datetime.strptime(
+                    request.form["expected_end_time"], "%H:%M"
+                ).time()
+            except ValueError:
+                flash("Please enter a valid expected end time.", "error")
+                return redirect(request.url)
+
+        if event_time and not reserve_for_rest_of_day:
+            if expected_end_time is None:
+                flash(
+                    "Enter an expected end time or choose 'Reserve for rest of day'.",
+                    "error",
+                )
+                return redirect(request.url)
+
+            if expected_end_time <= event_time:
+                flash(
+                    "Expected end time must be later than the event start time.",
+                    "error",
+                )
+                return redirect(request.url)
+
         food_type = request.form.get("food_type", "").strip() or None
         menu_option_id = request.form.get("menu_option_id", type=int)
         catered_people = request.form.get("catered_people", type=int)
@@ -1231,6 +1466,23 @@ def large_party_form_handler(inquiry=None):
         deposit_paid = request.form.get("deposit_paid_amount", type=float) or 0.0
         deposit_paid = max(0.0, min(deposit_paid, deposit_due))
 
+        deposit_method = request.form.get("deposit_payment_method", "").strip() or None
+        deposit_taken_by = request.form.get("deposit_taken_by", "").strip() or None
+
+        if deposit_paid > 0 and deposit_method not in {"Cash", "Card"}:
+            flash(
+                "Choose Cash or Card when a deposit payment has been recorded.",
+                "error",
+            )
+            return redirect(request.url)
+
+        if deposit_paid > 0 and not deposit_taken_by:
+            flash(
+                "Enter who took the deposit payment.",
+                "error",
+            )
+            return redirect(request.url)
+
         if inquiry is None:
             inquiry = LargePartyInquiry()
             db.session.add(inquiry)
@@ -1239,6 +1491,8 @@ def large_party_form_handler(inquiry=None):
         inquiry.customer_phone = customer_phone
         inquiry.event_date = event_date
         inquiry.event_time = event_time
+        inquiry.expected_end_time = expected_end_time
+        inquiry.reserve_for_rest_of_day = reserve_for_rest_of_day
         inquiry.party_size = party_size
         inquiry.number_of_children = children
         inquiry.food_type = food_type
@@ -1248,11 +1502,49 @@ def large_party_form_handler(inquiry=None):
         inquiry.quoted_food_total = food_total
         inquiry.deposit_required_amount = deposit_due
         inquiry.deposit_paid_amount = deposit_paid
+        inquiry.deposit_payment_method = deposit_method if deposit_paid > 0 else None
+        inquiry.deposit_taken_by = deposit_taken_by if deposit_paid > 0 else None
         inquiry.occasion = request.form.get("occasion", "").strip() or None
         inquiry.notes = request.form.get("notes", "").strip() or None
         inquiry.status = request.form.get("status", "Enquiry").strip() or "Enquiry"
 
         db.session.flush()
+
+        # Rebuild area/table reservations for this enquiry.
+        LargePartyReservedArea.query.filter_by(inquiry_id=inquiry.id).delete()
+        LargePartyReservedTable.query.filter_by(inquiry_id=inquiry.id).delete()
+
+        reserved_area_ids = request.form.getlist("reserved_area_ids", type=int)
+        reserved_table_ids = request.form.getlist("reserved_table_ids", type=int)
+
+        for area_id in sorted(set(reserved_area_ids)):
+            db.session.add(
+                LargePartyReservedArea(
+                    inquiry_id=inquiry.id,
+                    area_id=area_id,
+                )
+            )
+
+        for table_id in sorted(set(reserved_table_ids)):
+            db.session.add(
+                LargePartyReservedTable(
+                    inquiry_id=inquiry.id,
+                    table_id=table_id,
+                )
+            )
+
+        db.session.flush()
+
+        # If the newly reserved area/tables contain existing bookings, move
+        # those bookings automatically to the next best available table.
+        try:
+            moved_bookings = relocate_bookings_conflicting_with_large_party(
+                inquiry
+            )
+        except ValueError as error:
+            db.session.rollback()
+            flash(str(error), "error")
+            return redirect(request.url)
 
         # Rebuild the extra-dish rows from the editable form.
         InquiryExtraDish.query.filter_by(inquiry_id=inquiry.id).delete()
@@ -1302,12 +1594,16 @@ def large_party_form_handler(inquiry=None):
 
         db.session.commit()
 
-        flash(
+        message = (
             "Large party enquiry updated."
             if request.endpoint == "main.edit_large_party"
-            else "Large party enquiry created.",
-            "success",
+            else "Large party enquiry created."
         )
+
+        if moved_bookings:
+            message += " Moved: " + "; ".join(moved_bookings)
+
+        flash(message, "success")
         return redirect(url_for("main.large_parties"))
 
     return render_template(
@@ -1315,5 +1611,15 @@ def large_party_form_handler(inquiry=None):
         inquiry=inquiry,
         options=options,
         extra_options=extra_options,
+        areas=areas,
+        tables=tables,
+        selected_reserved_area_ids=(
+            [link.area_id for link in inquiry.reserved_areas]
+            if inquiry else []
+        ),
+        selected_reserved_table_ids=(
+            [link.table_id for link in inquiry.reserved_tables]
+            if inquiry else []
+        ),
         today=date.today(),
     )

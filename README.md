@@ -1,4 +1,4 @@
-# Pub Booking System - v4.1
+# Pub Booking System - v4.3
 
 ## Added in v4
 
@@ -48,3 +48,32 @@ http://127.0.0.1:8000
 Fixed an IntegrityError when enabling a weekly repeat booking from an existing
 booking. RepeatBooking rows now receive weekday, time, party size and all other
 required fields before SQLAlchemy first flushes them to SQLite.
+
+
+## v4.2
+
+- Large-party enquiries can reserve whole pub areas.
+- Large-party enquiries can reserve multiple individual tables.
+- Those reservations block normal booking allocation during the overlapping
+  three-hour event window.
+- Existing normal bookings on newly reserved tables are automatically moved to
+  the next suitable available table.
+- If no alternative table exists, the large-party reservation save is rejected
+  rather than leaving a booking conflict.
+- Fixed custom extra-dish name controls showing when "Custom dish" was not
+  selected.
+- Added total food amount for large-party enquiries.
+- Added remainder after deposit.
+- Large-party deposits now record Cash/Card and the staff member who took them.
+
+
+## v4.3
+
+- Large-party enquiries now include an expected end time.
+- Reserved areas/tables are blocked from event start until expected end.
+- "Reserve for rest of day" can be selected instead of an end time.
+- Rest-of-day reservations remain blocked through 23:59:59.
+- The form clearly notes that the selected area/table is closed to further
+  bookings for the rest of that day.
+- Existing older enquiries without an end time safely fall back to a three-hour
+  blocking window.

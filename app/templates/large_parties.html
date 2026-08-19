@@ -34,6 +34,14 @@
                             {% else %}
                                 · Date not confirmed
                             {% endif %}
+                            {% if inquiry.event_time %}
+                                · {{ inquiry.event_time.strftime("%H:%M") }}
+                                {% if inquiry.reserve_for_rest_of_day %}
+                                    · Reserved for rest of day
+                                {% elif inquiry.expected_end_time %}
+                                    – {{ inquiry.expected_end_time.strftime("%H:%M") }}
+                                {% endif %}
+                            {% endif %}
                         </div>
                     </div>
 
@@ -44,11 +52,16 @@
                     </div>
 
                     <div>
-                        {% if inquiry.quoted_food_total is not none %}
-                            Buffet £{{ "%.2f"|format(inquiry.quoted_food_total) }}
-                        {% endif %}
-                        {% if inquiry.extras_total %}
-                            · Extras £{{ "%.2f"|format(inquiry.extras_total) }}
+                        <strong>Total £{{ "%.2f"|format(inquiry.total_amount) }}</strong>
+                        {% if inquiry.deposit_paid_amount %}
+                            <div class="muted">
+                                Deposit £{{ "%.2f"|format(inquiry.deposit_paid_amount) }}
+                                · {{ inquiry.deposit_payment_method }}
+                                · taken by {{ inquiry.deposit_taken_by }}
+                            </div>
+                            <div class="muted">
+                                Remainder £{{ "%.2f"|format(inquiry.total_remainder) }}
+                            </div>
                         {% endif %}
                     </div>
 

@@ -589,3 +589,39 @@ textarea {
         grid-template-columns: 1fr;
     }
 }
+
+
+/* v4.2 additions */
+.custom-dish-field[hidden] {
+    display: none !important;
+}
+
+.reservation-columns {
+    display: grid;
+    grid-template-columns: minmax(180px, 0.65fr) minmax(0, 1.35fr);
+    gap: 20px;
+}
+
+.reservation-columns fieldset {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+}
+
+.large-total-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(180px, 1fr));
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.grand-total-preview strong {
+    font-size: 26px;
+}
+
+@media (max-width: 800px) {
+    .reservation-columns,
+    .large-total-grid {
+        grid-template-columns: 1fr;
+    }
+}

@@ -250,6 +250,11 @@ class LargePartyInquiry(db.Model):
 
     event_date = db.Column(db.Date, index=True)
     event_time = db.Column(db.Time)
+    expected_end_time = db.Column(db.Time)
+
+    # When true, any reserved area/table remains blocked from the event start
+    # until the end of the day rather than only until expected_end_time.
+    reserve_for_rest_of_day = db.Column(db.Boolean, nullable=False, default=False)
 
     party_size = db.Column(db.Integer, nullable=False)
     number_of_children = db.Column(db.Integer, nullable=False, default=0)
@@ -266,6 +271,8 @@ class LargePartyInquiry(db.Model):
 
     deposit_required_amount = db.Column(db.Float, nullable=False, default=0)
     deposit_paid_amount = db.Column(db.Float, nullable=False, default=0)
+    deposit_payment_method = db.Column(db.String(20))
+    deposit_taken_by = db.Column(db.String(120))
 
     occasion = db.Column(db.String(120))
     notes = db.Column(db.Text)
@@ -279,6 +286,19 @@ class LargePartyInquiry(db.Model):
     )
 
     menu_option = db.relationship("LargePartyMenuOption")
+
+    reserved_areas = db.relationship(
+        "LargePartyReservedArea",
+        back_populates="inquiry",
+        cascade="all, delete-orphan"
+    )
+
+    reserved_tables = db.relationship(
+        "LargePartyReservedTable",
+        back_populates="inquiry",
+        cascade="all, delete-orphan"
+    )
+
     extra_dishes = db.relationship(
         "InquiryExtraDish",
         back_populates="inquiry",
@@ -296,6 +316,75 @@ class LargePartyInquiry(db.Model):
     @property
     def extras_total(self):
         return sum(float(item.total_price or 0) for item in self.extra_dishes)
+
+    @property
+    def total_amount(self):
+        """Main buffet quote plus all extra dishes."""
+        return round(
+            float(self.quoted_food_total or 0) + float(self.extras_total or 0),
+            2,
+        )
+
+    @property
+    def total_remainder(self):
+        """
+        Amount still outstanding from the currently quoted food total after
+        any deposit already recorded.
+        """
+        return max(
+            round(
+                float(self.total_amount or 0)
+                - float(self.deposit_paid_amount or 0),
+                2,
+            ),
+            0,
+        )
+
+
+class LargePartyReservedArea(db.Model):
+    """An entire pub area blocked out for a large-party enquiry."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    inquiry_id = db.Column(
+        db.Integer,
+        db.ForeignKey("large_party_inquiry.id"),
+        nullable=False
+    )
+    area_id = db.Column(db.Integer, db.ForeignKey("area.id"), nullable=False)
+
+    inquiry = db.relationship("LargePartyInquiry", back_populates="reserved_areas")
+    area = db.relationship("Area")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "inquiry_id",
+            "area_id",
+            name="uq_large_party_reserved_area"
+        ),
+    )
+
+
+class LargePartyReservedTable(db.Model):
+    """A specific physical table blocked out for a large-party enquiry."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    inquiry_id = db.Column(
+        db.Integer,
+        db.ForeignKey("large_party_inquiry.id"),
+        nullable=False
+    )
+    table_id = db.Column(db.Integer, db.ForeignKey("pub_table.id"), nullable=False)
+
+    inquiry = db.relationship("LargePartyInquiry", back_populates="reserved_tables")
+    table = db.relationship("PubTable")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "inquiry_id",
+            "table_id",
+            name="uq_large_party_reserved_table"
+        ),
+    )
 
 
 class InquiryExtraDish(db.Model):

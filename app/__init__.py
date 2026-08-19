@@ -86,6 +86,18 @@ def ensure_starter_schema_updates():
         "items_text": "TEXT",
     }
 
+    large_party_additions = {
+        "deposit_payment_method": "VARCHAR(20)",
+        "deposit_taken_by": "VARCHAR(120)",
+        "expected_end_time": "TIME",
+        "reserve_for_rest_of_day": "BOOLEAN DEFAULT 0",
+    }
+
+    for name, sql_type in large_party_additions.items():
+        add_column_if_missing(
+            inspector, "large_party_inquiry", name, sql_type
+        )
+
     for name, sql_type in menu_additions.items():
         add_column_if_missing(
             inspector, "large_party_menu_option", name, sql_type

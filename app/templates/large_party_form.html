@@ -68,10 +68,33 @@
             </label>
 
             <label>
-                Approximate time
+                Approximate start time
                 <input type="time"
                        name="event_time"
+                       id="large-event-time"
                        value="{% if inquiry and inquiry.event_time %}{{ inquiry.event_time.strftime('%H:%M') }}{% endif %}">
+            </label>
+
+            <label id="expected-end-time-field">
+                Expected end time
+                <input type="time"
+                       name="expected_end_time"
+                       id="expected-end-time"
+                       value="{% if inquiry and inquiry.expected_end_time %}{{ inquiry.expected_end_time.strftime('%H:%M') }}{% endif %}">
+                <span class="field-note">
+                    Used to block reserved tables/areas until the event is expected to finish.
+                </span>
+            </label>
+
+            <label class="checkbox-row prominent-checkbox">
+                <input type="checkbox"
+                       name="reserve_for_rest_of_day"
+                       id="reserve-for-rest-of-day"
+                       {% if inquiry and inquiry.reserve_for_rest_of_day %}checked{% endif %}>
+                Reserve for rest of day
+                <span class="field-note">
+                    This area/table will be closed for any further bookings for the rest of that day.
+                </span>
             </label>
 
             <label>
@@ -98,15 +121,94 @@
         <div id="large-deposit-payment-field"
              class="deposit-payment-field"
              {% if not inquiry or inquiry.party_size <= 10 %}hidden{% endif %}>
-            <label>
-                Deposit paid (£)
-                <input type="number"
-                       name="deposit_paid_amount"
-                       id="large-deposit-paid"
-                       min="0"
-                       step="0.01"
-                       value="{{ '%.2f'|format(inquiry.deposit_paid_amount or 0) if inquiry else '0.00' }}">
-            </label>
+            <div class="nested-grid">
+                <label>
+                    Deposit paid (£)
+                    <input type="number"
+                           name="deposit_paid_amount"
+                           id="large-deposit-paid"
+                           min="0"
+                           step="0.01"
+                           value="{{ '%.2f'|format(inquiry.deposit_paid_amount or 0) if inquiry else '0.00' }}">
+                </label>
+
+                <label>
+                    Payment method
+                    <select name="deposit_payment_method"
+                            id="deposit-payment-method">
+                        <option value="">Choose...</option>
+                        <option value="Cash"
+                            {% if inquiry and inquiry.deposit_payment_method == "Cash" %}selected{% endif %}>
+                            Cash
+                        </option>
+                        <option value="Card"
+                            {% if inquiry and inquiry.deposit_payment_method == "Card" %}selected{% endif %}>
+                            Card
+                        </option>
+                    </select>
+                </label>
+
+                <label>
+                    Deposit taken by
+                    <input name="deposit_taken_by"
+                           id="deposit-taken-by"
+                           value="{{ inquiry.deposit_taken_by if inquiry and inquiry.deposit_taken_by else '' }}"
+                           placeholder="Staff member">
+                </label>
+
+                <div class="quote-preview">
+                    <span class="field-note">Deposit still due</span>
+                    <strong id="deposit-remainder-preview">
+                        {% if inquiry %}
+                            £{{ "%.2f"|format(inquiry.deposit_balance) }}
+                        {% else %}
+                            £0.00
+                        {% endif %}
+                    </strong>
+                </div>
+            </div>
+        </div>
+    </section>
+
+
+    <section class="form-section full-width">
+        <h2>Reserve areas / tables</h2>
+        <p class="muted">
+            Reserving an area blocks every table in that area for this
+            enquiry's three-hour event window. You can also reserve individual
+            tables. Existing bookings on those tables will be moved to the next
+            suitable available table automatically.
+        </p>
+
+        <div class="reservation-columns">
+            <fieldset>
+                <legend>Whole areas</legend>
+                {% for area in areas %}
+                    <label class="checkbox-row">
+                        <input type="checkbox"
+                               name="reserved_area_ids"
+                               value="{{ area.id }}"
+                               {% if area.id in selected_reserved_area_ids %}checked{% endif %}>
+                        {{ area.name }}
+                    </label>
+                {% endfor %}
+            </fieldset>
+
+            <fieldset>
+                <legend>Specific tables</legend>
+                <div class="table-checkbox-grid">
+                    {% for table in tables %}
+                        <label class="table-checkbox">
+                            <input type="checkbox"
+                                   name="reserved_table_ids"
+                                   value="{{ table.id }}"
+                                   {% if table.id in selected_reserved_table_ids %}checked{% endif %}>
+                            <strong>T{{ table.number }}</strong>
+                            <span>{{ table.capacity }} seats · {{ table.area.name }}</span>
+                        </label>
+                    {% endfor %}
+                </div>
+            </fieldset>
         </div>
     </section>
 
@@ -269,11 +371,27 @@
             {% endif %}
         </div>
 
-        <div class="quote-preview extras-preview">
-            <span class="field-note">Extra dishes estimate</span>
-            <strong id="extras-total-preview">
-                {% if inquiry %}£{{ "%.2f"|format(inquiry.extras_total) }}{% else %}£0.00{% endif %}
-            </strong>
+        <div class="large-total-grid">
+            <div class="quote-preview extras-preview">
+                <span class="field-note">Extra dishes estimate</span>
+                <strong id="extras-total-preview">
+                    {% if inquiry %}£{{ "%.2f"|format(inquiry.extras_total) }}{% else %}£0.00{% endif %}
+                </strong>
+            </div>
+
+            <div class="quote-preview grand-total-preview">
+                <span class="field-note">Total food amount</span>
+                <strong id="large-grand-total-preview">
+                    {% if inquiry %}£{{ "%.2f"|format(inquiry.total_amount) }}{% else %}£0.00{% endif %}
+                </strong>
+            </div>
+
+            <div class="quote-preview grand-total-preview">
+                <span class="field-note">Remainder after deposit</span>
+                <strong id="large-total-remainder-preview">
+                    {% if inquiry %}£{{ "%.2f"|format(inquiry.total_remainder) }}{% else %}£0.00{% endif %}
+                </strong>
+            </div>
         </div>
 
         <template id="extra-dish-template">
