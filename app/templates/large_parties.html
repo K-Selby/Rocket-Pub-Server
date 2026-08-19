@@ -9,10 +9,16 @@
         <p>Open enquiries can be changed as details are confirmed over time.</p>
     </div>
 
-    <a class="button"
-       href="{{ url_for('main.new_large_party') }}">
-        New large party enquiry
-    </a>
+    <div class="heading-actions">
+        <a class="button secondary"
+           href="{{ url_for('main.archive') }}">
+            Archive
+        </a>
+        <a class="button"
+           href="{{ url_for('main.new_large_party') }}">
+            New large party enquiry
+        </a>
+    </div>
 </div>
 
 <div class="card">

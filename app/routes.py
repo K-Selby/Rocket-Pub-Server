@@ -912,6 +912,92 @@ def finish_booking(booking_id):
     )
 
 
+
+@main.route("/large-parties/<int:inquiry_id>/delete", methods=["POST"])
+def delete_cancelled_large_party(inquiry_id):
+    """Permanently remove a cancelled large-party enquiry."""
+    inquiry = db.get_or_404(LargePartyInquiry, inquiry_id)
+
+    if inquiry.status != "Cancelled":
+        flash(
+            "Only cancelled large-party enquiries can be permanently deleted.",
+            "error",
+        )
+        return redirect(url_for("main.archive"))
+
+    customer_name = inquiry.customer_name
+    db.session.delete(inquiry)
+    db.session.commit()
+
+    flash(
+        f"Cancelled large-party enquiry for {customer_name} permanently removed.",
+        "success",
+    )
+    return redirect(url_for("main.archive"))
+
+
+@main.route("/archive")
+def archive():
+    """
+    Archived/history screen.
+
+    Cancelled records live here instead of cluttering active bookings and
+    enquiries. Past completed bookings are also available as history.
+    """
+    cancelled_bookings = db.session.scalars(
+        db.select(Booking)
+        .where(Booking.status == "Cancelled")
+        .order_by(
+            Booking.booking_date.desc(),
+            Booking.booking_time.desc(),
+        )
+    ).all()
+
+    cancelled_large_parties = db.session.scalars(
+        db.select(LargePartyInquiry)
+        .where(LargePartyInquiry.status == "Cancelled")
+        .order_by(
+            LargePartyInquiry.event_date.desc(),
+            LargePartyInquiry.created_at.desc(),
+        )
+    ).all()
+
+    past_bookings = db.session.scalars(
+        db.select(Booking)
+        .where(
+            Booking.status != "Cancelled",
+            Booking.booking_date < date.today(),
+        )
+        .order_by(
+            Booking.booking_date.desc(),
+            Booking.booking_time.desc(),
+        )
+        .limit(250)
+    ).all()
+
+    past_large_parties = db.session.scalars(
+        db.select(LargePartyInquiry)
+        .where(
+            LargePartyInquiry.status != "Cancelled",
+            LargePartyInquiry.event_date.is_not(None),
+            LargePartyInquiry.event_date < date.today(),
+        )
+        .order_by(
+            LargePartyInquiry.event_date.desc(),
+            LargePartyInquiry.event_time.desc(),
+        )
+        .limit(250)
+    ).all()
+
+    return render_template(
+        "archive.html",
+        cancelled_bookings=cancelled_bookings,
+        cancelled_large_parties=cancelled_large_parties,
+        past_bookings=past_bookings,
+        past_large_parties=past_large_parties,
+    )
+
+
 # -------------------------
 # Customers
 # -------------------------
@@ -1669,7 +1755,10 @@ def bookings():
 
     booking_list = db.session.scalars(
         db.select(Booking)
-        .where(Booking.booking_date == selected_date)
+        .where(
+            Booking.booking_date == selected_date,
+            Booking.status != "Cancelled",
+        )
         .order_by(Booking.booking_time)
     ).all()
 
@@ -1947,6 +2036,44 @@ def cancel_booking(booking_id):
     )
 
 
+@main.route("/bookings/<int:booking_id>/delete", methods=["POST"])
+def delete_cancelled_booking(booking_id):
+    """
+    Permanently remove a cancelled booking. Intended for cleanup/test data.
+
+    Any repeat-booking occurrence that referenced the booking is retained but
+    detached from the deleted booking record.
+    """
+    booking = db.get_or_404(Booking, booking_id)
+
+    if booking.status != "Cancelled":
+        flash(
+            "Only cancelled bookings can be permanently deleted.",
+            "error",
+        )
+        return redirect(url_for("main.archive"))
+
+    occurrences = db.session.scalars(
+        db.select(RepeatBookingOccurrence).where(
+            RepeatBookingOccurrence.booking_id == booking.id
+        )
+    ).all()
+
+    for occurrence in occurrences:
+        occurrence.booking_id = None
+        occurrence.status = "Cancelled"
+
+    customer_name = booking.customer.name
+    db.session.delete(booking)
+    db.session.commit()
+
+    flash(
+        f"Cancelled booking for {customer_name} permanently removed.",
+        "success",
+    )
+    return redirect(url_for("main.archive"))
+
+
 # -------------------------
 # Repeat booking prompts
 # -------------------------
@@ -2163,6 +2290,7 @@ def edit_repeat_booking(repeat_id):
 def large_parties():
     inquiries = db.session.scalars(
         db.select(LargePartyInquiry)
+        .where(LargePartyInquiry.status != "Cancelled")
         .order_by(
             LargePartyInquiry.event_date.is_(None),
             LargePartyInquiry.event_date,

@@ -1,4 +1,4 @@
-# Pub Booking System - v5.6 Live Dashboard Booking States
+# Pub Booking System - v5.7 Archive + Test Data Cleanup
 
 ## Added in v4
 
@@ -355,3 +355,20 @@ completion time. A manually completed booking stops blocking its table(s)
 immediately, allowing those tables to be allocated to a later booking.
 Past-day bookings display as completed/minimised automatically while future-day
 bookings remain white/upcoming.
+
+
+## v5.7 archive and test-data cleanup
+
+- Cancelled normal bookings no longer appear on the active Bookings screen.
+- Cancelled large-party enquiries no longer appear in the active Enquiries box.
+- New Archive screen contains:
+  - cancelled bookings
+  - cancelled large-party enquiries
+  - past normal bookings
+  - past large-party events
+- Cancelled bookings and cancelled large-party enquiries can be permanently
+  deleted from Archive, making it easy to clear test data.
+- Permanent deletion is deliberately limited to Cancelled records.
+- Deleting a cancelled normal booking safely detaches any repeat occurrence that
+  pointed to it before removing the booking.
+- Archive is available from the top navigation and from Bookings/Large Parties.

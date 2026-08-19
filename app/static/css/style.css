@@ -2042,3 +2042,78 @@ textarea {
         grid-column: 2;
     }
 }
+
+
+/* v5.7 archive */
+.archive-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.archive-tabs a {
+    display: inline-flex;
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: white;
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.archive-section {
+    scroll-margin-top: 18px;
+}
+
+.archive-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.archive-row {
+    display: grid;
+    grid-template-columns: 125px minmax(220px, 1fr) auto auto;
+    gap: 18px;
+    align-items: center;
+    padding: 13px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.archive-row:last-child {
+    border-bottom: 0;
+}
+
+.archive-date-block {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.archive-date-block span {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.archive-delete-button {
+    background: #9a3333;
+    padding: 7px 10px;
+    font-size: 12px;
+}
+
+.archive-delete-button:hover {
+    background: #7f2828;
+}
+
+.archive-history-row {
+    opacity: 0.88;
+}
+
+@media (max-width: 780px) {
+    .archive-row {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+}

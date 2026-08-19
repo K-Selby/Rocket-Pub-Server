@@ -11,6 +11,10 @@
 
     <div class="heading-actions">
         <a class="button secondary"
+           href="{{ url_for('main.archive') }}">
+            Archive
+        </a>
+        <a class="button secondary"
            href="{{ url_for('main.new_large_party') }}">
             Large party enquiry
         </a>
@@ -35,7 +39,7 @@
     {% if bookings %}
         <div class="booking-list">
             {% for booking in bookings %}
-                <div class="booking-row {% if booking.status == 'Cancelled' %}cancelled{% endif %}">
+                <div class="booking-row">
                     <strong>{{ booking.booking_time.strftime("%H:%M") }}</strong>
 
                     <div>
@@ -66,22 +70,18 @@
                     </div>
 
                     <div class="row-actions">
-                        {% if booking.status != "Cancelled" %}
-                            <a class="small-link"
-                               href="{{ url_for('main.edit_booking', booking_id=booking.id) }}">
-                                Edit
-                            </a>
+                        <a class="small-link"
+                           href="{{ url_for('main.edit_booking', booking_id=booking.id) }}">
+                            Edit
+                        </a>
 
-                            <form method="post"
-                                  action="{{ url_for('main.cancel_booking', booking_id=booking.id) }}"
-                                  onsubmit="return confirm('Cancel this booking?');">
-                                <button class="link-button danger" type="submit">
-                                    Cancel
-                                </button>
-                            </form>
-                        {% else %}
-                            <span class="badge danger-badge">Cancelled</span>
-                        {% endif %}
+                        <form method="post"
+                              action="{{ url_for('main.cancel_booking', booking_id=booking.id) }}"
+                              onsubmit="return confirm('Cancel this booking? It will move to Archive.');">
+                            <button class="link-button danger" type="submit">
+                                Cancel
+                            </button>
+                        </form>
                     </div>
                 </div>
             {% endfor %}
