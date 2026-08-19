@@ -951,8 +951,11 @@ def save_table_layout():
         if shape not in allowed_shapes:
             shape = "rectangle"
 
-        table.x_position = max(0, x)
-        table.y_position = max(0, y)
+        # Keep rotation-aware signed coordinates for the same reason as
+        # structural floor objects. The browser editor already constrains the
+        # VISUAL table inside the map.
+        table.x_position = max(-500, min(x, settings.canvas_width + 500))
+        table.y_position = max(-500, min(y, settings.canvas_height + 500))
         table.layout_width = min(max(width, 46), 400)
         table.layout_height = min(max(height, 46), 300)
         table.layout_shape = shape
@@ -985,8 +988,12 @@ def save_table_layout():
         if shape not in allowed_shapes:
             shape = "rectangle"
 
-        floor_object.x_position = max(0, x)
-        floor_object.y_position = max(0, y)
+        # Rotated objects may legitimately need a negative unrotated
+        # left/top value so their VISUAL edge sits flush with the map edge.
+        # Example: a long wall rotated 90° can require x < 0 even though no
+        # visible part of the wall is outside the floor plan.
+        floor_object.x_position = max(-1000, min(x, settings.canvas_width + 1000))
+        floor_object.y_position = max(-1000, min(y, settings.canvas_height + 1000))
         floor_object.layout_width = min(max(width, 16), 1000)
         floor_object.layout_height = min(max(height, 10), 800)
         floor_object.layout_rotation = rotation % 360
@@ -1426,8 +1433,20 @@ def table_availability_api():
             exclude_booking_id,
         )
 
+        blocked_by_large_party = (
+            table.id in large_party_blocked_table_ids(
+                booking_date,
+                booking_time,
+                STANDARD_BOOKING_DURATION,
+            )
+        )
+
         if not available:
-            status = "unavailable"
+            status = (
+                "large_party"
+                if blocked_by_large_party
+                else "unavailable"
+            )
         elif party_size > 0 and table.capacity == party_size:
             status = "ideal"
         elif party_size > 0 and table.capacity > party_size:
@@ -1443,9 +1462,12 @@ def table_availability_api():
                 "number": table.number,
                 "capacity": table.capacity,
                 "area_id": table.area_id,
+                "area_name": table.area.name,
                 "available": available,
                 "status": status,
                 "unsuitable_for_food": bool(table.unsuitable_for_food),
+                "near_tv": bool(table.near_tv),
+                "has_bench": bool(table.has_bench),
             }
         )
 
@@ -1722,10 +1744,23 @@ def booking_form_handler(booking=None):
             url_for("main.bookings", date=booking_date.isoformat())
         )
 
+    floor_objects = db.session.scalars(
+        db.select(FloorPlanObject)
+        .order_by(FloorPlanObject.z_index, FloorPlanObject.id)
+    ).all()
+
+    floor_settings = db.session.scalar(
+        db.select(FloorPlanSetting).where(
+            FloorPlanSetting.name == "main"
+        )
+    )
+
     return render_template(
         "booking_form.html",
         areas=areas,
         tables=tables,
+        floor_objects=floor_objects,
+        floor_settings=floor_settings,
         customer_lookup=customer_lookup_payload(),
         today=date.today(),
         now_time=datetime.now().strftime("%H:%M"),

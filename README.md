@@ -1,4 +1,4 @@
-# Pub Booking System - v5.1 Floor Plan Editor
+# Pub Booking System - v5.2.1 Rotated Position Persistence Fix
 
 ## Added in v4
 
@@ -197,3 +197,28 @@ changes the object's visual bounding box while `offsetLeft` still describes its
 unrotated box. Dragging, resizing and map-resizing now use rotation-aware visual
 bounds, allowing a long wall rotated 90 degrees to sit flush against the left,
 right, top or bottom edge of the floor plan.
+
+
+## v5.2 booking-screen floor-plan integration
+
+- Normal booking table boxes now use a horizontal slider.
+- Cards sort automatically from ideal through unavailable.
+- Hovering a table card highlights its physical table on the full floor plan.
+- Hovering a physical table highlights/scrolls its card into view.
+- Clicking either the card or map selects/deselects that table.
+- Large-party-reserved tables use a separate purple status.
+- Suggested connected table combinations remain available.
+- The complete saved pub layout is displayed under the slider as a spatial reference.
+
+
+## v5.2.1 rotated-position persistence fix
+
+- Fixed walls/objects placed flush against the left/top edge moving inward after
+  Save Layout, page reload, adding another object, or opening the booking form.
+- Rotated objects can require a negative unrotated x/y coordinate even when the
+  visible object is completely inside the map. The server previously forced
+  those coordinates back to zero.
+- Signed rotation-aware coordinates are now preserved in SQLite.
+- Rotated bookable tables use the same persistence fix.
+- Adding a new floor-plan object now saves the current layout before reloading
+  the editor, preventing unsaved position changes from being lost.

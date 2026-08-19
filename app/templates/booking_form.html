@@ -205,41 +205,136 @@
         </div>
     </section>
 
-    <fieldset class="full-width">
-        <legend>Manual table selection</legend>
-        <p class="muted">
-            Leave all unticked for automatic allocation.
-        </p>
 
-        <div class="table-checkbox-grid">
+<fieldset class="full-width booking-table-picker">
+    <legend>Table selection</legend>
+
+    <p class="muted">
+        Tables are sorted from best match to least suitable once date,
+        time and party size are entered. Hover a table card to locate it
+        on the floor plan below, or click either the card or map table to
+        select it.
+    </p>
+
+    <div class="booking-table-legend">
+        <span class="legend-chip legend-green">Ideal</span>
+        <span class="legend-chip legend-yellow">Available / oversized</span>
+        <span class="legend-chip legend-grey">Combination candidate</span>
+        <span class="legend-chip legend-red">Unavailable</span>
+        <span class="legend-chip legend-purple">Large party reserved</span>
+    </div>
+
+    <div class="table-slider-shell">
+        <button type="button" class="table-slider-arrow" id="table-slider-left" aria-label="Scroll tables left">‹</button>
+
+        <div class="table-slider" id="table-slider">
             {% for table in tables %}
-                <label class="table-checkbox availability-table"
+                <label class="table-choice-card"
                        data-table-id="{{ table.id }}"
-                       data-area-id="{{ table.area_id }}">
+                       data-number="{{ table.number }}"
+                       data-capacity="{{ table.capacity }}"
+                       data-area-id="{{ table.area_id }}"
+                       data-area-name="{{ table.area.name }}">
                     <input type="checkbox"
                            name="table_ids"
                            value="{{ table.id }}"
                            {% if table.id in selected_table_ids %}checked{% endif %}>
-                    <strong>T{{ table.number }}</strong>
-                    <span>
-                        {{ table.capacity }} seats · {{ table.area.name }}
-                        {% if table.near_tv %} · TV{% endif %}
-                        {% if table.has_bench %} · Bench{% endif %}
-                        {% if table.unsuitable_for_food %} · Food last resort{% endif %}
-                    </span>
+
+                    <div class="table-choice-heading">
+                        <strong>T{{ table.number }}</strong>
+                        <span>{{ table.capacity }} seats</span>
+                    </div>
+
+                    <div class="table-choice-meta">
+                        <span>{{ table.area.name }}</span>
+                        {% if table.near_tv %}<span>Near TV</span>{% endif %}
+                        {% if table.has_bench %}<span>Bench</span>{% endif %}
+                        {% if table.unsuitable_for_food %}<span>Food last resort</span>{% endif %}
+                    </div>
+
+                    <div class="table-choice-status">Enter booking details</div>
                 </label>
             {% endfor %}
         </div>
 
-        <div id="pairing-suggestions" class="pairing-suggestions">
-            <h3>Table combinations</h3>
-            <p class="field-note">
-                Valid paired-table combinations will appear here when date,
-                time and party size are entered.
-            </p>
-            <div id="pairing-suggestion-list"></div>
+        <button type="button" class="table-slider-arrow" id="table-slider-right" aria-label="Scroll tables right">›</button>
+    </div>
+
+    <div id="pairing-suggestions" class="pairing-suggestions">
+        <h3>Suggested table combinations</h3>
+        <p class="field-note">
+            Suitable connected table combinations appear here when a
+            single table is not the best fit.
+        </p>
+        <div id="pairing-suggestion-list"></div>
+    </div>
+
+    <div class="booking-floor-plan-wrap">
+        <div class="booking-floor-plan-toolbar">
+            <div>
+                <strong>Pub layout</strong>
+                <span class="field-note">Hover a card above to highlight the table here.</span>
+            </div>
+
+            <button type="button"
+                    class="button secondary compact-button"
+                    id="booking-map-fit">
+                Fit whole map
+            </button>
         </div>
-    </fieldset>
+
+        <div class="booking-floor-plan-shell" id="booking-floor-plan-shell">
+            <div class="booking-floor-plan-zoom-surface" id="booking-floor-plan-zoom-surface">
+                <div class="booking-floor-plan-stage"
+                     id="booking-floor-plan-stage"
+                     style="
+                        width: {{ floor_settings.canvas_width if floor_settings else 1200 }}px;
+                        height: {{ floor_settings.canvas_height if floor_settings else 760 }}px;
+                     ">
+
+                    {% for floor_object in floor_objects %}
+                        <div class="booking-floor-object object-{{ floor_object.object_type }} shape-{{ floor_object.layout_shape or 'rectangle' }}"
+                             style="
+                                left: {{ floor_object.x_position }}px;
+                                top: {{ floor_object.y_position }}px;
+                                width: {{ floor_object.layout_width }}px;
+                                height: {{ floor_object.layout_height }}px;
+                                transform: rotate({{ floor_object.layout_rotation or 0 }}deg);
+                                z-index: {{ floor_object.z_index or 1 }};
+                             ">
+                            <div class="floor-object-content">
+                                {% if floor_object.object_type == "tv" %}
+                                    <span class="floor-icon">TV</span>
+                                {% elif floor_object.object_type == "pillar" %}
+                                    <span class="floor-icon">●</span>
+                                {% endif %}
+                                <span class="floor-object-label">{{ floor_object.label }}</span>
+                            </div>
+                        </div>
+                    {% endfor %}
+
+                    {% for table in tables %}
+                        <button type="button"
+                                class="booking-map-table shape-{{ table.layout_shape or 'rectangle' }}"
+                                data-table-id="{{ table.id }}"
+                                data-number="{{ table.number }}"
+                                aria-label="Table {{ table.number }}"
+                                style="
+                                    left: {{ table.x_position or 40 }}px;
+                                    top: {{ table.y_position or 40 }}px;
+                                    width: {{ table.layout_width or 90 }}px;
+                                    height: {{ table.layout_height or 60 }}px;
+                                    transform: rotate({{ table.layout_rotation or 0 }}deg);
+                                ">
+                            <span>T{{ table.number }}</span>
+                            <small>{{ table.capacity }}</small>
+                        </button>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</fieldset>
 
     <section class="form-section full-width">
         <h2>Repeat booking</h2>

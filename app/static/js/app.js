@@ -492,6 +492,7 @@ function setupInquiryReminders() {
 }
 
 
+
 function setupNormalTableAvailability() {
     const form = document.getElementById("booking-form");
     const dateInput = document.getElementById("booking-date");
@@ -501,28 +502,208 @@ function setupNormalTableAvailability() {
     const nearTv = document.getElementById("wants-near-tv");
     const avoidsBench = document.getElementById("avoids-bench");
     const eating = document.getElementById("is-eating-food");
-    const tableCards = Array.from(
-        document.querySelectorAll(".availability-table")
-    );
+
+    const slider = document.getElementById("table-slider");
+    const sliderLeft = document.getElementById("table-slider-left");
+    const sliderRight = document.getElementById("table-slider-right");
+
+    const cards = Array.from(document.querySelectorAll(".table-choice-card"));
+    const mapStage = document.getElementById("booking-floor-plan-stage");
+    const mapShell = document.getElementById("booking-floor-plan-shell");
+    const zoomSurface = document.getElementById("booking-floor-plan-zoom-surface");
+    const mapFit = document.getElementById("booking-map-fit");
+    const mapTables = Array.from(document.querySelectorAll(".booking-map-table"));
     const pairingList = document.getElementById("pairing-suggestion-list");
 
-    if (
-        !form || !dateInput || !timeInput || !partyInput ||
-        !tableCards.length || !pairingList
-    ) {
+    if (!form || !dateInput || !timeInput || !partyInput || !slider ||
+        !cards.length || !mapStage || !mapShell || !zoomSurface || !pairingList) {
         return;
     }
 
-    async function update() {
-        if (!dateInput.value || !timeInput.value || !partyInput.value) {
-            tableCards.forEach(card => {
-                card.classList.remove(
-                    "table-ideal",
-                    "table-suitable",
-                    "table-unavailable",
-                    "table-too-small"
-                );
+    let availabilityById = new Map();
+
+    const STATUS_ORDER = {
+        ideal: 0,
+        suitable: 1,
+        available: 1,
+        too_small: 2,
+        unavailable: 3,
+        large_party: 4,
+    };
+
+    const STATUS_TEXT = {
+        ideal: "Ideal",
+        suitable: "Available — larger than needed",
+        available: "Available",
+        too_small: "Too small alone",
+        unavailable: "Unavailable",
+        large_party: "Reserved for large party",
+    };
+
+    function cardForTable(id) {
+        return document.querySelector(`.table-choice-card[data-table-id="${id}"]`);
+    }
+
+    function mapTableFor(id) {
+        return document.querySelector(`.booking-map-table[data-table-id="${id}"]`);
+    }
+
+    function clearHoverHighlight() {
+        cards.forEach(card => card.classList.remove("table-hover-focus"));
+        mapTables.forEach(table => {
+            table.classList.remove("booking-map-hover");
+            table.classList.remove("booking-map-dimmed");
+        });
+    }
+
+    function highlightTable(id) {
+        clearHoverHighlight();
+
+        const card = cardForTable(id);
+        const mapTable = mapTableFor(id);
+
+        if (card) card.classList.add("table-hover-focus");
+
+        mapTables.forEach(table => {
+            if (table === mapTable) {
+                table.classList.add("booking-map-hover");
+            } else {
+                table.classList.add("booking-map-dimmed");
+            }
+        });
+    }
+
+    function syncSelectedVisuals() {
+        cards.forEach(card => {
+            const checkbox = card.querySelector('input[type="checkbox"]');
+            const selected = Boolean(checkbox?.checked);
+
+            card.classList.toggle("table-choice-selected", selected);
+
+            const mapTable = mapTableFor(card.dataset.tableId);
+            if (mapTable) {
+                mapTable.classList.toggle("booking-map-selected", selected);
+            }
+        });
+    }
+
+    function applyStatusClasses(element, status) {
+        element.classList.remove(
+            "status-ideal",
+            "status-suitable",
+            "status-too-small",
+            "status-unavailable",
+            "status-large-party"
+        );
+
+        if (status === "ideal") {
+            element.classList.add("status-ideal");
+        } else if (status === "suitable" || status === "available") {
+            element.classList.add("status-suitable");
+        } else if (status === "too_small") {
+            element.classList.add("status-too-small");
+        } else if (status === "large_party") {
+            element.classList.add("status-large-party");
+        } else if (status === "unavailable") {
+            element.classList.add("status-unavailable");
+        }
+    }
+
+    function sortCards() {
+        const party = Number(partyInput.value || 0);
+
+        [...cards].sort((a, b) => {
+            const aData = availabilityById.get(a.dataset.tableId);
+            const bData = availabilityById.get(b.dataset.tableId);
+
+            const statusDiff =
+                (STATUS_ORDER[aData?.status || "available"] ?? 99) -
+                (STATUS_ORDER[bData?.status || "available"] ?? 99);
+
+            if (statusDiff !== 0) return statusDiff;
+
+            const aWaste = Math.max(Number(a.dataset.capacity || 0) - party, 0);
+            const bWaste = Math.max(Number(b.dataset.capacity || 0) - party, 0);
+
+            if (aWaste !== bWaste) return aWaste - bWaste;
+
+            return Number(a.dataset.number) - Number(b.dataset.number);
+        }).forEach(card => slider.appendChild(card));
+    }
+
+    function fitMap() {
+        const availableWidth = Math.max(mapShell.clientWidth - 20, 100);
+        const availableHeight = Math.max(mapShell.clientHeight - 20, 100);
+
+        const zoom = Math.max(
+            Math.min(
+                availableWidth / mapStage.offsetWidth,
+                availableHeight / mapStage.offsetHeight,
+                1
+            ),
+            0.25
+        );
+
+        mapStage.style.transform = `scale(${zoom})`;
+        mapStage.style.transformOrigin = "top left";
+        zoomSurface.style.width = `${mapStage.offsetWidth * zoom}px`;
+        zoomSurface.style.height = `${mapStage.offsetHeight * zoom}px`;
+        mapShell.scrollLeft = 0;
+        mapShell.scrollTop = 0;
+    }
+
+    function updatePairingSuggestions(groups) {
+        pairingList.innerHTML = "";
+
+        groups.forEach(group => {
+            if (group.table_ids.length <= 1) return;
+
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "pairing-option";
+            button.textContent = `T${group.numbers.join(" + T")} · ${group.capacity} seats`;
+
+            button.addEventListener("mouseenter", () => {
+                clearHoverHighlight();
+
+                group.table_ids.forEach(id => {
+                    mapTableFor(id)?.classList.add("booking-map-hover");
+                });
+
+                mapTables.forEach(table => {
+                    if (!group.table_ids.includes(Number(table.dataset.tableId))) {
+                        table.classList.add("booking-map-dimmed");
+                    }
+                });
             });
+
+            button.addEventListener("mouseleave", clearHoverHighlight);
+
+            button.addEventListener("click", () => {
+                cards.forEach(card => {
+                    const checkbox = card.querySelector('input[type="checkbox"]');
+                    const shouldSelect = group.table_ids.includes(Number(card.dataset.tableId));
+
+                    if (!checkbox.disabled) {
+                        checkbox.checked = shouldSelect;
+                    }
+                });
+
+                syncSelectedVisuals();
+            });
+
+            pairingList.appendChild(button);
+        });
+    }
+
+    async function updateAvailability() {
+        if (!dateInput.value || !timeInput.value || !partyInput.value) {
+            cards.forEach(card => {
+                applyStatusClasses(card, "available");
+                card.querySelector(".table-choice-status").textContent = "Enter booking details";
+            });
+
+            mapTables.forEach(table => applyStatusClasses(table, "available"));
             pairingList.innerHTML = "";
             return;
         }
@@ -541,66 +722,101 @@ function setupNormalTableAvailability() {
         const response = await fetch(`/api/table-availability?${params}`);
         const data = await response.json();
 
-        const byId = new Map(
+        availabilityById = new Map(
             data.tables.map(table => [String(table.id), table])
         );
 
-        tableCards.forEach(card => {
-            const table = byId.get(card.dataset.tableId);
+        cards.forEach(card => {
+            const table = availabilityById.get(card.dataset.tableId);
             const checkbox = card.querySelector('input[type="checkbox"]');
-
-            card.classList.remove(
-                "table-ideal",
-                "table-suitable",
-                "table-unavailable",
-                "table-too-small"
-            );
 
             if (!table) return;
 
-            if (table.status === "unavailable") {
-                card.classList.add("table-unavailable");
-                checkbox.disabled = true;
-                checkbox.checked = false;
-            } else if (table.status === "ideal") {
-                card.classList.add("table-ideal");
-                checkbox.disabled = false;
-            } else if (table.status === "suitable") {
-                card.classList.add("table-suitable");
-                checkbox.disabled = false;
-            } else if (table.status === "too_small") {
-                card.classList.add("table-too-small");
-                // Too-small tables can still be chosen as part of a configured
-                // multi-table combination, so don't disable them.
-                checkbox.disabled = false;
-            } else {
-                checkbox.disabled = false;
+            applyStatusClasses(card, table.status);
+            card.querySelector(".table-choice-status").textContent =
+                STATUS_TEXT[table.status] || table.status;
+
+            const unavailable =
+                table.status === "unavailable" ||
+                table.status === "large_party";
+
+            checkbox.disabled = unavailable;
+            if (unavailable) checkbox.checked = false;
+
+            const mapTable = mapTableFor(card.dataset.tableId);
+
+            if (mapTable) {
+                applyStatusClasses(mapTable, table.status);
+                mapTable.disabled = !table.available;
             }
         });
 
-        pairingList.innerHTML = "";
-
-        data.groups.forEach(group => {
-            if (group.table_ids.length <= 1) return;
-
-            const button = document.createElement("button");
-            button.type = "button";
-            button.className = "pairing-option";
-            button.textContent =
-                `T${group.numbers.join(" + T")} · ${group.capacity} seats`;
-
-            button.addEventListener("click", () => {
-                tableCards.forEach(card => {
-                    const checkbox = card.querySelector('input[type="checkbox"]');
-                    checkbox.checked = group.table_ids.includes(
-                        Number(card.dataset.tableId)
-                    );
-                });
-            });
-
-            pairingList.appendChild(button);
-        });
+        sortCards();
+        updatePairingSuggestions(data.groups || []);
+        syncSelectedVisuals();
     }
+
+    cards.forEach(card => {
+        const checkbox = card.querySelector('input[type="checkbox"]');
+
+        card.addEventListener("mouseenter", () => highlightTable(card.dataset.tableId));
+        card.addEventListener("mouseleave", clearHoverHighlight);
+
+        card.addEventListener("click", event => {
+            if (event.target === checkbox || checkbox.disabled) return;
+
+            event.preventDefault();
+            checkbox.checked = !checkbox.checked;
+            syncSelectedVisuals();
+        });
+
+        checkbox.addEventListener("change", syncSelectedVisuals);
+    });
+
+    mapTables.forEach(table => {
+        table.addEventListener("mouseenter", () => {
+            const id = table.dataset.tableId;
+            highlightTable(id);
+
+            const card = cardForTable(id);
+            if (card) {
+                card.scrollIntoView({
+                    behavior: "smooth",
+                    block: "nearest",
+                    inline: "center",
+                });
+            }
+        });
+
+        table.addEventListener("mouseleave", clearHoverHighlight);
+
+        table.addEventListener("click", () => {
+            const card = cardForTable(table.dataset.tableId);
+            if (!card) return;
+
+            const checkbox = card.querySelector('input[type="checkbox"]');
+            if (!checkbox || checkbox.disabled) return;
+
+            checkbox.checked = !checkbox.checked;
+            syncSelectedVisuals();
+        });
+    });
+
+    sliderLeft.addEventListener("click", () => {
+        slider.scrollBy({
+            left: -Math.max(slider.clientWidth * 0.75, 300),
+            behavior: "smooth",
+        });
+    });
+
+    sliderRight.addEventListener("click", () => {
+        slider.scrollBy({
+            left: Math.max(slider.clientWidth * 0.75, 300),
+            behavior: "smooth",
+        });
+    });
+
+    mapFit?.addEventListener("click", fitMap);
 
     [
         dateInput,
@@ -611,15 +827,16 @@ function setupNormalTableAvailability() {
         avoidsBench,
         eating,
     ].filter(Boolean).forEach(control => {
-        control.addEventListener("change", update);
-        control.addEventListener("input", update);
+        control.addEventListener("change", updateAvailability);
+        control.addEventListener("input", updateAvailability);
     });
 
-    update();
+    window.addEventListener("resize", fitMap);
+
+    syncSelectedVisuals();
+    fitMap();
+    updateAvailability();
 }
-
-
-
 
 
 function setupTableLayoutEditor() {
@@ -1328,6 +1545,21 @@ function setupTableLayoutEditor() {
 
     document.querySelectorAll("[data-add-object]").forEach(button => {
         button.addEventListener("click", async () => {
+            /*
+             * Adding an object reloads the editor so the new database ID can
+             * be represented in the DOM. Save all current positions FIRST so
+             * no unsaved drag/resize work is lost during that reload.
+             */
+            const currentLayout = await saveLayout();
+
+            if (!currentLayout.ok) {
+                alert(
+                    "The current layout could not be saved, so the new object " +
+                    "was not added."
+                );
+                return;
+            }
+
             const response = await fetch(
                 "/api/floor-objects",
                 {
