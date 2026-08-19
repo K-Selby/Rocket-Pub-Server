@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 
 import msal
 import requests
@@ -196,12 +196,13 @@ MANAGER_ENDPOINTS = {
     "main.rota_profile_new",
     "main.rota_profile_edit",
     "main.rota_profile_delete",
+    "main.rota_profile_archive",
+    "main.rota_profile_restore",
     "main.rota_create",
     "main.rota_edit",
     "main.rota_add_shift",
     "main.rota_edit_shift",
     "main.rota_delete_shift",
-    "main.rota_autofill",
     "main.rota_publish",
     "main.rota_settings",
     "main.rota_template_add",
@@ -2437,10 +2438,10 @@ def projected_hours_for_profile(profile, week):
     )
 
 
-def rota_candidate_score(profile, week, target_date, start, end, end_is_finish, role):
+def rota_candidate_score(profile, week, target_date, start, end, end_is_finish, role="front_of_house"):
     available, earliest, latest, _ = availability_for(profile, target_date)
 
-    if not available or not role_compatible(profile, role):
+    if not available:
         return None
 
     effective_end = (
@@ -2458,12 +2459,11 @@ def rota_candidate_score(profile, week, target_date, start, end, end_is_finish, 
     ):
         return None
 
-    # Don't overlap another shift on the same day.
-    existing_same_day = [
-        s for s in week.shifts
-        if s.staff_id == profile.id and s.shift_date == target_date
-    ]
-    if existing_same_day:
+    # Never give the same person two Auto-fill slots on one day.
+    if any(
+        s.staff_id == profile.id and s.shift_date == target_date
+        for s in week.shifts
+    ):
         return None
 
     hours_so_far = projected_hours_for_profile(profile, week)
@@ -2479,37 +2479,113 @@ def rota_candidate_score(profile, week, target_date, start, end, end_is_finish, 
     if profile.max_hours and hours_so_far + shift_hours > profile.max_hours:
         return None
 
-    score = 50
+    # Base score is deliberately modest. Strong observed-pattern bonuses are
+    # what should drive the suggestion rather than handing everyone shifts.
+    score = 10
+
     score += historical_pattern_bonus(
         profile,
         target_date.weekday(),
         start,
         end_is_finish,
     )
+    score += preferred_shift_match_bonus(
+        profile,
+        start,
+        end,
+        end_is_finish,
+    )
 
-    # Prefer people still below their target hours.
-    if profile.target_hours:
-        remaining = profile.target_hours - hours_so_far
-        if remaining > 0:
-            score += min(remaining * 2, 28)
+    # Prefer staff with fewer assigned hours so one person cannot absorb the
+    # entire week (the old Auto-fill problem).
+    score -= hours_so_far * 2.2
+
+    # Occasional staff are still available, but only used when they score well
+    # or regular staff cannot cover the slot.
+    if profile.display_name.lower() in {"erin", "hannah", "leoni", "charl"}:
+        score -= 35
+
+    # Alara is Friday-Sunday only and generally late.
+    if profile.display_name.lower() == "alara":
+        if target_date.weekday() not in {4, 5, 6}:
+            return None
+        if start.hour < 17:
+            score -= 30
         else:
-            score -= 12
-
-    # Regular staff rank ahead of casual workers when both are suitable.
-    if profile.employment_type == "regular":
-        score += 10
-
-    # Slight fairness penalty for every existing shift.
-    score -= sum(1 for s in week.shifts if s.staff_id == profile.id) * 5
+            score += 18
 
     return score
+
+
+
+
+def parse_rota_shift_text(value):
+    """
+    Parse the same shorthand used on the paper rota:
+    12-3, 5-9, 4-F, 6-F.
+    """
+    value = (value or "").strip().upper().replace(" ", "")
+
+    if not value or "-" not in value:
+        raise ValueError("Enter a shift like 5-9, 12-3 or 4-F.")
+
+    start_text, end_text = value.split("-", 1)
+
+    def parse_clock(text_value):
+        if ":" in text_value:
+            hour_text, minute_text = text_value.split(":", 1)
+            hour = int(hour_text)
+            minute = int(minute_text)
+        else:
+            hour = int(text_value)
+            minute = 0
+
+        if not 0 <= minute <= 59:
+            raise ValueError("Invalid minute.")
+
+        # Pub rota shorthand: 1-11 means afternoon/evening.
+        if 1 <= hour <= 11:
+            hour += 12
+        elif hour == 12:
+            hour = 12
+        elif not 0 <= hour <= 23:
+            raise ValueError("Invalid hour.")
+
+        return time(hour, minute)
+
+    start = parse_clock(start_text)
+
+    if end_text == "F":
+        return start, None, True
+
+    end = parse_clock(end_text)
+    return start, end, False
+
+
+def preferred_shift_match_bonus(profile, start, end, end_is_finish):
+    hints = [
+        part.strip().upper()
+        for part in (profile.preferred_shifts or "").split(",")
+        if part.strip()
+    ]
+
+    if not hints:
+        return 0
+
+    candidate = (
+        f"{time_label(start)}-F"
+        if end_is_finish
+        else f"{time_label(start)}-{time_label(end)}"
+    ).upper()
+
+    return 26 if candidate in hints else 0
 
 
 def rota_context(week):
     profiles = db.session.scalars(
         db.select(StaffProfile)
         .where(StaffProfile.active.is_(True))
-        .order_by(StaffProfile.display_name)
+        .order_by(StaffProfile.sort_order, StaffProfile.display_name)
     ).all()
 
     days = [week.week_start + timedelta(days=i) for i in range(7)]
@@ -2521,17 +2597,12 @@ def rota_context(week):
     }
 
     for shift in week.shifts:
-        shift_map.setdefault(
-            (shift.staff_id, shift.shift_date),
-            [],
-        ).append(shift)
+        # Historical shifts for archived staff remain in the database, but
+        # archived staff are not shown on current/future rota views.
+        if (shift.staff_id, shift.shift_date) in shift_map:
+            shift_map[(shift.staff_id, shift.shift_date)].append(shift)
 
-    hours = {
-        profile.id: projected_hours_for_profile(profile, week)
-        for profile in profiles
-    }
-
-    return profiles, days, shift_map, hours
+    return profiles, days, shift_map
 
 
 @main.route("/rota")
@@ -2572,9 +2643,9 @@ def rota_home():
             key=lambda s: (s.shift_date, s.start_time),
         )
 
-    profiles = days = shift_map = hours = None
+    profiles = days = shift_map = None
     if week:
-        profiles, days, shift_map, hours = rota_context(week)
+        profiles, days, shift_map = rota_context(week)
 
     swaps = []
     if my_profile:
@@ -2598,7 +2669,6 @@ def rota_home():
         profiles=profiles or [],
         days=days or [week_start + timedelta(days=i) for i in range(7)],
         shift_map=shift_map or {},
-        hours=hours or {},
         my_profile=my_profile,
         my_shifts=my_shifts,
         swaps=swaps,
@@ -2636,18 +2706,71 @@ def rota_create():
 @main.route("/rota/<int:rota_id>/edit")
 def rota_edit(rota_id):
     week = db.get_or_404(RotaWeek, rota_id)
-    profiles, days, shift_map, hours = rota_context(week)
+    profiles, days, shift_map = rota_context(week)
 
     diary_by_day = {}
+    cell_diary = {}
+
     for day in days:
-        diary_by_day[day] = db.session.scalars(
+        entries = db.session.scalars(
             db.select(StaffDiaryEntry)
             .where(
                 StaffDiaryEntry.entry_date == day,
-                StaffDiaryEntry.status.in_(["approved", "info", "requested"]),
+                StaffDiaryEntry.status.in_(
+                    ["approved", "info", "requested"]
+                ),
             )
             .order_by(StaffDiaryEntry.created_at)
         ).all()
+
+        diary_by_day[day] = entries
+
+        for entry in entries:
+            if entry.staff_id is None:
+                continue
+
+            key = (entry.staff_id, day)
+            state = cell_diary.setdefault(
+                key,
+                {
+                    "unavailable": False,
+                    "unavailable_status": None,
+                    "availability": [],
+                },
+            )
+
+            if entry.entry_type in {
+                "day_off_request",
+                "unavailable",
+            }:
+                state["unavailable"] = True
+                state["unavailable_status"] = entry.status
+
+            elif entry.entry_type == "available_window":
+                if entry.available_from or entry.available_until:
+                    start_label = (
+                        time_label(entry.available_from)
+                        if entry.available_from
+                        else "Any"
+                    )
+                    end_label = (
+                        time_label(entry.available_until)
+                        if entry.available_until
+                        else "Any"
+                    )
+                    availability_text = (
+                        f"{start_label}-{end_label}"
+                    )
+                else:
+                    availability_text = "Available"
+
+                state["availability"].append(
+                    {
+                        "text": availability_text,
+                        "status": entry.status,
+                        "note": entry.note,
+                    }
+                )
 
     return render_template(
         "rota_edit.html",
@@ -2655,8 +2778,8 @@ def rota_edit(rota_id):
         profiles=profiles,
         days=days,
         shift_map=shift_map,
-        hours=hours,
         diary_by_day=diary_by_day,
+        cell_diary=cell_diary,
         shift_label=shift_label,
     )
 
@@ -2667,19 +2790,9 @@ def parse_shift_form():
         "%Y-%m-%d",
     ).date()
 
-    start_time = datetime.strptime(
-        request.form["start_time"],
-        "%H:%M",
-    ).time()
-
-    end_is_finish = request.form.get("end_is_finish") == "1"
-    end_time = None
-
-    if not end_is_finish:
-        end_text = request.form.get("end_time", "")
-        if not end_text:
-            raise ValueError("Enter an end time or select Finish.")
-        end_time = datetime.strptime(end_text, "%H:%M").time()
+    start_time, end_time, end_is_finish = parse_rota_shift_text(
+        request.form.get("shift_text", "")
+    )
 
     return shift_date, start_time, end_time, end_is_finish
 
@@ -2725,7 +2838,7 @@ def rota_add_shift(rota_id):
             start_time=start,
             end_time=end,
             end_is_finish=is_finish,
-            shift_role=request.form.get("shift_role", "front_of_house"),
+            shift_role="front_of_house",
             note=request.form.get("note", "").strip() or None,
         )
     )
@@ -2747,10 +2860,6 @@ def rota_edit_shift(shift_id):
     shift.start_time = start
     shift.end_time = end
     shift.end_is_finish = is_finish
-    shift.shift_role = request.form.get(
-        "shift_role",
-        shift.shift_role,
-    )
     shift.note = request.form.get("note", "").strip() or None
     shift.auto_suggested = False
 
@@ -2765,97 +2874,6 @@ def rota_delete_shift(shift_id):
     rota_id = shift.rota_week_id
     db.session.delete(shift)
     db.session.commit()
-    return redirect(url_for("main.rota_edit", rota_id=rota_id))
-
-
-@main.route("/rota/<int:rota_id>/autofill", methods=["POST"])
-def rota_autofill(rota_id):
-    week = db.get_or_404(RotaWeek, rota_id)
-
-    # Remove previous auto-suggestions only; manager-entered shifts remain.
-    for shift in list(week.shifts):
-        if shift.auto_suggested:
-            db.session.delete(shift)
-    db.session.flush()
-
-    profiles = db.session.scalars(
-        db.select(StaffProfile)
-        .where(StaffProfile.active.is_(True))
-        .order_by(StaffProfile.display_name)
-    ).all()
-
-    templates = db.session.scalars(
-        db.select(RotaShiftTemplate)
-        .where(RotaShiftTemplate.active.is_(True))
-        .order_by(
-            RotaShiftTemplate.weekday,
-            RotaShiftTemplate.start_time,
-        )
-    ).all()
-
-    created = 0
-    skipped = 0
-
-    for template in templates:
-        target_date = week.week_start + timedelta(
-            days=(template.weekday - 6) % 7
-        )
-
-        for _ in range(max(template.quantity, 1)):
-            ranked = []
-
-            for profile in profiles:
-                score = rota_candidate_score(
-                    profile,
-                    week,
-                    target_date,
-                    template.start_time,
-                    template.end_time,
-                    template.end_is_finish,
-                    template.role,
-                )
-
-                if score is not None:
-                    ranked.append((score, profile))
-
-            ranked.sort(
-                key=lambda pair: (
-                    pair[0],
-                    -pair[1].id,
-                ),
-                reverse=True,
-            )
-
-            if not ranked:
-                skipped += 1
-                continue
-
-            chosen = ranked[0][1]
-
-            db.session.add(
-                RotaShift(
-                    rota_week_id=week.id,
-                    staff_id=chosen.id,
-                    shift_date=target_date,
-                    start_time=template.start_time,
-                    end_time=template.end_time,
-                    end_is_finish=template.end_is_finish,
-                    shift_role=template.role,
-                    auto_suggested=True,
-                    note="Auto-fill suggestion",
-                )
-            )
-            db.session.flush()
-            created += 1
-
-    db.session.commit()
-
-    flash(
-        f"Auto-fill suggested {created} shifts"
-        + (f"; {skipped} slots need manual cover." if skipped else "."),
-        "success",
-    )
-
     return redirect(url_for("main.rota_edit", rota_id=rota_id))
 
 
@@ -2893,7 +2911,7 @@ def rota_image(rota_id):
         flash("That rota has not been issued.", "error")
         return redirect(url_for("main.rota_home"))
 
-    profiles, days, shift_map, hours = rota_context(week)
+    profiles, days, shift_map = rota_context(week)
 
     # High-resolution, phone-friendly PNG generated locally.
     width = 2200
@@ -2937,13 +2955,12 @@ def rota_image(rota_id):
     )
 
     name_w = 330
-    hours_w = 150
-    day_w = (width - name_w - hours_w - 80) // 7
+    day_w = (width - name_w - 80) // 7
     x0 = 40
     y0 = header_h
 
-    headers = ["Staff"] + [d.strftime("%a\n%d") for d in days] + ["Hours"]
-    widths = [name_w] + [day_w]*7 + [hours_w]
+    headers = ["Staff"] + [d.strftime("%a\n%d") for d in days]
+    widths = [name_w] + [day_w]*7
 
     x = x0
     for label, col_w in zip(headers, widths):
@@ -2981,19 +2998,12 @@ def rota_image(rota_id):
             )
             x += day_w
 
-        draw.rectangle((x, y, x+hours_w, y+row_h), fill="white", outline=line, width=2)
-        draw.text(
-            (x+18, y+26),
-            f"{hours.get(profile.id, 0):g}",
-            fill=text,
-            font=text_font,
-        )
 
         y += row_h
 
     draw.text(
         (45, height-75),
-        "F = Finish (actual finishing time varies) • Hours are projected",
+        "F = Finish (actual finishing time varies)",
         fill=(90, 105, 96),
         font=small_font,
     )
@@ -3092,10 +3102,9 @@ def save_rota_profile(profile=None):
 
     user_id_text = request.form.get("user_id", "")
     profile.user_id = int(user_id_text) if user_id_text else None
-    profile.work_role = request.form.get("work_role", "front_of_house")
-    profile.employment_type = request.form.get("employment_type", "regular")
 
     try:
+        profile.sort_order = int(request.form.get("sort_order", 100) or 100)
         profile.target_hours = float(request.form.get("target_hours", 0) or 0)
         profile.max_hours = float(request.form.get("max_hours", 40) or 40)
     except ValueError:
@@ -3103,6 +3112,9 @@ def save_rota_profile(profile=None):
         return redirect(request.url)
 
     profile.rota_notes = request.form.get("rota_notes", "").strip() or None
+    profile.preferred_shifts = (
+        request.form.get("preferred_shifts", "").strip() or None
+    )
     profile.active = request.form.get("active", "1") == "1"
 
     db.session.flush()
@@ -3146,19 +3158,42 @@ def save_rota_profile(profile=None):
 
 @main.route("/rota/staff/<int:profile_id>/delete", methods=["POST"])
 def rota_profile_delete(profile_id):
+    # Keep this old endpoint working, but treat removal as archiving so
+    # historical rotas are never broken.
     profile = db.get_or_404(StaffProfile, profile_id)
-
-    if profile.shifts:
-        profile.active = False
-        flash(
-            "This person has rota history, so they were archived rather than deleted.",
-            "success",
-        )
-    else:
-        db.session.delete(profile)
-        flash("Staff rota profile deleted.", "success")
-
+    profile.active = False
     db.session.commit()
+
+    flash(
+        f"{profile.display_name} archived from future rotas.",
+        "success",
+    )
+    return redirect(url_for("main.rota_profiles"))
+
+
+@main.route("/rota/staff/<int:profile_id>/archive", methods=["POST"])
+def rota_profile_archive(profile_id):
+    profile = db.get_or_404(StaffProfile, profile_id)
+    profile.active = False
+    db.session.commit()
+
+    flash(
+        f"{profile.display_name} archived from future rotas.",
+        "success",
+    )
+    return redirect(url_for("main.rota_profiles"))
+
+
+@main.route("/rota/staff/<int:profile_id>/restore", methods=["POST"])
+def rota_profile_restore(profile_id):
+    profile = db.get_or_404(StaffProfile, profile_id)
+    profile.active = True
+    db.session.commit()
+
+    flash(
+        f"{profile.display_name} restored to future rotas.",
+        "success",
+    )
     return redirect(url_for("main.rota_profiles"))
 
 
@@ -3258,7 +3293,7 @@ def staff_diary():
     profiles = db.session.scalars(
         db.select(StaffProfile)
         .where(StaffProfile.active.is_(True))
-        .order_by(StaffProfile.display_name)
+        .order_by(StaffProfile.sort_order, StaffProfile.display_name)
     ).all()
 
     by_day = {day: [] for day in days}
@@ -3318,7 +3353,7 @@ def request_shift_swap(shift_id):
             StaffProfile.active.is_(True),
             StaffProfile.id != my_profile.id,
         )
-        .order_by(StaffProfile.display_name)
+        .order_by(StaffProfile.sort_order, StaffProfile.display_name)
     ).all()
 
     week = shift.rota_week

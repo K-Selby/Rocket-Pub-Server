@@ -121,6 +121,19 @@ def ensure_starter_schema_updates():
         add_column_if_missing(inspector, "app_user", name, sql_type)
 
 
+    rota_profile_additions = {
+        "sort_order": "INTEGER DEFAULT 100",
+        "preferred_shifts": "VARCHAR(250)",
+    }
+
+    for name, sql_type in rota_profile_additions.items():
+        add_column_if_missing(
+            inspector,
+            "staff_profile",
+            name,
+            sql_type,
+        )
+
     allergen_item_additions = {
         "milk_status": "VARCHAR(20) DEFAULT 'free'",
         "nuts_status": "VARCHAR(20) DEFAULT 'free'",
@@ -610,38 +623,54 @@ def seed_rota_shift_templates():
 
 def seed_initial_staff_profiles():
     """
-    Start with the names visible across the supplied historical rotas.
+    Seed the active rota list in the same general order as the paper rotas.
 
-    Existing login accounts are linked by username where possible. These are
-    rota profiles, not new login accounts.
+    Active initial rota:
+      Gemma, Brooke, Niamh, Lois, Jenna, Maggie, Alara, Scott, Kieran
+
+    Archived initially:
+      Matt, Hannah, Charl, Leoni, Erin
+
+    Archived profiles stay in history but do not appear on future rota weeks
+    unless a manager restores them.
     """
     from app.models import AppUser, StaffAvailabilityRule, StaffProfile
 
-    names = [
-        "Gemma", "Brooke", "Niamh", "Lois", "Hannah", "Jenna", "Maggie",
-        "Charl", "Charlotte", "Alara", "Scott", "Kieran", "Erin", "Matt",
-        "Leoni",
+    staff_rows = [
+        ("Gemma", 10, True),
+        ("Brooke", 20, True),
+        ("Niamh", 30, True),
+        ("Lois", 40, True),
+        ("Jenna", 50, True),
+        ("Maggie", 60, True),
+        ("Alara", 70, True),
+        ("Scott", 80, True),
+        ("Kieran", 90, True),
+
+        ("Hannah", 200, False),
+        ("Charl", 210, False),
+        ("Leoni", 220, False),
+        ("Erin", 230, False),
+        ("Matt", 240, False),
     ]
 
-    # Avoid both Charl and Charlotte if one already exists; keep Charl as the
-    # historical rota spelling by default.
-    for name in names:
-        existing = db.session.scalar(
+    common_shift_hints = {
+        "brooke": "12-3,12-8,12-5,6-F",
+        "niamh": "5-F,6-F",
+        "lois": "3-8,5-F",
+        "jenna": "12-5,12-6,12-7,5-F",
+        "maggie": "12-5,12-6,12-7,5-9",
+        "alara": "5-8,5-9,6-F",
+        "scott": "4-8,4-9,5-9,6-F",
+        "kieran": "3-8,4-8,4-9,5-F,6-F",
+    }
+
+    for name, order, is_active in staff_rows:
+        profile = db.session.scalar(
             db.select(StaffProfile).where(
                 db.func.lower(StaffProfile.display_name) == name.lower()
             )
         )
-        if existing:
-            continue
-
-        if name == "Charlotte":
-            charl_exists = db.session.scalar(
-                db.select(StaffProfile).where(
-                    db.func.lower(StaffProfile.display_name) == "charl"
-                )
-            )
-            if charl_exists:
-                continue
 
         user = db.session.scalar(
             db.select(AppUser).where(
@@ -649,44 +678,43 @@ def seed_initial_staff_profiles():
             )
         )
 
-        employment_type = "regular"
-        work_role = "front_of_house"
-        target_hours = 0
-        max_hours = 40
-        note = None
+        if profile is None:
+            profile = StaffProfile(
+                display_name=name,
+                user_id=user.id if user else None,
+            )
+            db.session.add(profile)
+            db.session.flush()
 
-        if name.lower() in {"hannah", "charl", "charlotte", "erin"}:
-            employment_type = "casual"
-            max_hours = 12
-            note = "Occasional shifts; has another job."
+        profile.sort_order = order
+        profile.active = is_active
+        profile.preferred_shifts = common_shift_hints.get(name.lower())
 
         if name.lower() == "alara":
-            employment_type = "casual"
-            work_role = "glass_collector"
-            max_hours = 12
-            note = "Glass collector; normally Friday to Sunday."
+            profile.rota_notes = "Normally Friday to Sunday."
+            profile.max_hours = 12
+        elif not is_active:
+            profile.rota_notes = "Archived from current rota."
+        else:
+            profile.rota_notes = profile.rota_notes or None
 
-        profile = StaffProfile(
-            user_id=user.id if user else None,
-            display_name=name,
-            work_role=work_role,
-            employment_type=employment_type,
-            target_hours=target_hours,
-            max_hours=max_hours,
-            rota_notes=note,
-        )
-        db.session.add(profile)
-        db.session.flush()
-
-        # Alara's normal availability is limited to Fri-Sun.
+        # Alara's recurring availability remains Friday-Sunday.
         if name.lower() == "alara":
             for weekday in range(7):
-                db.session.add(
-                    StaffAvailabilityRule(
-                        staff_id=profile.id,
-                        weekday=weekday,
-                        available=weekday in {4, 5, 6},
+                rule = db.session.scalar(
+                    db.select(StaffAvailabilityRule).where(
+                        StaffAvailabilityRule.staff_id == profile.id,
+                        StaffAvailabilityRule.weekday == weekday,
                     )
                 )
+
+                if rule is None:
+                    rule = StaffAvailabilityRule(
+                        staff_id=profile.id,
+                        weekday=weekday,
+                    )
+                    db.session.add(rule)
+
+                rule.available = weekday in {4, 5, 6}
 
     db.session.commit()

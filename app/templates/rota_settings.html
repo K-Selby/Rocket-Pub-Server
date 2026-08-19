@@ -47,8 +47,7 @@
                 –
                 {{ "F" if template.end_is_finish else template.end_time.strftime("%H:%M") }}
             </span>
-            <span>{{ template.role.replace("_", " ")|title }}</span>
-            <span>×{{ template.quantity }}</span>
+                        <span>×{{ template.quantity }}</span>
             <form method="post"
                   action="{{ url_for('main.rota_template_delete', template_id=template.id) }}">
                 <button class="link-button danger" type="submit">Delete</button>
@@ -82,15 +81,7 @@
             Finish
         </label>
 
-        <label>Role
-            <select name="role">
-                <option value="front_of_house">Front of house</option>
-                <option value="kitchen">Kitchen</option>
-                <option value="glass_collector">Glass collector</option>
-            </select>
-        </label>
-
-        <label>People
+<label>People
             <input type="number" name="quantity" min="1" value="1">
         </label>
 

@@ -66,11 +66,6 @@
                     <div>
                         <strong>{{ shift.shift_date.strftime("%A %d %B") }}</strong>
                         <span>{{ shift_label(shift) }}</span>
-                        {% if shift.shift_role == "kitchen" %}
-                            <small>Kitchen</small>
-                        {% elif shift.shift_role == "glass_collector" %}
-                            <small>Glass collector</small>
-                        {% endif %}
                     </div>
 
                     {% if week.status == "published" %}
@@ -96,7 +91,6 @@
                                 <small>{{ day.strftime("%d") }}</small>
                             </th>
                         {% endfor %}
-                        <th>Est. hours</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -104,7 +98,7 @@
                     <tr>
                         <th>
                             {{ profile.display_name }}
-                            <small>{{ profile.work_role.replace("_", " ")|title }}</small>
+                            
                         </th>
                         {% for day in days %}
                         <td>
@@ -113,12 +107,10 @@
                                     {% if shift.shift_role == 'kitchen' %}kitchen{% endif %}
                                     {% if shift.auto_suggested %}suggested{% endif %}">
                                     {{ shift_label(shift) }}
-                                    {% if shift.shift_role == "kitchen" %} K{% endif %}
                                 </span>
                             {% endfor %}
                         </td>
                         {% endfor %}
-                        <td class="rota-hours">{{ hours.get(profile.id, 0) }}h</td>
                     </tr>
                     {% endfor %}
                 </tbody>

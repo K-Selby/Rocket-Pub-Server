@@ -639,3 +639,69 @@ Managers can:
 Rota is a primary navigation item.
 Staff Diary sits under More.
 Manager rota tools are accessible from the Rota screen.
+
+
+## v9.1 rota corrections
+
+- Removed Front of House / Glass Collector / Regular / Casual labels from the
+  rota display. Those internal compatibility fields no longer clutter the UI.
+- Matt is archived because he no longer works at the pub.
+- Erin, Hannah, Leoni and Charl are placed at the bottom of the rota by default.
+- Managers enter shifts using the same shorthand as the paper rota:
+  `5-9`, `3-8`, `12-6`, `4-F`, `6-F`.
+- Shift editing is now one text field instead of separate start/end/Finish
+  controls.
+- Auto-fill was rewritten to be deliberately conservative. It uses a realistic
+  weekly coverage skeleton taken from the supplied rotas, assigns only one
+  shift per person per day, heavily penalises occasional staff, respects
+  availability, and balances projected weekly hours.
+- Common shift patterns can be edited per staff profile and are used as an
+  Auto-fill ranking hint.
+
+
+## v9.2 rota autofill crash and staff archive fixes
+
+- Fixed the `NameError: parse_rota_shift_text is not defined` crash in Auto-fill.
+- Active rota order now follows the established paper rota ordering:
+  Gemma, Brooke, Niamh, Lois, Jenna, Maggie, Alara, Scott, Kieran.
+- Hannah, Charl, Leoni, Erin and Matt are archived by default.
+- Archived staff stay in historical rota records but disappear from future rota
+  views and Auto-fill.
+- Managers can add a staff profile from the Rota Builder or Staff Profiles.
+- Each rota name has a small `•••` options menu for Edit Staff / Archive Staff.
+- Staff Profiles has Restore for archived staff.
+- Because future rota views are built from active staff profiles, archive/restore
+  changes automatically apply to future rota weeks without rewriting old rota
+  history.
+
+
+## v9.2.1 archive route hotfix
+
+- Fixed the 500 error opening Rota Builder caused by the template referencing
+  `main.rota_profile_archive` before that Flask route existed.
+- Added working Manager-only Archive and Restore routes.
+- Remove/archive now always preserves historical rota records.
+- Archived staff disappear from future rota views and Auto-fill but can be
+  restored from Staff Profiles.
+
+
+## v9.2.2 Auto-fill time import hotfix
+
+- Fixed the Auto-fill 500 error caused by `parse_rota_shift_text()` calling
+  `time(...)` without importing `time` from Python's `datetime` module.
+
+
+## v9.3 manual rota builder
+
+- Auto-fill has been removed completely.
+- Estimated/projected hours have been removed from the rota and rota image.
+- Empty rota cells are genuinely blank. A manager clicks a blank cell and
+  types paper-rota notation such as `5-9`, `12-6` or `4-F`.
+- Existing shifts are clicked directly to edit them.
+- A day-off/unavailable diary request greys out that staff/date cell and blocks
+  shift entry.
+- Date-specific availability appears as a compact `A` badge on that cell, for
+  example `A 5-9`, while the manager can still click the cell and assign the
+  shift.
+- Pending availability requests use a yellow availability badge; approved
+  availability uses green.

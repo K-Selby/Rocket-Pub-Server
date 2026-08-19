@@ -7,7 +7,7 @@
         <h1>Rota Staff Profiles</h1>
         <p>Normal availability, role and expected hours used by Auto-fill.</p>
     </div>
-    <a class="button" href="{{ url_for('main.rota_profile_new') }}">Add staff profile</a>
+    <a class="button" href="{{ url_for('main.rota_profile_new') }}">Add staff</a>
 </div>
 
 <div class="card">
@@ -17,9 +17,7 @@
             <div>
                 <strong>{{ profile.display_name }}</strong>
                 <div class="muted">
-                    {{ profile.work_role.replace("_", " ")|title }}
-                    · {{ profile.employment_type|title }}
-                    {% if profile.user %} · Login: {{ profile.user.username }}{% endif %}
+                    {% if profile.user %}Login: {{ profile.user.username }}{% else %}No login linked{% endif %}
                 </div>
                 {% if profile.rota_notes %}
                     <small>{{ profile.rota_notes }}</small>
@@ -33,12 +31,26 @@
 
             <div class="row-actions">
                 <a class="small-link"
-                   href="{{ url_for('main.rota_profile_edit', profile_id=profile.id) }}">Edit</a>
-                <form method="post"
-                      action="{{ url_for('main.rota_profile_delete', profile_id=profile.id) }}"
-                      onsubmit="return confirm('Remove/archive {{ profile.display_name }}?');">
-                    <button class="link-button danger" type="submit">Remove</button>
-                </form>
+                   href="{{ url_for('main.rota_profile_edit', profile_id=profile.id) }}">
+                    Edit
+                </a>
+
+                {% if profile.active %}
+                    <form method="post"
+                          action="{{ url_for('main.rota_profile_archive', profile_id=profile.id) }}"
+                          onsubmit="return confirm('Archive {{ profile.display_name }} from future rotas?');">
+                        <button class="link-button danger" type="submit">
+                            Archive
+                        </button>
+                    </form>
+                {% else %}
+                    <form method="post"
+                          action="{{ url_for('main.rota_profile_restore', profile_id=profile.id) }}">
+                        <button class="link-button" type="submit">
+                            Restore
+                        </button>
+                    </form>
+                {% endif %}
             </div>
         </div>
     {% endfor %}

@@ -713,6 +713,13 @@ class StaffProfile(db.Model):
     # Small manager note such as "has another job" / "Friday-Sunday only".
     rota_notes = db.Column(db.String(300))
 
+    # Manager-controlled display priority in the rota table.
+    sort_order = db.Column(db.Integer, nullable=False, default=100)
+
+    # Optional comma-separated common shift patterns, e.g. "5-F,4-8,4-9".
+    # Used only as an Auto-fill hint.
+    preferred_shifts = db.Column(db.String(250))
+
     active = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 

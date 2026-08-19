@@ -30,30 +30,21 @@
                 </select>
             </label>
 
-            <label>Work role
-                <select name="work_role">
-                    {% for value, label in [
-                        ("front_of_house", "Front of house"),
-                        ("kitchen", "Kitchen"),
-                        ("both", "FOH + Kitchen"),
-                        ("glass_collector", "Glass collector")
-                    ] %}
-                    <option value="{{ value }}"
-                            {% if profile and profile.work_role == value %}selected{% endif %}>
-                        {{ label }}
-                    </option>
-                    {% endfor %}
-                </select>
+            <label>Rota order
+                <input type="number"
+                       name="sort_order"
+                       value="{{ profile.sort_order if profile else 100 }}">
+                <span class="field-note">Lower numbers appear nearer the top.</span>
             </label>
 
-            <label>Employment pattern
-                <select name="employment_type">
-                    <option value="regular" {% if not profile or profile.employment_type == "regular" %}selected{% endif %}>Regular</option>
-                    <option value="casual" {% if profile and profile.employment_type == "casual" %}selected{% endif %}>Casual / odd shifts</option>
-                </select>
+            <label>Common shifts
+                <input name="preferred_shifts"
+                       value="{{ profile.preferred_shifts if profile and profile.preferred_shifts else '' }}"
+                       placeholder="e.g. 5-F, 4-8, 4-9">
+                <span class="field-note">Used as an Auto-fill hint only.</span>
             </label>
 
-            <label>Target weekly hours
+<label>Target weekly hours
                 <input type="number" step="0.5" min="0" name="target_hours"
                        value="{{ profile.target_hours if profile else 0 }}">
             </label>
