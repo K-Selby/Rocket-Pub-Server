@@ -427,6 +427,198 @@ function setupLargePartyEndTime() {
 }
 
 
+
+function setupLargePartyAreaFiltering() {
+    const areaCheckboxes = Array.from(
+        document.querySelectorAll(".reserved-area-checkbox")
+    );
+    const tableCards = Array.from(
+        document.querySelectorAll(".large-reserve-table")
+    );
+
+    if (!areaCheckboxes.length || !tableCards.length) return;
+
+    function update() {
+        const selectedAreas = new Set(
+            areaCheckboxes
+                .filter(box => box.checked)
+                .map(box => box.value)
+        );
+
+        tableCards.forEach(card => {
+            if (selectedAreas.size === 0) {
+                card.hidden = false;
+                return;
+            }
+
+            card.hidden = !selectedAreas.has(card.dataset.areaId);
+
+            // If a table becomes hidden because its area isn't selected,
+            // clear its individual selection to avoid invisible reservations.
+            if (card.hidden) {
+                const checkbox = card.querySelector('input[type="checkbox"]');
+                if (checkbox) checkbox.checked = false;
+            }
+        });
+    }
+
+    areaCheckboxes.forEach(box => box.addEventListener("change", update));
+    update();
+}
+
+
+function setupInquiryReminders() {
+    const container = document.getElementById("reminder-rows");
+    const template = document.getElementById("reminder-template");
+    const addButton = document.getElementById("add-reminder");
+
+    if (!container || !template || !addButton) return;
+
+    function configure(row) {
+        const remove = row.querySelector(".remove-reminder");
+
+        if (remove) {
+            remove.addEventListener("click", () => row.remove());
+        }
+    }
+
+    container.querySelectorAll(".reminder-row").forEach(configure);
+
+    addButton.addEventListener("click", () => {
+        const row = template.content.firstElementChild.cloneNode(true);
+        container.appendChild(row);
+        configure(row);
+    });
+}
+
+
+function setupNormalTableAvailability() {
+    const form = document.getElementById("booking-form");
+    const dateInput = document.getElementById("booking-date");
+    const timeInput = document.getElementById("booking-time");
+    const partyInput = document.getElementById("party-size");
+    const areaInput = document.getElementById("preferred-area");
+    const nearTv = document.getElementById("wants-near-tv");
+    const avoidsBench = document.getElementById("avoids-bench");
+    const eating = document.getElementById("is-eating-food");
+    const tableCards = Array.from(
+        document.querySelectorAll(".availability-table")
+    );
+    const pairingList = document.getElementById("pairing-suggestion-list");
+
+    if (
+        !form || !dateInput || !timeInput || !partyInput ||
+        !tableCards.length || !pairingList
+    ) {
+        return;
+    }
+
+    async function update() {
+        if (!dateInput.value || !timeInput.value || !partyInput.value) {
+            tableCards.forEach(card => {
+                card.classList.remove(
+                    "table-ideal",
+                    "table-suitable",
+                    "table-unavailable",
+                    "table-too-small"
+                );
+            });
+            pairingList.innerHTML = "";
+            return;
+        }
+
+        const params = new URLSearchParams({
+            date: dateInput.value,
+            time: timeInput.value,
+            party_size: partyInput.value,
+            preferred_area_id: areaInput?.value || "",
+            wants_near_tv: nearTv?.checked ? "1" : "0",
+            avoids_bench: avoidsBench?.checked ? "1" : "0",
+            is_eating_food: eating?.checked ? "1" : "0",
+            exclude_booking_id: form.dataset.bookingId || "",
+        });
+
+        const response = await fetch(`/api/table-availability?${params}`);
+        const data = await response.json();
+
+        const byId = new Map(
+            data.tables.map(table => [String(table.id), table])
+        );
+
+        tableCards.forEach(card => {
+            const table = byId.get(card.dataset.tableId);
+            const checkbox = card.querySelector('input[type="checkbox"]');
+
+            card.classList.remove(
+                "table-ideal",
+                "table-suitable",
+                "table-unavailable",
+                "table-too-small"
+            );
+
+            if (!table) return;
+
+            if (table.status === "unavailable") {
+                card.classList.add("table-unavailable");
+                checkbox.disabled = true;
+                checkbox.checked = false;
+            } else if (table.status === "ideal") {
+                card.classList.add("table-ideal");
+                checkbox.disabled = false;
+            } else if (table.status === "suitable") {
+                card.classList.add("table-suitable");
+                checkbox.disabled = false;
+            } else if (table.status === "too_small") {
+                card.classList.add("table-too-small");
+                // Too-small tables can still be chosen as part of a configured
+                // multi-table combination, so don't disable them.
+                checkbox.disabled = false;
+            } else {
+                checkbox.disabled = false;
+            }
+        });
+
+        pairingList.innerHTML = "";
+
+        data.groups.forEach(group => {
+            if (group.table_ids.length <= 1) return;
+
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "pairing-option";
+            button.textContent =
+                `T${group.numbers.join(" + T")} · ${group.capacity} seats`;
+
+            button.addEventListener("click", () => {
+                tableCards.forEach(card => {
+                    const checkbox = card.querySelector('input[type="checkbox"]');
+                    checkbox.checked = group.table_ids.includes(
+                        Number(card.dataset.tableId)
+                    );
+                });
+            });
+
+            pairingList.appendChild(button);
+        });
+    }
+
+    [
+        dateInput,
+        timeInput,
+        partyInput,
+        areaInput,
+        nearTv,
+        avoidsBench,
+        eating,
+    ].filter(Boolean).forEach(control => {
+        control.addEventListener("change", update);
+        control.addEventListener("input", update);
+    });
+
+    update();
+}
+
+
 document.addEventListener("DOMContentLoaded", () => {
     setupCustomerLookup();
     setupBookingTimeValidation();
@@ -436,4 +628,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setupLargePartyFoodQuote();
     setupExtraDishes();
     setupLargePartyEndTime();
+    setupLargePartyAreaFiltering();
+    setupInquiryReminders();
+    setupNormalTableAvailability();
 });

@@ -25,7 +25,8 @@
       id="booking-form"
       data-today="{{ today.isoformat() }}"
       data-now="{{ now_time }}"
-      data-editing="{{ '1' if booking else '0' }}">
+      data-editing="{{ '1' if booking else '0' }}"
+      data-booking-id="{{ booking.id if booking else '' }}">
 
     <section class="form-section full-width">
         <h2>Customer</h2>
@@ -108,6 +109,14 @@
                        min="0"
                        value="{{ booking.number_of_children if booking else 0 }}">
                 <span class="field-note">Children are under 13 years old.</span>
+            </label>
+
+            <label>
+                High chairs required
+                <input type="number"
+                       name="high_chairs_required"
+                       min="0"
+                       value="{{ booking.high_chairs_required if booking else 0 }}">
             </label>
 
             <label>
@@ -204,7 +213,9 @@
 
         <div class="table-checkbox-grid">
             {% for table in tables %}
-                <label class="table-checkbox">
+                <label class="table-checkbox availability-table"
+                       data-table-id="{{ table.id }}"
+                       data-area-id="{{ table.area_id }}">
                     <input type="checkbox"
                            name="table_ids"
                            value="{{ table.id }}"
@@ -218,6 +229,15 @@
                     </span>
                 </label>
             {% endfor %}
+        </div>
+
+        <div id="pairing-suggestions" class="pairing-suggestions">
+            <h3>Table combinations</h3>
+            <p class="field-note">
+                Valid paired-table combinations will appear here when date,
+                time and party size are entered.
+            </p>
+            <div id="pairing-suggestion-list"></div>
         </div>
     </fieldset>
 

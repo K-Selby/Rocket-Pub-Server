@@ -19,6 +19,7 @@ from app.models import (
     Customer,
     ExtraDishOption,
     InquiryExtraDish,
+    InquiryReminder,
     LargePartyInquiry,
     LargePartyMenuOption,
     LargePartyReservedArea,
@@ -382,6 +383,141 @@ def suggest_tables(
     return candidates[0][1]
 
 
+
+def selected_tables_form_valid_pairing_group(selected_tables):
+    """
+    Allow more than two tables, but only when they form one physically connected
+    group through configured pairings.
+
+    Example: T1+T2+T3 is valid if T1 pairs with T2 and T2 pairs with T3.
+    """
+    if len(selected_tables) <= 1:
+        return True
+
+    selected_ids = {table.id for table in selected_tables}
+    pairings = db.session.scalars(db.select(TablePairing)).all()
+
+    adjacency = {table_id: set() for table_id in selected_ids}
+
+    for pairing in pairings:
+        a = pairing.table_a_id
+        b = pairing.table_b_id
+
+        if a in selected_ids and b in selected_ids:
+            adjacency[a].add(b)
+            adjacency[b].add(a)
+
+    # Graph connectivity check.
+    start = next(iter(selected_ids))
+    visited = set()
+    stack = [start]
+
+    while stack:
+        current = stack.pop()
+
+        if current in visited:
+            continue
+
+        visited.add(current)
+        stack.extend(adjacency[current] - visited)
+
+    return visited == selected_ids
+
+
+def available_pairing_groups(
+    party_size,
+    date_value,
+    time_value,
+    duration_minutes,
+    preferred_area_id=None,
+    wants_near_tv=False,
+    avoids_bench=False,
+    is_eating_food=True,
+    exclude_booking_id=None,
+):
+    """
+    Return useful configured table combinations that can hold the party.
+
+    We build connected groups from pairing relationships, then keep the smallest
+    groups that meet the required capacity.
+    """
+    tables = {
+        table.id: table
+        for table in db.session.scalars(
+            db.select(PubTable).where(PubTable.active.is_(True))
+        ).all()
+    }
+
+    pairings = db.session.scalars(db.select(TablePairing)).all()
+    adjacency = {table_id: set() for table_id in tables}
+
+    for pairing in pairings:
+        if pairing.table_a_id in tables and pairing.table_b_id in tables:
+            adjacency[pairing.table_a_id].add(pairing.table_b_id)
+            adjacency[pairing.table_b_id].add(pairing.table_a_id)
+
+    results = []
+    seen = set()
+
+    def dfs(group):
+        key = tuple(sorted(group))
+        if key in seen:
+            return
+        seen.add(key)
+
+        group_tables = [tables[table_id] for table_id in key]
+        capacity = sum(table.capacity for table in group_tables)
+
+        all_available = all(
+            table_is_available(
+                table.id,
+                date_value,
+                time_value,
+                duration_minutes,
+                exclude_booking_id,
+            )
+            for table in group_tables
+        )
+
+        passes_preferences = not (
+            avoids_bench and any(table.has_bench for table in group_tables)
+        )
+
+        if capacity >= party_size and all_available and passes_preferences:
+            score = score_candidate(
+                group_tables,
+                party_size,
+                preferred_area_id,
+                None,
+                wants_near_tv,
+                avoids_bench,
+                is_eating_food,
+            )
+            results.append(
+                {
+                    "table_ids": list(key),
+                    "numbers": [table.number for table in group_tables],
+                    "capacity": capacity,
+                    "score": score if score is not None else 0,
+                }
+            )
+            # Once a group fits, don't keep expanding it unless necessary.
+            return
+
+        neighbours = set()
+        for table_id in group:
+            neighbours.update(adjacency.get(table_id, set()))
+
+        for neighbour in neighbours - set(group):
+            dfs(set(group) | {neighbour})
+
+    for table_id in tables:
+        dfs({table_id})
+
+    results.sort(key=lambda item: (-item["score"], item["capacity"], len(item["table_ids"])))
+    return results[:12]
+
+
 def validate_selected_tables(
     selected_tables,
     party_size,
@@ -407,20 +543,11 @@ def validate_selected_tables(
     if total_capacity < party_size:
         return f"Selected tables only hold {total_capacity} people."
 
-    if len(selected_tables) == 2:
-        first, second = sorted(table.id for table in selected_tables)
-        valid_pair = db.session.scalar(
-            db.select(TablePairing).where(
-                TablePairing.table_a_id == first,
-                TablePairing.table_b_id == second,
-            )
+    if not selected_tables_form_valid_pairing_group(selected_tables):
+        return (
+            "Those tables do not form one valid connected pairing group. "
+            "Only tables configured as physically pairable can be combined."
         )
-
-        if not valid_pair:
-            return "Those two tables are not configured as a valid pairing."
-
-    if len(selected_tables) > 2:
-        return "The current version supports a maximum of two paired tables."
 
     return None
 
@@ -598,6 +725,15 @@ def dashboard():
         selected_date
     )
 
+    reminders = db.session.scalars(
+        db.select(InquiryReminder)
+        .where(
+            InquiryReminder.reminder_date == selected_date,
+            InquiryReminder.completed.is_(False),
+        )
+        .order_by(InquiryReminder.id)
+    ).all()
+
     return render_template(
         "dashboard.html",
         bookings=bookings,
@@ -606,6 +742,7 @@ def dashboard():
         next_date=selected_date + timedelta(days=1),
         repeat_target_date=repeat_target_date,
         repeat_prompts=repeat_prompts,
+        reminders=reminders,
     )
 
 
@@ -825,6 +962,84 @@ def pair_tables():
     return redirect(url_for("main.tables"))
 
 
+
+@main.route("/api/table-availability")
+def table_availability_api():
+    """
+    Live availability used by the normal booking form.
+
+    Green  = exact-capacity available table
+    Yellow = available but larger than required
+    Red    = unavailable / overlapping reservation
+    """
+    date_text = request.args.get("date", "")
+    time_text = request.args.get("time", "")
+    party_size = request.args.get("party_size", type=int) or 0
+    preferred_area_id = request.args.get("preferred_area_id", type=int)
+    wants_near_tv = request.args.get("wants_near_tv") == "1"
+    avoids_bench = request.args.get("avoids_bench") == "1"
+    is_eating_food = request.args.get("is_eating_food", "1") == "1"
+    exclude_booking_id = request.args.get("exclude_booking_id", type=int)
+
+    try:
+        booking_date = datetime.strptime(date_text, "%Y-%m-%d").date()
+        booking_time = datetime.strptime(time_text, "%H:%M").time()
+    except ValueError:
+        return {"tables": [], "groups": []}
+
+    table_rows = []
+
+    for table in db.session.scalars(
+        db.select(PubTable)
+        .where(PubTable.active.is_(True))
+        .order_by(*table_order_clause())
+    ).all():
+        available = table_is_available(
+            table.id,
+            booking_date,
+            booking_time,
+            STANDARD_BOOKING_DURATION,
+            exclude_booking_id,
+        )
+
+        if not available:
+            status = "unavailable"
+        elif party_size > 0 and table.capacity == party_size:
+            status = "ideal"
+        elif party_size > 0 and table.capacity > party_size:
+            status = "suitable"
+        elif party_size > 0 and table.capacity < party_size:
+            status = "too_small"
+        else:
+            status = "available"
+
+        table_rows.append(
+            {
+                "id": table.id,
+                "number": table.number,
+                "capacity": table.capacity,
+                "area_id": table.area_id,
+                "available": available,
+                "status": status,
+                "unsuitable_for_food": bool(table.unsuitable_for_food),
+            }
+        )
+
+    groups = available_pairing_groups(
+        party_size,
+        booking_date,
+        booking_time,
+        STANDARD_BOOKING_DURATION,
+        preferred_area_id,
+        wants_near_tv,
+        avoids_bench,
+        is_eating_food,
+        exclude_booking_id,
+    ) if party_size > 0 else []
+
+    return {"tables": table_rows, "groups": groups}
+
+
 # -------------------------
 # Normal bookings
 # -------------------------
@@ -879,10 +1094,18 @@ def booking_form_handler(booking=None):
         customer_phone = normalise_phone(request.form.get("customer_phone", ""))
         party_size = request.form.get("party_size", type=int)
         number_of_children = request.form.get("number_of_children", type=int) or 0
+        high_chairs_required = request.form.get("high_chairs_required", type=int) or 0
 
         if not customer_name or not customer_phone or not party_size:
             flash(
                 "Customer name, phone number and party size are required.",
+                "error",
+            )
+            return redirect(request.url)
+
+        if high_chairs_required < 0 or high_chairs_required > party_size:
+            flash(
+                "High chairs required cannot be greater than the total party size.",
                 "error",
             )
             return redirect(request.url)
@@ -996,6 +1219,7 @@ def booking_form_handler(booking=None):
         booking.duration_minutes = STANDARD_BOOKING_DURATION
         booking.party_size = party_size
         booking.number_of_children = number_of_children
+        booking.high_chairs_required = high_chairs_required
         booking.is_eating_food = is_eating_food
         booking.occasion = request.form.get("occasion", "").strip() or None
         booking.preferred_area_id = preferred_area_id
@@ -1029,6 +1253,7 @@ def booking_form_handler(booking=None):
                     booking_time=booking_time,
                     party_size=party_size,
                     number_of_children=number_of_children,
+                    high_chairs_required=high_chairs_required,
                     is_eating_food=is_eating_food,
                     preferred_area_id=preferred_area_id,
                     preferred_table_id=preferred_table_id,
@@ -1050,6 +1275,7 @@ def booking_form_handler(booking=None):
                 repeat_rule.booking_time = booking_time
                 repeat_rule.party_size = party_size
                 repeat_rule.number_of_children = number_of_children
+                repeat_rule.high_chairs_required = high_chairs_required
                 repeat_rule.is_eating_food = is_eating_food
                 repeat_rule.preferred_area_id = preferred_area_id
                 repeat_rule.preferred_table_id = preferred_table_id
@@ -1157,6 +1383,7 @@ def confirm_repeat_booking(repeat_id):
         duration_minutes=STANDARD_BOOKING_DURATION,
         party_size=rule.party_size,
         number_of_children=rule.number_of_children,
+        high_chairs_required=rule.high_chairs_required,
         is_eating_food=rule.is_eating_food,
         occasion=rule.occasion,
         preferred_area_id=rule.preferred_area_id,
@@ -1243,6 +1470,7 @@ def edit_repeat_booking(repeat_id):
         weekday = request.form.get("weekday", type=int)
         party_size = request.form.get("party_size", type=int)
         children = request.form.get("number_of_children", type=int) or 0
+        high_chairs = request.form.get("high_chairs_required", type=int) or 0
 
         try:
             booking_time = datetime.strptime(
@@ -1274,10 +1502,15 @@ def edit_repeat_booking(repeat_id):
             flash("Children cannot exceed total party size.", "error")
             return redirect(request.url)
 
+        if high_chairs < 0 or high_chairs > party_size:
+            flash("High chairs cannot exceed total party size.", "error")
+            return redirect(request.url)
+
         rule.weekday = weekday
         rule.booking_time = booking_time
         rule.party_size = party_size
         rule.number_of_children = children
+        rule.high_chairs_required = high_chairs
         rule.is_eating_food = request.form.get("is_eating_food") == "on"
         rule.preferred_area_id = request.form.get("preferred_area_id", type=int)
         rule.preferred_table_id = request.form.get("preferred_table_id", type=int)
@@ -1365,6 +1598,7 @@ def large_party_form_handler(inquiry=None):
         customer_phone = normalise_phone(request.form.get("customer_phone", ""))
         party_size = request.form.get("party_size", type=int)
         children = request.form.get("number_of_children", type=int) or 0
+        high_chairs = request.form.get("high_chairs_required", type=int) or 0
 
         if not customer_name or not customer_phone or not party_size:
             flash(
@@ -1376,6 +1610,13 @@ def large_party_form_handler(inquiry=None):
         if children < 0 or children > party_size:
             flash(
                 "Number of children cannot exceed the total party size.",
+                "error",
+            )
+            return redirect(request.url)
+
+        if high_chairs < 0 or high_chairs > party_size:
+            flash(
+                "High chairs required cannot exceed the total party size.",
                 "error",
             )
             return redirect(request.url)
@@ -1469,6 +1710,34 @@ def large_party_form_handler(inquiry=None):
         deposit_method = request.form.get("deposit_payment_method", "").strip() or None
         deposit_taken_by = request.form.get("deposit_taken_by", "").strip() or None
 
+        deposit_due_date = None
+        deposit_paid_date = None
+
+        if request.form.get("deposit_due_date"):
+            try:
+                deposit_due_date = datetime.strptime(
+                    request.form["deposit_due_date"], "%Y-%m-%d"
+                ).date()
+            except ValueError:
+                flash("Enter a valid deposit due date.", "error")
+                return redirect(request.url)
+
+        if request.form.get("deposit_paid_date"):
+            try:
+                deposit_paid_date = datetime.strptime(
+                    request.form["deposit_paid_date"], "%Y-%m-%d"
+                ).date()
+            except ValueError:
+                flash("Enter a valid deposit paid date.", "error")
+                return redirect(request.url)
+
+        if deposit_paid > 0 and deposit_paid_date is None:
+            flash(
+                "The date the deposit was paid is required once a payment is recorded.",
+                "error",
+            )
+            return redirect(request.url)
+
         if deposit_paid > 0 and deposit_method not in {"Cash", "Card"}:
             flash(
                 "Choose Cash or Card when a deposit payment has been recorded.",
@@ -1495,6 +1764,7 @@ def large_party_form_handler(inquiry=None):
         inquiry.reserve_for_rest_of_day = reserve_for_rest_of_day
         inquiry.party_size = party_size
         inquiry.number_of_children = children
+        inquiry.high_chairs_required = high_chairs
         inquiry.food_type = food_type
         inquiry.menu_option_id = menu_option_id
         inquiry.catered_people = catered_people
@@ -1502,6 +1772,8 @@ def large_party_form_handler(inquiry=None):
         inquiry.quoted_food_total = food_total
         inquiry.deposit_required_amount = deposit_due
         inquiry.deposit_paid_amount = deposit_paid
+        inquiry.deposit_due_date = deposit_due_date
+        inquiry.deposit_paid_date = deposit_paid_date if deposit_paid > 0 else None
         inquiry.deposit_payment_method = deposit_method if deposit_paid > 0 else None
         inquiry.deposit_taken_by = deposit_taken_by if deposit_paid > 0 else None
         inquiry.occasion = request.form.get("occasion", "").strip() or None
@@ -1588,6 +1860,43 @@ def large_party_form_handler(inquiry=None):
                     is_custom=(
                         index < len(custom_flags)
                         and custom_flags[index] == "1"
+                    ),
+                )
+            )
+
+        # Rebuild callback/follow-up reminders.
+        InquiryReminder.query.filter_by(inquiry_id=inquiry.id).delete()
+
+        reminder_dates = request.form.getlist("reminder_date")
+        reminder_notes = request.form.getlist("reminder_note")
+        reminder_completed = request.form.getlist("reminder_completed")
+
+        for index, date_text in enumerate(reminder_dates):
+            note = reminder_notes[index].strip() if index < len(reminder_notes) else ""
+
+            if not date_text and not note:
+                continue
+
+            if not date_text or not note:
+                db.session.rollback()
+                flash("Each reminder needs both a date and a note.", "error")
+                return redirect(request.url)
+
+            try:
+                reminder_date = datetime.strptime(date_text, "%Y-%m-%d").date()
+            except ValueError:
+                db.session.rollback()
+                flash("Enter a valid reminder date.", "error")
+                return redirect(request.url)
+
+            db.session.add(
+                InquiryReminder(
+                    inquiry_id=inquiry.id,
+                    reminder_date=reminder_date,
+                    note=note,
+                    completed=(
+                        index < len(reminder_completed)
+                        and reminder_completed[index] == "1"
                     ),
                 )
             )

@@ -58,6 +58,9 @@
                                 Deposit £{{ "%.2f"|format(inquiry.deposit_paid_amount) }}
                                 · {{ inquiry.deposit_payment_method }}
                                 · taken by {{ inquiry.deposit_taken_by }}
+                                {% if inquiry.deposit_paid_date %}
+                                    · paid {{ inquiry.deposit_paid_date.strftime("%d/%m/%Y") }}
+                                {% endif %}
                             </div>
                             <div class="muted">
                                 Remainder £{{ "%.2f"|format(inquiry.total_remainder) }}

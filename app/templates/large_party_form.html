@@ -61,6 +61,14 @@
             </label>
 
             <label>
+                High chairs required
+                <input type="number"
+                       name="high_chairs_required"
+                       min="0"
+                       value="{{ inquiry.high_chairs_required if inquiry else 0 }}">
+            </label>
+
+            <label>
                 Event date
                 <input type="date"
                        name="event_date"
@@ -133,6 +141,27 @@
                 </label>
 
                 <label>
+                    Deposit expected / promised date
+                    <input type="date"
+                           name="deposit_due_date"
+                           value="{% if inquiry and inquiry.deposit_due_date %}{{ inquiry.deposit_due_date.isoformat() }}{% endif %}">
+                    <span class="field-note">
+                        Optional. Use this when the customer says when they intend to pay.
+                    </span>
+                </label>
+
+                <label>
+                    Date deposit paid
+                    <input type="date"
+                           name="deposit_paid_date"
+                           id="deposit-paid-date"
+                           value="{% if inquiry and inquiry.deposit_paid_date %}{{ inquiry.deposit_paid_date.isoformat() }}{% endif %}">
+                    <span class="field-note">
+                        Required once a deposit payment has actually been recorded.
+                    </span>
+                </label>
+
+                <label>
                     Payment method
                     <select name="deposit_payment_method"
                             id="deposit-payment-method">
@@ -187,6 +216,7 @@
                     <label class="checkbox-row">
                         <input type="checkbox"
                                name="reserved_area_ids"
+                               class="reserved-area-checkbox"
                                value="{{ area.id }}"
                                {% if area.id in selected_reserved_area_ids %}checked{% endif %}>
                         {{ area.name }}
@@ -198,7 +228,8 @@
                 <legend>Specific tables</legend>
                 <div class="table-checkbox-grid">
                     {% for table in tables %}
-                        <label class="table-checkbox">
+                        <label class="table-checkbox large-reserve-table"
+                               data-area-id="{{ table.area_id }}">
                             <input type="checkbox"
                                    name="reserved_table_ids"
                                    value="{{ table.id }}"
@@ -443,6 +474,81 @@
 
                 <button type="button"
                         class="link-button danger remove-extra">
+                    Remove
+                </button>
+            </div>
+        </template>
+    </section>
+
+    <section class="form-section full-width">
+        <div class="section-heading-inline">
+            <div>
+                <h2>Reminders / callbacks</h2>
+                <p class="muted">
+                    Add dates when staff should call the customer or follow up.
+                    Due reminders also appear on the dashboard for that day.
+                </p>
+            </div>
+
+            <button class="button secondary"
+                    type="button"
+                    id="add-reminder">
+                Add reminder
+            </button>
+        </div>
+
+        <div id="reminder-rows">
+            {% if inquiry %}
+                {% for reminder in inquiry.reminders %}
+                    <div class="reminder-row">
+                        <label>
+                            Date
+                            <input type="date"
+                                   name="reminder_date"
+                                   value="{{ reminder.reminder_date.isoformat() }}">
+                        </label>
+
+                        <label>
+                            Reminder
+                            <input name="reminder_note"
+                                   value="{{ reminder.note }}"
+                                   placeholder="e.g. Call customer to confirm buffet numbers">
+                        </label>
+
+                        <input type="hidden"
+                               name="reminder_completed"
+                               class="reminder-completed"
+                               value="{{ 1 if reminder.completed else 0 }}">
+
+                        <button type="button"
+                                class="link-button danger remove-reminder">
+                            Remove
+                        </button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+
+        <template id="reminder-template">
+            <div class="reminder-row">
+                <label>
+                    Date
+                    <input type="date" name="reminder_date">
+                </label>
+
+                <label>
+                    Reminder
+                    <input name="reminder_note"
+                           placeholder="e.g. Call customer to confirm buffet numbers">
+                </label>
+
+                <input type="hidden"
+                       name="reminder_completed"
+                       class="reminder-completed"
+                       value="0">
+
+                <button type="button"
+                        class="link-button danger remove-reminder">
                     Remove
                 </button>
             </div>

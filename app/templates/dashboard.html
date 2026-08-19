@@ -31,6 +31,32 @@
     </a>
 </div>
 
+
+{% if reminders %}
+<div class="card reminder-card">
+    <h2>Reminders for today</h2>
+    {% for reminder in reminders %}
+        <div class="reminder-dashboard-row">
+            <div>
+                <strong>{{ reminder.inquiry.customer_name }}</strong>
+                <div>{{ reminder.note }}</div>
+                <div class="muted">
+                    Large party enquiry
+                    {% if reminder.inquiry.event_date %}
+                        · event {{ reminder.inquiry.event_date.strftime("%d/%m/%Y") }}
+                    {% endif %}
+                </div>
+            </div>
+
+            <a class="small-link"
+               href="{{ url_for('main.edit_large_party', inquiry_id=reminder.inquiry.id) }}">
+                Open enquiry
+            </a>
+        </div>
+    {% endfor %}
+</div>
+{% endif %}
+
 {% if repeat_prompts %}
 <div class="card repeat-card">
     <h2>Repeat bookings to confirm for {{ repeat_target_date.strftime("%A %d %B") }}</h2>

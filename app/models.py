@@ -103,6 +103,7 @@ class RepeatBooking(db.Model):
 
     party_size = db.Column(db.Integer, nullable=False)
     number_of_children = db.Column(db.Integer, nullable=False, default=0)
+    high_chairs_required = db.Column(db.Integer, nullable=False, default=0)
     is_eating_food = db.Column(db.Boolean, nullable=False, default=True)
 
     preferred_area_id = db.Column(db.Integer, db.ForeignKey("area.id"))
@@ -258,6 +259,7 @@ class LargePartyInquiry(db.Model):
 
     party_size = db.Column(db.Integer, nullable=False)
     number_of_children = db.Column(db.Integer, nullable=False, default=0)
+    high_chairs_required = db.Column(db.Integer, nullable=False, default=0)
 
     food_type = db.Column(db.String(30))  # Menu / Buffet / blank
     menu_option_id = db.Column(
@@ -271,6 +273,12 @@ class LargePartyInquiry(db.Model):
 
     deposit_required_amount = db.Column(db.Float, nullable=False, default=0)
     deposit_paid_amount = db.Column(db.Float, nullable=False, default=0)
+
+    # Optional promised date can be entered before any money is received.
+    deposit_due_date = db.Column(db.Date)
+
+    # Payment date becomes mandatory once deposit_paid_amount > 0.
+    deposit_paid_date = db.Column(db.Date)
     deposit_payment_method = db.Column(db.String(20))
     deposit_taken_by = db.Column(db.String(120))
 
@@ -301,6 +309,12 @@ class LargePartyInquiry(db.Model):
 
     extra_dishes = db.relationship(
         "InquiryExtraDish",
+        back_populates="inquiry",
+        cascade="all, delete-orphan"
+    )
+
+    reminders = db.relationship(
+        "InquiryReminder",
         back_populates="inquiry",
         cascade="all, delete-orphan"
     )
@@ -385,6 +399,25 @@ class LargePartyReservedTable(db.Model):
             name="uq_large_party_reserved_table"
         ),
     )
+
+
+
+class InquiryReminder(db.Model):
+    """A callback/follow-up reminder attached to a large-party enquiry."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    inquiry_id = db.Column(
+        db.Integer,
+        db.ForeignKey("large_party_inquiry.id"),
+        nullable=False
+    )
+
+    reminder_date = db.Column(db.Date, nullable=False, index=True)
+    note = db.Column(db.String(250), nullable=False)
+    completed = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    inquiry = db.relationship("LargePartyInquiry", back_populates="reminders")
 
 
 class InquiryExtraDish(db.Model):

@@ -625,3 +625,85 @@ textarea {
         grid-template-columns: 1fr;
     }
 }
+
+
+/* v4.4 additions */
+.table-ideal {
+    background: #e8f6ea;
+    border-color: #76b77d;
+}
+
+.table-suitable {
+    background: #fff7d6;
+    border-color: #d8bd54;
+}
+
+.table-unavailable {
+    background: #fde7e7;
+    border-color: #d77b7b;
+    opacity: 0.78;
+}
+
+.table-too-small {
+    background: #f1f1ee;
+    border-color: #c9c9c2;
+}
+
+.pairing-suggestions {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+
+.pairing-option {
+    border: 1px solid var(--border);
+    background: white;
+    border-radius: 8px;
+    padding: 9px 12px;
+    margin: 4px;
+    cursor: pointer;
+    font: inherit;
+}
+
+.pairing-option:hover {
+    background: #eef3f0;
+}
+
+.reminder-row {
+    display: grid;
+    grid-template-columns: 180px minmax(260px, 1fr) auto;
+    gap: 10px;
+    align-items: end;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.reminder-dashboard-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.reminder-dashboard-row:last-child {
+    border-bottom: 0;
+}
+
+.reminder-card {
+    border-width: 2px;
+}
+
+.large-reserve-table[hidden] {
+    display: none !important;
+}
+
+@media (max-width: 800px) {
+    .reminder-row,
+    .reminder-dashboard-row {
+        grid-template-columns: 1fr;
+        flex-direction: column;
+        align-items: stretch;
+    }
+}

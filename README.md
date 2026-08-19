@@ -1,4 +1,4 @@
-# Pub Booking System - v4.3
+# Pub Booking System - v4.4
 
 ## Added in v4
 
@@ -77,3 +77,25 @@ required fields before SQLAlchemy first flushes them to SQLite.
   bookings for the rest of that day.
 - Existing older enquiries without an end time safely fall back to a three-hour
   blocking window.
+
+
+## v4.4
+
+- High-chair count added to normal bookings, weekly repeats and large-party enquiries.
+- Large-party deposits now support:
+  - optional promised/due date
+  - mandatory paid date when money has been recorded
+  - Cash/Card
+  - staff member who took payment
+  - remaining balance
+- Selecting large-party areas filters the specific-table selector to those areas.
+- Multiple callback/follow-up reminders can be attached to a large-party enquiry.
+- Due reminders appear on the dashboard on the selected date.
+- Normal booking table availability updates live:
+  - green = exact-capacity available table
+  - yellow = available but larger than necessary
+  - red = unavailable / already occupied
+  - grey = too small alone but potentially useful in a valid combination
+- Valid configured table combinations are suggested live.
+- Normal bookings can use more than two tables, provided the selected tables form
+  one connected group through configured table-pairing relationships.

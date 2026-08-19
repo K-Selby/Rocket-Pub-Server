@@ -75,11 +75,16 @@ def ensure_starter_schema_updates():
         "deposit_required_amount": "FLOAT DEFAULT 0",
         "deposit_paid_amount": "FLOAT DEFAULT 0",
         "is_eating_food": "BOOLEAN DEFAULT 1",
+        "high_chairs_required": "INTEGER DEFAULT 0",
         "repeat_booking_id": "INTEGER",
     }
 
     for name, sql_type in booking_additions.items():
         add_column_if_missing(inspector, "booking", name, sql_type)
+
+    add_column_if_missing(
+        inspector, "repeat_booking", "high_chairs_required", "INTEGER DEFAULT 0"
+    )
 
     menu_additions = {
         "option_number": "INTEGER",
@@ -91,6 +96,9 @@ def ensure_starter_schema_updates():
         "deposit_taken_by": "VARCHAR(120)",
         "expected_end_time": "TIME",
         "reserve_for_rest_of_day": "BOOLEAN DEFAULT 0",
+        "high_chairs_required": "INTEGER DEFAULT 0",
+        "deposit_due_date": "DATE",
+        "deposit_paid_date": "DATE",
     }
 
     for name, sql_type in large_party_additions.items():
