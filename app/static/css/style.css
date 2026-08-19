@@ -3036,3 +3036,323 @@ main.container {
 .auth-secondary-link:hover {
     text-decoration: underline;
 }
+
+
+/* v6.4 allergen menu + navigation cleanup */
+.main-nav {
+    align-items: center;
+}
+
+.nav-menu {
+    position: relative;
+}
+
+.nav-menu > summary {
+    list-style: none;
+    color: #f5fbf2;
+    padding: 9px 11px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+}
+
+.nav-menu > summary::-webkit-details-marker {
+    display: none;
+}
+
+.nav-menu > summary::after {
+    content: " ▾";
+    font-size: 10px;
+    opacity: 0.75;
+}
+
+.nav-menu[open] > summary,
+.nav-menu > summary:hover {
+    background: rgba(205, 230, 193, 0.15);
+}
+
+.nav-menu-panel {
+    position: absolute;
+    top: calc(100% + 7px);
+    right: 0;
+    z-index: 200;
+    min-width: 175px;
+    padding: 7px;
+    border: 1px solid #b8c9bb;
+    border-radius: 10px;
+    background: #153f30;
+    box-shadow: 0 10px 26px rgba(0,0,0,0.22);
+}
+
+.nav-menu-panel a {
+    display: block;
+    width: 100%;
+    white-space: nowrap;
+}
+
+.allergen-warning {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 18px;
+    padding: 13px 15px;
+    border: 1px solid #d9be64;
+    border-radius: 10px;
+    background: #fff6d7;
+    color: #5f4b0b;
+}
+
+.allergen-warning strong {
+    white-space: nowrap;
+}
+
+.allergen-search-panel {
+    padding: 20px;
+}
+
+.allergen-search-top {
+    display: grid;
+    grid-template-columns: minmax(280px, 2fr) minmax(180px, 1fr);
+    gap: 14px;
+}
+
+.allergen-search-top label {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.allergen-filter-heading {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin: 18px 0 9px;
+}
+
+.allergen-filter-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+}
+
+.filter-toggle {
+    position: relative;
+}
+
+.filter-toggle input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.filter-toggle span {
+    display: inline-flex;
+    align-items: center;
+    min-height: 38px;
+    padding: 8px 12px;
+    border: 1px solid #c8d3c9;
+    border-radius: 999px;
+    background: white;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.filter-toggle input:checked + span {
+    border-color: #5d8869;
+    background: #e4f0e2;
+    color: #31543c;
+    box-shadow: 0 0 0 2px rgba(80, 129, 93, 0.12);
+}
+
+.filter-toggle.vegetarian-toggle input:checked + span {
+    background: #dcf0dc;
+    border-color: #559260;
+}
+
+.allergen-search-actions {
+    display: flex;
+    gap: 9px;
+    margin-top: 16px;
+}
+
+.allergen-results-heading h2 {
+    margin-bottom: 12px;
+}
+
+.allergen-menu-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+    gap: 15px;
+}
+
+.allergen-item-card {
+    margin-bottom: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.allergen-item-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.allergen-item-top h2 {
+    margin: 4px 0 0;
+}
+
+.allergen-category {
+    font-size: 11px;
+    font-weight: 800;
+    color: #5f7366;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.allergen-admin-actions {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+}
+
+.allergen-admin-actions form {
+    margin: 0;
+}
+
+.allergen-description {
+    color: #526159;
+    line-height: 1.45;
+}
+
+.allergen-status-block {
+    margin-top: 6px;
+}
+
+.allergen-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 7px;
+}
+
+.allergen-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.allergen-badge.contains {
+    background: #f5dfdf;
+    border: 1px solid #d8a1a1;
+    color: #7b3131;
+}
+
+.allergen-badge.none-listed {
+    background: #e5f1e3;
+    border: 1px solid #b9d2b7;
+    color: #45694b;
+}
+
+.vegetarian-status {
+    margin-top: 14px;
+    padding-top: 13px;
+    border-top: 1px solid var(--border);
+}
+
+.veg-pill {
+    display: inline-flex;
+    padding: 5px 8px;
+    border-radius: 999px;
+    background: #dff1dc;
+    border: 1px solid #afd0aa;
+    color: #3b6841;
+    font-size: 11px;
+    font-weight: 850;
+}
+
+.veg-pill.adaptable {
+    background: #ebf3dc;
+}
+
+.vegetarian-status p {
+    margin: 7px 0 0;
+    font-size: 13px;
+    color: #53645a;
+}
+
+.ingredient-details {
+    margin-top: 13px;
+}
+
+.ingredient-details summary {
+    cursor: pointer;
+    font-weight: 750;
+    color: #3c6049;
+}
+
+.ingredient-details p {
+    margin-bottom: 0;
+    line-height: 1.45;
+    color: #59675f;
+}
+
+.empty-allergen-result {
+    text-align: center;
+    padding: 32px;
+}
+
+.allergen-edit-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.allergen-edit-check {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: #f9fbf8;
+}
+
+.allergen-edit-check input {
+    width: auto;
+}
+
+.vegetarian-change-field {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin-top: 14px;
+}
+
+@media (max-width: 900px) {
+    .nav-menu-panel {
+        left: 0;
+        right: auto;
+    }
+
+    .allergen-search-top {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 620px) {
+    .allergen-menu-grid,
+    .allergen-edit-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .allergen-warning,
+    .allergen-filter-heading {
+        flex-direction: column;
+    }
+}

@@ -57,6 +57,53 @@ class AppUser(db.Model):
         return self.role == "admin"
 
 
+
+
+class AllergenMenuItem(db.Model):
+    """
+    One food/menu item used by the staff allergen lookup.
+
+    This first version deliberately focuses on the common test set requested:
+    milk, nuts, egg and gluten, plus vegetarian suitability.
+    """
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(160), nullable=False, unique=True, index=True)
+    category = db.Column(db.String(80), nullable=False, default="Main")
+    description = db.Column(db.String(300))
+    ingredients = db.Column(db.Text)
+
+    contains_milk = db.Column(db.Boolean, nullable=False, default=False)
+    contains_nuts = db.Column(db.Boolean, nullable=False, default=False)
+    contains_egg = db.Column(db.Boolean, nullable=False, default=False)
+    contains_gluten = db.Column(db.Boolean, nullable=False, default=False)
+
+    vegetarian = db.Column(db.Boolean, nullable=False, default=False)
+    can_make_vegetarian = db.Column(db.Boolean, nullable=False, default=False)
+    vegetarian_changes = db.Column(db.String(300))
+
+    active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    @property
+    def allergen_names(self):
+        names = []
+        if self.contains_milk:
+            names.append("Milk")
+        if self.contains_nuts:
+            names.append("Nuts")
+        if self.contains_egg:
+            names.append("Egg")
+        if self.contains_gluten:
+            names.append("Gluten")
+        return names
+
+
 class Customer(db.Model):
     """Recurring customer details and saved seating preferences."""
 

@@ -34,6 +34,7 @@ def create_app():
         seed_extra_dishes()
         seed_floor_plan_settings()
         seed_default_admin()
+        seed_allergen_test_menu()
 
     return app
 
@@ -339,4 +340,85 @@ def seed_default_admin():
             active=True,
         )
     )
+    db.session.commit()
+
+
+
+def seed_allergen_test_menu():
+    """
+    Small temporary menu for testing allergen search/filter behaviour.
+
+    These are demonstration rows only and should be replaced with verified
+    Rocket menu/ingredient information before allergen data is relied upon.
+    """
+    from app.models import AllergenMenuItem
+
+    if db.session.scalar(db.select(AllergenMenuItem.id).limit(1)):
+        return
+
+    rows = [
+        {
+            "name": "Cheese Burger",
+            "category": "Burgers",
+            "description": "Beef burger with cheese in a bun.",
+            "ingredients": "Beef burger, burger bun, cheddar cheese, lettuce, sauce",
+            "contains_milk": True,
+            "contains_gluten": True,
+        },
+        {
+            "name": "Chicken Burger",
+            "category": "Burgers",
+            "description": "Chicken burger served in a bun.",
+            "ingredients": "Chicken fillet, burger bun, lettuce, mayonnaise",
+            "contains_egg": True,
+            "contains_gluten": True,
+        },
+        {
+            "name": "Vegetable Curry",
+            "category": "Mains",
+            "description": "Mixed vegetable curry served with rice.",
+            "ingredients": "Mixed vegetables, curry sauce, rice",
+            "vegetarian": True,
+        },
+        {
+            "name": "Fish & Chips",
+            "category": "Mains",
+            "description": "Battered fish served with chips.",
+            "ingredients": "Fish fillet, flour batter, chips",
+            "contains_gluten": True,
+        },
+        {
+            "name": "Chicken Caesar Salad",
+            "category": "Salads",
+            "description": "Chicken Caesar salad with dressing.",
+            "ingredients": "Chicken, lettuce, Caesar dressing, croutons, parmesan",
+            "contains_milk": True,
+            "contains_egg": True,
+            "contains_gluten": True,
+            "can_make_vegetarian": True,
+            "vegetarian_changes": "Remove chicken and serve as a vegetarian Caesar salad.",
+        },
+        {
+            "name": "Chocolate Brownie",
+            "category": "Desserts",
+            "description": "Chocolate brownie dessert.",
+            "ingredients": "Chocolate, flour, butter, egg, sugar",
+            "contains_milk": True,
+            "contains_egg": True,
+            "contains_gluten": True,
+        },
+        {
+            "name": "Nut Sundae",
+            "category": "Desserts",
+            "description": "Ice cream sundae topped with nuts.",
+            "ingredients": "Ice cream, mixed nuts, sauce",
+            "contains_milk": True,
+            "contains_nuts": True,
+            "vegetarian": True,
+        },
+    ]
+
+    for row in rows:
+        db.session.add(AllergenMenuItem(**row))
+
     db.session.commit()

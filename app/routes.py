@@ -119,6 +119,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from app import db
 from app.models import (
     AppUser,
+    AllergenMenuItem,
     Area,
     Booking,
     BookingTable,
@@ -172,6 +173,11 @@ MANAGER_ENDPOINTS = {
     # Permanent deletion is intentionally restricted.
     "main.delete_cancelled_booking",
     "main.delete_cancelled_large_party",
+
+    # Allergen menu editing.
+    "main.allergen_new",
+    "main.allergen_edit",
+    "main.allergen_delete",
 }
 
 
@@ -2171,6 +2177,197 @@ def change_user_role(user_id):
         "success",
     )
     return redirect(url_for("main.users"))
+
+
+
+# -------------------------
+# Allergen menu
+# -------------------------
+
+@main.route("/allergens")
+def allergen_menu():
+    """
+    Staff-facing allergen lookup.
+
+    Filters are exclusion based ("show me meals without X") because that is the
+    quickest workflow when helping a customer choose something they can eat.
+    """
+    search = request.args.get("q", "").strip()
+    category = request.args.get("category", "").strip()
+
+    milk_free = request.args.get("milk_free") == "1"
+    nut_free = request.args.get("nut_free") == "1"
+    egg_free = request.args.get("egg_free") == "1"
+    gluten_free = request.args.get("gluten_free") == "1"
+    vegetarian = request.args.get("vegetarian") == "1"
+    can_make_vegetarian = request.args.get("can_make_vegetarian") == "1"
+
+    stmt = db.select(AllergenMenuItem).where(
+        AllergenMenuItem.active.is_(True)
+    )
+
+    if search:
+        term = f"%{search.lower()}%"
+        stmt = stmt.where(
+            db.or_(
+                db.func.lower(AllergenMenuItem.name).like(term),
+                db.func.lower(AllergenMenuItem.description).like(term),
+                db.func.lower(AllergenMenuItem.ingredients).like(term),
+            )
+        )
+
+    if category:
+        stmt = stmt.where(AllergenMenuItem.category == category)
+
+    if milk_free:
+        stmt = stmt.where(AllergenMenuItem.contains_milk.is_(False))
+    if nut_free:
+        stmt = stmt.where(AllergenMenuItem.contains_nuts.is_(False))
+    if egg_free:
+        stmt = stmt.where(AllergenMenuItem.contains_egg.is_(False))
+    if gluten_free:
+        stmt = stmt.where(AllergenMenuItem.contains_gluten.is_(False))
+    if vegetarian:
+        stmt = stmt.where(AllergenMenuItem.vegetarian.is_(True))
+    if can_make_vegetarian:
+        stmt = stmt.where(
+            db.or_(
+                AllergenMenuItem.vegetarian.is_(True),
+                AllergenMenuItem.can_make_vegetarian.is_(True),
+            )
+        )
+
+    items = db.session.scalars(
+        stmt.order_by(
+            AllergenMenuItem.category,
+            AllergenMenuItem.name,
+        )
+    ).all()
+
+    categories = db.session.scalars(
+        db.select(AllergenMenuItem.category)
+        .where(AllergenMenuItem.active.is_(True))
+        .distinct()
+        .order_by(AllergenMenuItem.category)
+    ).all()
+
+    return render_template(
+        "allergen_menu.html",
+        items=items,
+        categories=categories,
+        search=search,
+        selected_category=category,
+        filters={
+            "milk_free": milk_free,
+            "nut_free": nut_free,
+            "egg_free": egg_free,
+            "gluten_free": gluten_free,
+            "vegetarian": vegetarian,
+            "can_make_vegetarian": can_make_vegetarian,
+        },
+    )
+
+
+def allergen_form_values(item=None):
+    return {
+        "item": item,
+        "categories": [
+            "Breakfast",
+            "Starters",
+            "Mains",
+            "Burgers",
+            "Salads",
+            "Sides",
+            "Desserts",
+            "Kids",
+            "Other",
+        ],
+    }
+
+
+@main.route("/allergens/new", methods=["GET", "POST"])
+def allergen_new():
+    if request.method == "POST":
+        return save_allergen_item()
+
+    return render_template(
+        "allergen_form.html",
+        **allergen_form_values(),
+    )
+
+
+@main.route("/allergens/<int:item_id>/edit", methods=["GET", "POST"])
+def allergen_edit(item_id):
+    item = db.get_or_404(AllergenMenuItem, item_id)
+
+    if request.method == "POST":
+        return save_allergen_item(item)
+
+    return render_template(
+        "allergen_form.html",
+        **allergen_form_values(item),
+    )
+
+
+def save_allergen_item(item=None):
+    name = request.form.get("name", "").strip()
+    category = request.form.get("category", "").strip() or "Other"
+
+    if not name:
+        flash("Enter a menu item name.", "error")
+        return redirect(request.url)
+
+    duplicate_stmt = db.select(AllergenMenuItem).where(
+        db.func.lower(AllergenMenuItem.name) == name.lower()
+    )
+
+    if item is not None:
+        duplicate_stmt = duplicate_stmt.where(
+            AllergenMenuItem.id != item.id
+        )
+
+    if db.session.scalar(duplicate_stmt):
+        flash("A menu item with that name already exists.", "error")
+        return redirect(request.url)
+
+    if item is None:
+        item = AllergenMenuItem()
+        db.session.add(item)
+
+    item.name = name
+    item.category = category
+    item.description = request.form.get("description", "").strip() or None
+    item.ingredients = request.form.get("ingredients", "").strip() or None
+
+    item.contains_milk = request.form.get("contains_milk") == "1"
+    item.contains_nuts = request.form.get("contains_nuts") == "1"
+    item.contains_egg = request.form.get("contains_egg") == "1"
+    item.contains_gluten = request.form.get("contains_gluten") == "1"
+
+    item.vegetarian = request.form.get("vegetarian") == "1"
+    item.can_make_vegetarian = (
+        request.form.get("can_make_vegetarian") == "1"
+    )
+
+    item.vegetarian_changes = (
+        request.form.get("vegetarian_changes", "").strip() or None
+    )
+
+    db.session.commit()
+
+    flash("Allergen menu item saved.", "success")
+    return redirect(url_for("main.allergen_menu"))
+
+
+@main.route("/allergens/<int:item_id>/delete", methods=["POST"])
+def allergen_delete(item_id):
+    item = db.get_or_404(AllergenMenuItem, item_id)
+    name = item.name
+    db.session.delete(item)
+    db.session.commit()
+
+    flash(f"{name} deleted from the allergen menu.", "success")
+    return redirect(url_for("main.allergen_menu"))
 
 
 # -------------------------

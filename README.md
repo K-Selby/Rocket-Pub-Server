@@ -516,3 +516,42 @@ or Microsoft token cache.
 - Successful reset clears the reset token and returns the user to sign-in.
 - Accounts without a verified email must use the existing manager/admin password
   reset process.
+
+
+## v6.4 allergen menu and navigation cleanup
+
+### Staff allergen lookup
+All logged-in users can open **Allergen Menu** and:
+- search by meal, ingredient or description
+- filter by category
+- show only meals that are milk free
+- nut free
+- egg free
+- gluten free
+- vegetarian
+- vegetarian or able to be made vegetarian
+- inspect listed ingredients and vegetarian modifications
+
+### Management
+Managers/Admin can:
+- add allergen menu items
+- edit ingredients/allergen flags
+- mark meals vegetarian
+- mark meals as able to be made vegetarian and record the required change
+- permanently delete menu items
+
+Staff have read-only allergen access; the write routes are protected server-side.
+
+### Test data
+A small demonstration menu is seeded only when the allergen table is empty.
+It is clearly labelled test data in the interface and is intended to be
+replaced with verified Rocket Pub menu and ingredient information.
+
+### Navigation
+The header is less crowded:
+- Dashboard
+- Bookings
+- Large Parties
+- Allergen Menu
+- More: Customers, Table Map, Archive
+- Management (Manager/Admin): Tables, Table Layout, Users

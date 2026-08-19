@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% block title %}Allergen Menu | Rocket Pub Server{% endblock %}
+
+{% block content %}
+<div class="page-heading allergen-page-heading">
+    <div>
+        <h1>Allergen Menu</h1>
+        <p>
+            Search meals and filter out common allergens.
+        </p>
+    </div>
+
+    {% if current_user.is_manager %}
+        <a class="button" href="{{ url_for('main.allergen_new') }}">
+            Add menu item
+        </a>
+    {% endif %}
+</div>
+
+<div class="allergen-warning">
+    <strong>Test allergen data</strong>
+    <span>
+        This section currently contains demonstration menu items only.
+        Always verify the final ingredient/allergen information before relying
+        on it for a customer allergy.
+    </span>
+</div>
+
+<form method="get" class="card allergen-search-panel">
+    <div class="allergen-search-top">
+        <label class="allergen-search-box">
+            Search menu
+            <input type="search"
+                   name="q"
+                   value="{{ search }}"
+                   placeholder="Search meal, ingredient or description…">
+        </label>
+
+        <label>
+            Category
+            <select name="category">
+                <option value="">All categories</option>
+                {% for category in categories %}
+                    <option value="{{ category }}"
+                            {% if category == selected_category %}selected{% endif %}>
+                        {{ category }}
+                    </option>
+                {% endfor %}
+            </select>
+        </label>
+    </div>
+
+    <div class="allergen-filter-heading">
+        <strong>Show meals that are:</strong>
+        <span class="field-note">Select more than one to combine filters.</span>
+    </div>
+
+    <div class="allergen-filter-grid">
+        <label class="filter-toggle">
+            <input type="checkbox" name="milk_free" value="1"
+                   {% if filters.milk_free %}checked{% endif %}>
+            <span>Milk free</span>
+        </label>
+
+        <label class="filter-toggle">
+            <input type="checkbox" name="nut_free" value="1"
+                   {% if filters.nut_free %}checked{% endif %}>
+            <span>Nut free</span>
+        </label>
+
+        <label class="filter-toggle">
+            <input type="checkbox" name="egg_free" value="1"
+                   {% if filters.egg_free %}checked{% endif %}>
+            <span>Egg free</span>
+        </label>
+
+        <label class="filter-toggle">
+            <input type="checkbox" name="gluten_free" value="1"
+                   {% if filters.gluten_free %}checked{% endif %}>
+            <span>Gluten free</span>
+        </label>
+
+        <label class="filter-toggle vegetarian-toggle">
+            <input type="checkbox" name="vegetarian" value="1"
+                   {% if filters.vegetarian %}checked{% endif %}>
+            <span>Vegetarian</span>
+        </label>
+
+        <label class="filter-toggle vegetarian-toggle">
+            <input type="checkbox" name="can_make_vegetarian" value="1"
+                   {% if filters.can_make_vegetarian %}checked{% endif %}>
+            <span>Vegetarian / can be made vegetarian</span>
+        </label>
+    </div>
+
+    <div class="allergen-search-actions">
+        <button class="button" type="submit">Search / filter</button>
+        <a class="button secondary"
+           href="{{ url_for('main.allergen_menu') }}">
+            Clear filters
+        </a>
+    </div>
+</form>
+
+<div class="allergen-results-heading">
+    <h2>{{ items|length }} meal{% if items|length != 1 %}s{% endif %}</h2>
+</div>
+
+{% if items %}
+    <div class="allergen-menu-grid">
+        {% for item in items %}
+            <article class="card allergen-item-card">
+                <div class="allergen-item-top">
+                    <div>
+                        <span class="allergen-category">{{ item.category }}</span>
+                        <h2>{{ item.name }}</h2>
+                    </div>
+
+                    {% if current_user.is_manager %}
+                        <div class="allergen-admin-actions">
+                            <a class="small-link"
+                               href="{{ url_for('main.allergen_edit', item_id=item.id) }}">
+                                Edit
+                            </a>
+
+                            <form method="post"
+                                  action="{{ url_for('main.allergen_delete', item_id=item.id) }}"
+                                  onsubmit="return confirm('Delete {{ item.name }}?');">
+                                <button class="link-button danger" type="submit">
+                                    Delete
+                                </button>
+                            </form>
+                        </div>
+                    {% endif %}
+                </div>
+
+                {% if item.description %}
+                    <p class="allergen-description">{{ item.description }}</p>
+                {% endif %}
+
+                <div class="allergen-status-block">
+                    <strong>Contains</strong>
+                    <div class="allergen-badges">
+                        {% if item.contains_milk %}
+                            <span class="allergen-badge contains">Milk</span>
+                        {% endif %}
+                        {% if item.contains_nuts %}
+                            <span class="allergen-badge contains">Nuts</span>
+                        {% endif %}
+                        {% if item.contains_egg %}
+                            <span class="allergen-badge contains">Egg</span>
+                        {% endif %}
+                        {% if item.contains_gluten %}
+                            <span class="allergen-badge contains">Gluten</span>
+                        {% endif %}
+                        {% if not item.allergen_names %}
+                            <span class="allergen-badge none-listed">
+                                None of the test allergens listed
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="vegetarian-status">
+                    {% if item.vegetarian %}
+                        <span class="veg-pill">Vegetarian</span>
+                    {% elif item.can_make_vegetarian %}
+                        <span class="veg-pill adaptable">
+                            Can be made vegetarian
+                        </span>
+                        {% if item.vegetarian_changes %}
+                            <p>{{ item.vegetarian_changes }}</p>
+                        {% endif %}
+                    {% else %}
+                        <span class="muted">Not marked vegetarian</span>
+                    {% endif %}
+                </div>
+
+                {% if item.ingredients %}
+                    <details class="ingredient-details">
+                        <summary>Ingredients</summary>
+                        <p>{{ item.ingredients }}</p>
+                    </details>
+                {% endif %}
+            </article>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="card empty-allergen-result">
+        <strong>No matching meals</strong>
+        <p class="muted">
+            Try removing one of the filters or changing the search.
+        </p>
+    </div>
+{% endif %}
+{% endblock %}

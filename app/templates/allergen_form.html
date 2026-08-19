@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit" if item else "Add" }} Menu Item | Rocket Pub Server{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h1>{{ "Edit" if item else "Add" }} allergen menu item</h1>
+        <p>Manager / Admin menu information editor.</p>
+    </div>
+</div>
+
+<form method="post" class="form-grid">
+    <section class="form-section full-width">
+        <h2>Menu item</h2>
+
+        <div class="nested-grid">
+            <label>
+                Meal name
+                <input name="name"
+                       value="{{ item.name if item else '' }}"
+                       required>
+            </label>
+
+            <label>
+                Category
+                <select name="category">
+                    {% for category in categories %}
+                        <option value="{{ category }}"
+                                {% if item and item.category == category %}selected{% endif %}>
+                            {{ category }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label class="full-width">
+                Description
+                <input name="description"
+                       value="{{ item.description if item and item.description else '' }}">
+            </label>
+
+            <label class="full-width">
+                Ingredients
+                <textarea name="ingredients"
+                          rows="5"
+                          placeholder="Enter ingredients here…">{{ item.ingredients if item and item.ingredients else '' }}</textarea>
+            </label>
+        </div>
+    </section>
+
+    <section class="form-section full-width">
+        <h2>Allergens</h2>
+        <p class="muted">
+            Tick an allergen when this meal contains it.
+        </p>
+
+        <div class="allergen-edit-grid">
+            <label class="allergen-edit-check">
+                <input type="checkbox"
+                       name="contains_milk"
+                       value="1"
+                       {% if item and item.contains_milk %}checked{% endif %}>
+                <span>Contains milk</span>
+            </label>
+
+            <label class="allergen-edit-check">
+                <input type="checkbox"
+                       name="contains_nuts"
+                       value="1"
+                       {% if item and item.contains_nuts %}checked{% endif %}>
+                <span>Contains nuts</span>
+            </label>
+
+            <label class="allergen-edit-check">
+                <input type="checkbox"
+                       name="contains_egg"
+                       value="1"
+                       {% if item and item.contains_egg %}checked{% endif %}>
+                <span>Contains egg</span>
+            </label>
+
+            <label class="allergen-edit-check">
+                <input type="checkbox"
+                       name="contains_gluten"
+                       value="1"
+                       {% if item and item.contains_gluten %}checked{% endif %}>
+                <span>Contains gluten</span>
+            </label>
+        </div>
+    </section>
+
+    <section class="form-section full-width">
+        <h2>Vegetarian</h2>
+
+        <div class="allergen-edit-grid">
+            <label class="allergen-edit-check">
+                <input type="checkbox"
+                       name="vegetarian"
+                       value="1"
+                       {% if item and item.vegetarian %}checked{% endif %}>
+                <span>Vegetarian as standard</span>
+            </label>
+
+            <label class="allergen-edit-check">
+                <input type="checkbox"
+                       name="can_make_vegetarian"
+                       value="1"
+                       {% if item and item.can_make_vegetarian %}checked{% endif %}>
+                <span>Can be made vegetarian</span>
+            </label>
+        </div>
+
+        <label class="vegetarian-change-field">
+            Changes required to make vegetarian
+            <textarea name="vegetarian_changes"
+                      rows="3"
+                      placeholder="e.g. remove chicken, swap sauce…">{{ item.vegetarian_changes if item and item.vegetarian_changes else '' }}</textarea>
+        </label>
+    </section>
+
+    <div class="full-width form-actions">
+        <button class="button" type="submit">Save menu item</button>
+        <a class="button secondary"
+           href="{{ url_for('main.allergen_menu') }}">
+            Cancel
+        </a>
+    </div>
+</form>
+{% endblock %}
