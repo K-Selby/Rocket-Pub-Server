@@ -1,4 +1,4 @@
-# Pub Booking System - v5 Complete Floor Plan Editor
+# Pub Booking System - v5.1 Floor Plan Editor
 
 ## Added in v4
 
@@ -170,3 +170,30 @@ This master floor plan is now ready to be reused in the live booking screen.
 Fixed the Table Layout page failing to render because Jinja does not support
 Python-style list comprehensions inside `{{ ... }}` expressions. Pairing data is
 now emitted with a normal Jinja `{% for %}` loop.
+
+
+## v5.1 floor-plan usability overhaul
+
+- Removed Pool Table and Stairs from the add-object toolbar.
+- Reworked dragging/resizing to use window-level pointer tracking for much
+  smoother interaction.
+- Drag/resizing calculations are zoom-aware, preventing jumping while zoomed.
+- Objects can no longer be resized beyond the right/bottom edge of the map.
+- Walls can now stretch all the way to the map boundary.
+- The floor-plan map can be resized from 600x400 up to 3000x2200.
+- The editor viewport height can be changed with a slider or the browser's
+  vertical resize handle.
+- Zoom range is deliberately limited to 35%–125%.
+- Fit Whole Map automatically chooses a zoom that shows the complete floor plan.
+- Zooming keeps the centre of the current view stable where possible.
+- Pairing lines are calculated from unscaled map coordinates so they remain
+  stable at every zoom level.
+
+
+## v5.1.1 rotated wall boundary fix
+
+Fixed rotated walls/objects being stopped away from the map edge. CSS rotation
+changes the object's visual bounding box while `offsetLeft` still describes its
+unrotated box. Dragging, resizing and map-resizing now use rotation-aware visual
+bounds, allowing a long wall rotated 90 degrees to sit flush against the left,
+right, top or bottom edge of the floor plan.

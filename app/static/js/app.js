@@ -621,11 +621,14 @@ function setupNormalTableAvailability() {
 
 
 
+
 function setupTableLayoutEditor() {
     const stage = document.getElementById("floor-plan-stage");
+    const zoomSurface = document.getElementById("floor-plan-zoom-surface");
+    const shell = document.getElementById("floor-plan-shell");
     const saveButton = document.getElementById("layout-save");
 
-    if (!stage || !saveButton) return;
+    if (!stage || !zoomSurface || !shell || !saveButton) return;
 
     const svg = document.getElementById("pairing-lines");
     const editMode = document.getElementById("layout-edit-mode");
@@ -633,7 +636,17 @@ function setupTableLayoutEditor() {
     const shapeSelect = document.getElementById("layout-shape");
     const rotateLeft = document.getElementById("layout-rotate-left");
     const rotateRight = document.getElementById("layout-rotate-right");
+
+    const zoomOut = document.getElementById("layout-zoom-out");
+    const zoomIn = document.getElementById("layout-zoom-in");
+    const zoomLabel = document.getElementById("layout-zoom-label");
     const fitButton = document.getElementById("layout-fit-view");
+
+    const mapWidthInput = document.getElementById("floor-map-width");
+    const mapHeightInput = document.getElementById("floor-map-height");
+    const applyMapSize = document.getElementById("apply-map-size");
+    const editorHeight = document.getElementById("editor-window-height");
+
     const layerControls = document.getElementById("object-layer-controls");
     const bringForward = document.getElementById("bring-forward");
     const sendBackward = document.getElementById("send-backward");
@@ -665,6 +678,11 @@ function setupTableLayoutEditor() {
 
     let selected = null;
     let firstPairTable = null;
+    let currentZoom = 1;
+    const MIN_ZOOM = 0.35;
+    const MAX_ZOOM = 1.25;
+    const ZOOM_STEP = 0.1;
+
     let pairings = Array.isArray(window.FLOOR_PAIRINGS)
         ? [...window.FLOOR_PAIRINGS]
         : [];
@@ -676,8 +694,6 @@ function setupTableLayoutEditor() {
         pillar: "Pillar",
         tv: "TV",
         fixed_table: "Non-bookable table",
-        pool_table: "Pool table",
-        stairs: "Stairs",
         label: "Label",
         area: "Area block",
     };
@@ -694,13 +710,70 @@ function setupTableLayoutEditor() {
         );
     }
 
-    function rectRelativeToStage(element) {
-        const stageRect = stage.getBoundingClientRect();
-        const rect = element.getBoundingClientRect();
+    function updateZoomSurfaceSize() {
+        zoomSurface.style.width = `${stage.offsetWidth * currentZoom}px`;
+        zoomSurface.style.height = `${stage.offsetHeight * currentZoom}px`;
+    }
 
+    function applyZoom(value, keepCentre = true) {
+        const oldZoom = currentZoom;
+        currentZoom = Math.max(
+            MIN_ZOOM,
+            Math.min(MAX_ZOOM, value)
+        );
+
+        let centreX = null;
+        let centreY = null;
+
+        if (keepCentre) {
+            centreX = (shell.scrollLeft + shell.clientWidth / 2) / oldZoom;
+            centreY = (shell.scrollTop + shell.clientHeight / 2) / oldZoom;
+        }
+
+        stage.style.transform = `scale(${currentZoom})`;
+        stage.style.transformOrigin = "top left";
+
+        updateZoomSurfaceSize();
+
+        if (zoomLabel) {
+            zoomLabel.textContent = `${Math.round(currentZoom * 100)}%`;
+        }
+
+        if (keepCentre && centreX !== null) {
+            requestAnimationFrame(() => {
+                shell.scrollLeft =
+                    centreX * currentZoom - shell.clientWidth / 2;
+                shell.scrollTop =
+                    centreY * currentZoom - shell.clientHeight / 2;
+            });
+        }
+
+        drawPairings();
+    }
+
+    function fitWholeMap() {
+        const availableWidth = Math.max(shell.clientWidth - 32, 100);
+        const availableHeight = Math.max(shell.clientHeight - 32, 100);
+
+        const fit = Math.min(
+            availableWidth / stage.offsetWidth,
+            availableHeight / stage.offsetHeight,
+            1
+        );
+
+        applyZoom(
+            Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, fit)),
+            false
+        );
+
+        shell.scrollLeft = 0;
+        shell.scrollTop = 0;
+    }
+
+    function rectCentre(element) {
         return {
-            x: rect.left - stageRect.left + rect.width / 2,
-            y: rect.top - stageRect.top + rect.height / 2,
+            x: element.offsetLeft + element.offsetWidth / 2,
+            y: element.offsetTop + element.offsetHeight / 2,
         };
     }
 
@@ -715,8 +788,8 @@ function setupTableLayoutEditor() {
 
             if (!a || !b) return;
 
-            const p1 = rectRelativeToStage(a);
-            const p2 = rectRelativeToStage(b);
+            const p1 = rectCentre(a);
+            const p2 = rectCentre(b);
 
             const line = document.createElementNS(
                 "http://www.w3.org/2000/svg",
@@ -761,11 +834,10 @@ function setupTableLayoutEditor() {
             return;
         }
 
-        const kind = element.dataset.kind;
         inspectorEmpty.hidden = true;
         shapeSelect.value = element.dataset.shape || "rectangle";
 
-        if (kind === "table") {
+        if (element.dataset.kind === "table") {
             element.classList.add("layout-table-selected");
             selectedLabel.textContent = `Table ${element.dataset.number}`;
 
@@ -815,13 +887,17 @@ function setupTableLayoutEditor() {
         element.dataset.shape = shape;
 
         if (shape === "square" || shape === "round") {
-            const size = Math.max(
-                parseFloat(element.style.width || "90"),
-                parseFloat(element.style.height || "60")
+            const maxWidth = stage.clientWidth - element.offsetLeft;
+            const maxHeight = stage.clientHeight - element.offsetTop;
+
+            const size = Math.min(
+                Math.max(element.offsetWidth, element.offsetHeight),
+                maxWidth,
+                maxHeight
             );
 
-            element.style.width = `${size}px`;
-            element.style.height = `${size}px`;
+            element.style.width = `${Math.max(size, 16)}px`;
+            element.style.height = `${Math.max(size, 16)}px`;
         }
 
         drawPairings();
@@ -838,52 +914,130 @@ function setupTableLayoutEditor() {
         drawPairings();
     }
 
+    function rotatedVisualBounds(element) {
+        /*
+         * CSS rotation happens around the centre of the element. offsetLeft /
+         * offsetWidth still describe the unrotated box, which is why a long
+         * wall rotated 90° previously appeared unable to reach the left edge.
+         *
+         * Calculate the axis-aligned visual box after rotation, then return
+         * the legal offsetLeft/offsetTop range needed to keep that VISUAL box
+         * inside the map.
+         */
+        const width = element.offsetWidth;
+        const height = element.offsetHeight;
+        const degrees = Number(element.dataset.rotation || 0);
+        const radians = degrees * Math.PI / 180;
+
+        const cos = Math.abs(Math.cos(radians));
+        const sin = Math.abs(Math.sin(radians));
+
+        const visualWidth = width * cos + height * sin;
+        const visualHeight = width * sin + height * cos;
+
+        // Visual box is centred on the original layout box.
+        const visualLeftOffset = (width - visualWidth) / 2;
+        const visualTopOffset = (height - visualHeight) / 2;
+
+        return {
+            minLeft: -visualLeftOffset,
+            maxLeft:
+                stage.clientWidth -
+                visualLeftOffset -
+                visualWidth,
+
+            minTop: -visualTopOffset,
+            maxTop:
+                stage.clientHeight -
+                visualTopOffset -
+                visualHeight,
+
+            visualWidth,
+            visualHeight,
+        };
+    }
+
+    function clampElementToMap(element) {
+        const bounds = rotatedVisualBounds(element);
+
+        // If an object is visually larger than the map in one dimension,
+        // centre it in that dimension rather than producing unstable bounds.
+        const minLeft = Math.min(bounds.minLeft, bounds.maxLeft);
+        const maxLeft = Math.max(bounds.minLeft, bounds.maxLeft);
+        const minTop = Math.min(bounds.minTop, bounds.maxTop);
+        const maxTop = Math.max(bounds.minTop, bounds.maxTop);
+
+        element.style.left =
+            `${Math.min(Math.max(element.offsetLeft, minLeft), maxLeft)}px`;
+
+        element.style.top =
+            `${Math.min(Math.max(element.offsetTop, minTop), maxTop)}px`;
+    }
+
+
     function makeInteractive(element) {
         element.addEventListener("pointerdown", event => {
-            if (event.target.classList.contains("resize-handle")) {
-                return;
-            }
+            if (event.button !== 0) return;
+            if (event.target.classList.contains("resize-handle")) return;
 
             selectElement(element);
 
             if (!editMode.checked) return;
 
+            event.preventDefault();
+
             const startX = event.clientX;
             const startY = event.clientY;
-            const startLeft = parseFloat(element.style.left || "0");
-            const startTop = parseFloat(element.style.top || "0");
-
-            element.setPointerCapture(event.pointerId);
+            const startLeft = element.offsetLeft;
+            const startTop = element.offsetTop;
 
             function move(moveEvent) {
-                const dx = moveEvent.clientX - startX;
-                const dy = moveEvent.clientY - startY;
+                const dx = (moveEvent.clientX - startX) / currentZoom;
+                const dy = (moveEvent.clientY - startY) / currentZoom;
 
-                const maxLeft = stage.clientWidth - element.offsetWidth;
-                const maxTop = stage.clientHeight - element.offsetHeight;
+                const bounds = rotatedVisualBounds(element);
 
-                element.style.left = `${Math.min(
-                    Math.max(startLeft + dx, 0),
-                    Math.max(maxLeft, 0)
-                )}px`;
+                const minLeft = Math.min(
+                    bounds.minLeft,
+                    bounds.maxLeft
+                );
+                const maxLeft = Math.max(
+                    bounds.minLeft,
+                    bounds.maxLeft
+                );
+                const minTop = Math.min(
+                    bounds.minTop,
+                    bounds.maxTop
+                );
+                const maxTop = Math.max(
+                    bounds.minTop,
+                    bounds.maxTop
+                );
 
-                element.style.top = `${Math.min(
-                    Math.max(startTop + dy, 0),
-                    Math.max(maxTop, 0)
-                )}px`;
+                element.style.left =
+                    `${Math.min(
+                        Math.max(startLeft + dx, minLeft),
+                        maxLeft
+                    )}px`;
+
+                element.style.top =
+                    `${Math.min(
+                        Math.max(startTop + dy, minTop),
+                        maxTop
+                    )}px`;
 
                 drawPairings();
             }
 
             function finish() {
-                element.removeEventListener("pointermove", move);
-                element.removeEventListener("pointerup", finish);
-                element.removeEventListener("pointercancel", finish);
+                window.removeEventListener("pointermove", move);
+                window.removeEventListener("pointerup", finish);
+                window.removeEventListener("pointercancel", finish);
             }
 
-            element.addEventListener("pointermove", move);
-            element.addEventListener("pointerup", finish);
-            element.addEventListener("pointercancel", finish);
+            window.addEventListener("pointermove", move);
+            window.addEventListener("pointerup", finish);
+            window.addEventListener("pointercancel", finish);
         });
 
         const handle = element.querySelector(".resize-handle");
@@ -891,8 +1045,9 @@ function setupTableLayoutEditor() {
         if (!handle) return;
 
         handle.addEventListener("pointerdown", event => {
-            if (!editMode.checked) return;
+            if (!editMode.checked || event.button !== 0) return;
 
+            event.preventDefault();
             event.stopPropagation();
             selectElement(element);
 
@@ -901,61 +1056,122 @@ function setupTableLayoutEditor() {
             const startWidth = element.offsetWidth;
             const startHeight = element.offsetHeight;
 
-            handle.setPointerCapture(event.pointerId);
-
             function resize(moveEvent) {
-                let width = Math.max(
-                    16,
-                    Math.min(
-                        1000,
-                        startWidth + moveEvent.clientX - startX
-                    )
+                const dx = (moveEvent.clientX - startX) / currentZoom;
+                const dy = (moveEvent.clientY - startY) / currentZoom;
+
+                const maxWidth = Math.max(
+                    stage.clientWidth - element.offsetLeft,
+                    16
+                );
+                const maxHeight = Math.max(
+                    stage.clientHeight - element.offsetTop,
+                    10
                 );
 
-                let height = Math.max(
-                    10,
-                    Math.min(
-                        800,
-                        startHeight + moveEvent.clientY - startY
-                    )
+                let width = Math.min(
+                    Math.max(startWidth + dx, 16),
+                    maxWidth
+                );
+
+                let height = Math.min(
+                    Math.max(startHeight + dy, 10),
+                    maxHeight
                 );
 
                 if (
                     element.dataset.shape === "square" ||
                     element.dataset.shape === "round"
                 ) {
-                    const size = Math.max(width, height);
+                    const size = Math.min(
+                        Math.max(width, height),
+                        maxWidth,
+                        maxHeight
+                    );
                     width = size;
                     height = size;
                 }
 
                 element.style.width = `${width}px`;
                 element.style.height = `${height}px`;
+
+                // Rotation changes the visual footprint. Re-clamp after every
+                // resize so walls/objects remain able to touch map edges
+                // without visually spilling outside the map.
+                clampElementToMap(element);
+
                 drawPairings();
             }
 
             function finish() {
-                handle.removeEventListener("pointermove", resize);
-                handle.removeEventListener("pointerup", finish);
-                handle.removeEventListener("pointercancel", finish);
+                window.removeEventListener("pointermove", resize);
+                window.removeEventListener("pointerup", finish);
+                window.removeEventListener("pointercancel", finish);
             }
 
-            handle.addEventListener("pointermove", resize);
-            handle.addEventListener("pointerup", finish);
-            handle.addEventListener("pointercancel", finish);
+            window.addEventListener("pointermove", resize);
+            window.addEventListener("pointerup", finish);
+            window.addEventListener("pointercancel", finish);
         });
     }
 
     allEditableElements().forEach(makeInteractive);
 
     shapeSelect.addEventListener("change", () => {
-        if (selected) {
-            setShape(selected, shapeSelect.value);
-        }
+        if (selected) setShape(selected, shapeSelect.value);
     });
 
     rotateLeft.addEventListener("click", () => rotateSelected(-15));
     rotateRight.addEventListener("click", () => rotateSelected(15));
+
+    zoomOut.addEventListener("click", () => {
+        applyZoom(currentZoom - ZOOM_STEP);
+    });
+
+    zoomIn.addEventListener("click", () => {
+        applyZoom(currentZoom + ZOOM_STEP);
+    });
+
+    fitButton.addEventListener("click", fitWholeMap);
+
+    editorHeight.addEventListener("input", () => {
+        shell.style.height = `${editorHeight.value}px`;
+        shell.style.maxHeight = "none";
+    });
+
+    applyMapSize.addEventListener("click", () => {
+        const width = Math.max(
+            600,
+            Math.min(3000, Number(mapWidthInput.value || 1200))
+        );
+
+        const height = Math.max(
+            400,
+            Math.min(2200, Number(mapHeightInput.value || 760))
+        );
+
+        stage.style.width = `${width}px`;
+        stage.style.height = `${height}px`;
+
+        mapWidthInput.value = width;
+        mapHeightInput.value = height;
+
+        // Keep every existing item fully inside the newly sized map.
+        allEditableElements().forEach(element => {
+            if (element.offsetWidth > width) {
+                element.style.width = `${width}px`;
+            }
+
+            if (element.offsetHeight > height) {
+                element.style.height = `${height}px`;
+            }
+
+            clampElementToMap(element);
+        });
+
+        updateZoomSurfaceSize();
+        drawPairings();
+    });
 
     bringForward.addEventListener("click", () => {
         if (!selected || selected.dataset.kind !== "object") return;
@@ -986,10 +1202,8 @@ function setupTableLayoutEditor() {
 
         if (!selected || selected.dataset.kind !== "table") return;
 
-        const tableId = Number(selected.dataset.tableId);
-
         const response = await fetch(
-            `/api/table-layout/table/${tableId}`,
+            `/api/table-layout/table/${selected.dataset.tableId}`,
             {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
@@ -1044,10 +1258,8 @@ function setupTableLayoutEditor() {
 
         if (!selected || selected.dataset.kind !== "object") return;
 
-        const objectId = Number(selected.dataset.objectId);
-
         const response = await fetch(
-            `/api/floor-objects/${objectId}`,
+            `/api/floor-objects/${selected.dataset.objectId}`,
             {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
@@ -1116,17 +1328,15 @@ function setupTableLayoutEditor() {
 
     document.querySelectorAll("[data-add-object]").forEach(button => {
         button.addEventListener("click", async () => {
-            const objectType = button.dataset.addObject;
-
             const response = await fetch(
                 "/api/floor-objects",
                 {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
                     body: JSON.stringify({
-                        object_type: objectType,
-                        x: 80 + Math.random() * 80,
-                        y: 80 + Math.random() * 80,
+                        object_type: button.dataset.addObject,
+                        x: 50,
+                        y: 50,
                     }),
                 }
             );
@@ -1138,8 +1348,6 @@ function setupTableLayoutEditor() {
                 return;
             }
 
-            // Reload keeps the HTML/data structure simple and guarantees the
-            // newly assigned database ID is represented everywhere.
             window.location.reload();
         });
     });
@@ -1235,8 +1443,8 @@ function setupTableLayoutEditor() {
 
             tables: tables.map(table => ({
                 id: Number(table.dataset.tableId),
-                x: parseFloat(table.style.left || "0"),
-                y: parseFloat(table.style.top || "0"),
+                x: table.offsetLeft,
+                y: table.offsetTop,
                 width: table.offsetWidth,
                 height: table.offsetHeight,
                 shape: table.dataset.shape || "rectangle",
@@ -1245,8 +1453,8 @@ function setupTableLayoutEditor() {
 
             objects: objects.map(object => ({
                 id: Number(object.dataset.objectId),
-                x: parseFloat(object.style.left || "0"),
-                y: parseFloat(object.style.top || "0"),
+                x: object.offsetLeft,
+                y: object.offsetTop,
                 width: object.offsetWidth,
                 height: object.offsetHeight,
                 shape: object.dataset.shape || "rectangle",
@@ -1277,17 +1485,10 @@ function setupTableLayoutEditor() {
 
         const original = saveButton.textContent;
         saveButton.textContent = "Saved";
+
         setTimeout(() => {
             saveButton.textContent = original;
         }, 1200);
-    });
-
-    fitButton.addEventListener("click", () => {
-        stage.parentElement.scrollTo({
-            left: 0,
-            top: 0,
-            behavior: "smooth",
-        });
     });
 
     stage.addEventListener("pointerdown", event => {
@@ -1299,7 +1500,14 @@ function setupTableLayoutEditor() {
         }
     });
 
-    window.addEventListener("resize", drawPairings);
+    window.addEventListener("resize", () => {
+        updateZoomSurfaceSize();
+        drawPairings();
+    });
+
+    shell.style.height = `${editorHeight.value}px`;
+    shell.style.maxHeight = "none";
+    applyZoom(1, false);
     drawPairings();
 }
 

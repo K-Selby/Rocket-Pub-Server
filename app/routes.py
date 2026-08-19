@@ -1058,8 +1058,6 @@ def create_floor_object():
         "pillar",
         "tv",
         "fixed_table",
-        "pool_table",
-        "stairs",
         "label",
         "area",
     }
@@ -1111,20 +1109,6 @@ def create_floor_object():
             "shape": "rectangle",
             "label": "Non-bookable table",
             "z": 3,
-        },
-        "pool_table": {
-            "width": 190,
-            "height": 105,
-            "shape": "rectangle",
-            "label": "Pool table",
-            "z": 2,
-        },
-        "stairs": {
-            "width": 110,
-            "height": 80,
-            "shape": "rectangle",
-            "label": "Stairs",
-            "z": 1,
         },
         "label": {
             "width": 150,

@@ -1127,3 +1127,89 @@ textarea {
 .layout-table-selected {
     z-index: 20;
 }
+
+
+/* v5.1 layout usability overhaul */
+.zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#layout-zoom-label {
+    min-width: 52px;
+    text-align: center;
+    font-weight: 700;
+}
+
+.floor-size-controls {
+    display: flex;
+    align-items: end;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+    width: 100%;
+}
+
+.floor-size-controls label {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-size: 13px;
+}
+
+.floor-size-controls input[type="number"] {
+    width: 105px;
+}
+
+.floor-size-controls input[type="range"] {
+    width: 170px;
+}
+
+.floor-plan-shell {
+    position: relative;
+    height: 700px;
+    min-height: 450px;
+    max-height: none;
+    resize: vertical;
+    overflow: auto;
+}
+
+.floor-plan-zoom-surface {
+    position: relative;
+    flex: none;
+}
+
+.floor-plan-stage {
+    transform-origin: top left;
+    overflow: visible;
+}
+
+/* Walls need to be able to touch the exact floor-plan boundary. */
+.floor-object,
+.layout-table {
+    box-sizing: border-box;
+}
+
+/* Reduce the resize handle footprint so it does not fight with selection. */
+.resize-handle {
+    right: 1px;
+    bottom: 1px;
+    width: 12px;
+    height: 12px;
+    border-width: 1px;
+    z-index: 50;
+}
+
+/* A selected object gets a clean outline without changing its geometry. */
+.floor-object-selected,
+.layout-table-selected {
+    outline: 3px solid rgba(31, 111, 178, 0.5);
+    outline-offset: 2px;
+}
+
+/* Old unsupported editor tools are intentionally hidden if stale records exist. */
+.object-pool_table,
+.object-stairs {
+    opacity: 0.55;
+}

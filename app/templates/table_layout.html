@@ -13,11 +13,28 @@
     </div>
 
     <div class="heading-actions">
-        <button class="button secondary"
-                type="button"
-                id="layout-fit-view">
-            Fit layout
-        </button>
+        <div class="zoom-controls">
+            <button class="button secondary compact-button"
+                    type="button"
+                    id="layout-zoom-out">
+                −
+            </button>
+
+            <span id="layout-zoom-label">100%</span>
+
+            <button class="button secondary compact-button"
+                    type="button"
+                    id="layout-zoom-in">
+                +
+            </button>
+
+            <button class="button secondary"
+                    type="button"
+                    id="layout-fit-view">
+                Fit whole map
+            </button>
+        </div>
+
         <button class="button"
                 type="button"
                 id="layout-save">
@@ -48,18 +65,54 @@
         <button type="button" class="floor-tool-button" data-add-object="fixed_table">
             Non-bookable table
         </button>
-        <button type="button" class="floor-tool-button" data-add-object="pool_table">
-            Pool table
-        </button>
-        <button type="button" class="floor-tool-button" data-add-object="stairs">
-            Stairs
-        </button>
         <button type="button" class="floor-tool-button" data-add-object="area">
             Area block
         </button>
         <button type="button" class="floor-tool-button" data-add-object="label">
             Label
         </button>
+    </div>
+
+    <div class="floor-size-controls">
+        <strong>Map size</strong>
+
+        <label>
+            Width
+            <input type="number"
+                   id="floor-map-width"
+                   min="600"
+                   max="3000"
+                   step="50"
+                   value="{{ settings.canvas_width if settings else 1200 }}">
+        </label>
+
+        <label>
+            Height
+            <input type="number"
+                   id="floor-map-height"
+                   min="400"
+                   max="2200"
+                   step="50"
+                   value="{{ settings.canvas_height if settings else 760 }}">
+        </label>
+
+        <button class="button secondary compact-button"
+                type="button"
+                id="apply-map-size">
+            Resize map
+        </button>
+
+        <strong>Editor window</strong>
+
+        <label>
+            Height
+            <input type="range"
+                   id="editor-window-height"
+                   min="450"
+                   max="1000"
+                   step="25"
+                   value="700">
+        </label>
     </div>
 </div>
 
@@ -109,13 +162,14 @@
 </div>
 
 <div class="layout-workspace">
-    <section class="floor-plan-shell">
-        <div class="floor-plan-stage"
-             id="floor-plan-stage"
-             style="
-                width: {{ settings.canvas_width if settings else 1200 }}px;
-                height: {{ settings.canvas_height if settings else 760 }}px;
-             ">
+    <section class="floor-plan-shell" id="floor-plan-shell">
+        <div class="floor-plan-zoom-surface" id="floor-plan-zoom-surface">
+            <div class="floor-plan-stage"
+                 id="floor-plan-stage"
+                 style="
+                    width: {{ settings.canvas_width if settings else 1200 }}px;
+                    height: {{ settings.canvas_height if settings else 760 }}px;
+                 ">
 
             <div class="floor-plan-grid"></div>
 
@@ -200,6 +254,7 @@
                  width="100%"
                  height="100%"
                  aria-hidden="true"></svg>
+            </div>
         </div>
     </section>
 
@@ -356,10 +411,10 @@
 <div class="card">
     <h2>Floor-plan objects</h2>
     <p class="muted">
-        Walls, doors, the bar, pillars, TVs, fixed tables, the pool table,
-        stairs, area blocks and labels are purely visual. They are never offered
-        to a customer as a bookable table. Bookable tables are the numbered
-        table objects already stored in the Tables section.
+        Walls, doors/openings, the bar, pillars, TVs, fixed non-bookable
+        tables, area blocks and labels are purely visual. They are never offered
+        to a customer as a bookable table. The map itself can be resized, and
+        the editor can zoom out far enough to show the entire floor plan.
     </p>
 </div>
 
