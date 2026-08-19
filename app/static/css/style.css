@@ -2533,3 +2533,35 @@ main.container {
         border-radius: 12px;
     }
 }
+
+
+/* v5.8.2 header logo correction */
+.brand-logo-frame {
+    width: 70px;
+    height: 70px;
+    flex: 0 0 70px;
+    padding: 5px;
+    box-sizing: border-box;
+    overflow: hidden;
+    border-radius: 14px;
+    border: 1px solid rgba(205, 229, 190, 0.42);
+    background: #123e2f;
+}
+
+.brand-logo-frame img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: contain;
+    object-position: center;
+    border-radius: 9px;
+}
+
+@media (max-width: 520px) {
+    .brand-logo-frame {
+        width: 58px;
+        height: 58px;
+        flex-basis: 58px;
+        padding: 4px;
+    }
+}
