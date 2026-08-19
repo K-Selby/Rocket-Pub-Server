@@ -2132,7 +2132,32 @@ function setupReadOnlyTableMap() {
     fitMap();
 }
 
+
+function setupExclusiveNavMenus() {
+    const menus = Array.from(document.querySelectorAll("details.nav-menu"));
+
+    menus.forEach(menu => {
+        menu.addEventListener("toggle", () => {
+            if (!menu.open) return;
+
+            menus.forEach(other => {
+                if (other !== menu) {
+                    other.open = false;
+                }
+            });
+        });
+    });
+
+    document.addEventListener("click", event => {
+        if (event.target.closest("details.nav-menu")) return;
+        menus.forEach(menu => {
+            menu.open = false;
+        });
+    });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+    setupExclusiveNavMenus();
     setupCustomerLookup();
     setupBookingTimeValidation();
     setupKitchenWarning();

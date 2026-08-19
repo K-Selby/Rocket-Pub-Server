@@ -40,7 +40,7 @@
         <a class="{% if request.endpoint in ['main.allergen_menu', 'main.allergen_new', 'main.allergen_edit'] %}active{% endif %}"
            href="{{ url_for('main.allergen_menu') }}">Allergen Menu</a>
 
-        <details class="nav-menu">
+        <details class="nav-menu" data-exclusive-nav>
             <summary>More</summary>
             <div class="nav-menu-panel">
                 <a class="{% if request.endpoint == 'main.staff_diary' %}active{% endif %}"
@@ -54,11 +54,14 @@
 
                 <a class="{% if request.endpoint == 'main.archive' %}active{% endif %}"
                    href="{{ url_for('main.archive') }}">Archive</a>
+
+                <a class="{% if request.endpoint in ['main.email_setup', 'main.verify_email'] %}active{% endif %}"
+                   href="{{ url_for('main.email_setup') }}">My Email</a>
             </div>
         </details>
 
         {% if current_user.is_manager %}
-            <details class="nav-menu management-menu">
+            <details class="nav-menu management-menu" data-exclusive-nav>
                 <summary>Management</summary>
                 <div class="nav-menu-panel">
                     <a href="{{ url_for('main.tables') }}">Tables</a>
@@ -73,13 +76,7 @@
                 {{ current_user.username }}
                 <small>{{ current_user.role|title }}</small>
             </span>
-
-            <a class="topbar-account-link"
-               href="{{ url_for('main.email_setup') }}">
-                Email
-            </a>
-
-            <form method="post" action="{{ url_for('main.logout') }}">
+<form method="post" action="{{ url_for('main.logout') }}">
                 <button type="submit" class="topbar-logout">Log out</button>
             </form>
         </div>

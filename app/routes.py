@@ -2212,6 +2212,78 @@ def reset_user_password(user_id):
     return redirect(url_for("main.users"))
 
 
+@main.route("/users/<int:user_id>/delete", methods=["POST"])
+def delete_user(user_id):
+    if not current_user().is_manager:
+        flash("Manager access is required.", "error")
+        return redirect(url_for("main.dashboard"))
+
+    target = db.get_or_404(AppUser, user_id)
+
+    if target.id == current_user().id:
+        flash("You cannot delete your own account.", "error")
+        return redirect(url_for("main.users"))
+
+    if target.is_admin:
+        flash("Administrator accounts cannot be deleted.", "error")
+        return redirect(url_for("main.users"))
+
+    # Managers may delete staff users. Admin may delete staff or manager users.
+    if current_user().role == "manager" and target.role != "staff":
+        flash("Managers can only delete staff accounts.", "error")
+        return redirect(url_for("main.users"))
+
+    # Preserve the rota person and all rota/diary history; only the login goes.
+    profile = db.session.scalar(
+        db.select(StaffProfile).where(
+            StaffProfile.user_id == target.id
+        )
+    )
+
+    if profile:
+        profile.user_id = None
+
+    for week in db.session.scalars(
+        db.select(RotaWeek).where(
+            db.or_(
+                RotaWeek.created_by_user_id == target.id,
+                RotaWeek.published_by_user_id == target.id,
+            )
+        )
+    ).all():
+        if week.created_by_user_id == target.id:
+            week.created_by_user_id = None
+        if week.published_by_user_id == target.id:
+            week.published_by_user_id = None
+
+    for entry in db.session.scalars(
+        db.select(StaffDiaryEntry).where(
+            db.or_(
+                StaffDiaryEntry.created_by_user_id == target.id,
+                StaffDiaryEntry.reviewed_by_user_id == target.id,
+            )
+        )
+    ).all():
+        if entry.created_by_user_id == target.id:
+            entry.created_by_user_id = None
+        if entry.reviewed_by_user_id == target.id:
+            entry.reviewed_by_user_id = None
+
+    for swap in db.session.scalars(
+        db.select(ShiftSwapRequest).where(
+            ShiftSwapRequest.manager_user_id == target.id
+        )
+    ).all():
+        swap.manager_user_id = None
+
+    username = target.username
+    db.session.delete(target)
+    db.session.commit()
+
+    flash(f"{username}'s user account was deleted.", "success")
+    return redirect(url_for("main.users"))
+
+
 @main.route("/users/<int:user_id>/toggle", methods=["POST"])
 def toggle_user(user_id):
     if not current_user().is_manager:
@@ -3008,6 +3080,12 @@ def rota_add_shift(rota_id):
 
     profile = db.get_or_404(StaffProfile, staff_id)
 
+    # Being placed onto a rota means this person is active again and should
+    # remain on future drafts until explicitly archived.
+    if not profile.active:
+        profile.active = True
+        db.session.flush()
+
     available, earliest, latest, reason = availability_for(
         profile,
         shift_date,
@@ -3146,8 +3224,12 @@ def rota_image(rota_id):
     width = 2200
     row_h = 92
     header_h = 220
-    footer_h = 30
-    height = header_h + max(len(profiles), 1) * row_h + footer_h
+    bottom_padding = 40
+
+    # One row is used by the Sun-Sat column headings in addition to every
+    # staff row. Include it in the canvas height so nobody is clipped.
+    table_rows = max(len(profiles), 1) + 1
+    height = header_h + (table_rows * row_h) + bottom_padding
 
     image = Image.new("RGB", (width, height), "white")
     draw = ImageDraw.Draw(image)

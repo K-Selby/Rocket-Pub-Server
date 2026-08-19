@@ -4837,3 +4837,21 @@ main.container {
         overflow-y: auto;
     }
 }
+
+
+/* v9.3.9 nav dropdown cleanup */
+.nav-menu[open] {
+    z-index: 900;
+}
+
+.nav-menu-panel {
+    z-index: 950;
+}
+
+.account-menu {
+    gap: 10px;
+}
+
+.account-menu > span {
+    margin-right: 2px;
+}

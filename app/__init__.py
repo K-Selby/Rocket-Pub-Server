@@ -623,18 +623,13 @@ def seed_rota_shift_templates():
 
 def seed_initial_staff_profiles():
     """
-    Seed the active rota list in the same general order as the paper rotas.
+    Create the known rota people only if they do not already exist.
 
-    Active initial rota:
-      Gemma, Brooke, Niamh, Lois, Jenna, Maggie, Alara, Scott, Kieran
-
-    Archived initially:
-      Matt, Hannah, Charl, Leoni, Erin
-
-    Archived profiles stay in history but do not appear on future rota weeks
-    unless a manager restores them.
+    Existing profiles are NEVER forced active or archived here. Once a manager
+    adds/restores Hannah, Charl, Leoni, Erin, or anybody else, that choice
+    persists until a manager explicitly archives them again.
     """
-    from app.models import AppUser, StaffAvailabilityRule, StaffProfile
+    from app.models import AppUser, StaffProfile
 
     staff_rows = [
         ("Gemma", 10, True),
@@ -647,6 +642,7 @@ def seed_initial_staff_profiles():
         ("Scott", 80, True),
         ("Kieran", 90, True),
 
+        # These are archived only on the very first creation.
         ("Hannah", 200, False),
         ("Charl", 210, False),
         ("Leoni", 220, False),
@@ -654,18 +650,7 @@ def seed_initial_staff_profiles():
         ("Matt", 240, False),
     ]
 
-    common_shift_hints = {
-        "brooke": "12-3,12-8,12-5,6-F",
-        "niamh": "5-F,6-F",
-        "lois": "3-8,5-F",
-        "jenna": "12-5,12-6,12-7,5-F",
-        "maggie": "12-5,12-6,12-7,5-9",
-        "alara": "5-8,5-9,6-F",
-        "scott": "4-8,4-9,5-9,6-F",
-        "kieran": "3-8,4-8,4-9,5-F,6-F",
-    }
-
-    for name, order, is_active in staff_rows:
+    for name, order, initial_active in staff_rows:
         profile = db.session.scalar(
             db.select(StaffProfile).where(
                 db.func.lower(StaffProfile.display_name) == name.lower()
@@ -682,39 +667,17 @@ def seed_initial_staff_profiles():
             profile = StaffProfile(
                 display_name=name,
                 user_id=user.id if user else None,
+                sort_order=order,
+                active=initial_active,
             )
             db.session.add(profile)
             db.session.flush()
-
-        profile.sort_order = order
-        profile.active = is_active
-        profile.preferred_shifts = common_shift_hints.get(name.lower())
-
-        if name.lower() == "alara":
-            profile.rota_notes = "Normally Friday to Sunday."
-            profile.max_hours = 12
-        elif not is_active:
-            profile.rota_notes = "Archived from current rota."
         else:
-            profile.rota_notes = profile.rota_notes or None
+            # Sort order can be refreshed, but the active/archive state is
+            # manager-controlled and must never be overwritten here.
+            profile.sort_order = order
 
-        # Alara's recurring availability remains Friday-Sunday.
-        if name.lower() == "alara":
-            for weekday in range(7):
-                rule = db.session.scalar(
-                    db.select(StaffAvailabilityRule).where(
-                        StaffAvailabilityRule.staff_id == profile.id,
-                        StaffAvailabilityRule.weekday == weekday,
-                    )
-                )
-
-                if rule is None:
-                    rule = StaffAvailabilityRule(
-                        staff_id=profile.id,
-                        weekday=weekday,
-                    )
-                    db.session.add(rule)
-
-                rule.available = weekday in {4, 5, 6}
+            if profile.user_id is None and user is not None:
+                profile.user_id = user.id
 
     db.session.commit()

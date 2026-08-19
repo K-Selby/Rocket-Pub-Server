@@ -831,3 +831,43 @@ Manager rota tools are accessible from the Rota screen.
   control. Role and email remain Admin-only.
 - Removed the `F = Finish (actual finishing time varies)` footer from saved rota
   images.
+
+
+## v9.3.8 manager user deletion
+
+- Managers now get `Delete user` instead of Disable/Enable for staff accounts.
+- Managers can delete staff login accounts only; they cannot delete manager or
+  administrator accounts or their own account.
+- Deleting a login unlinks it from the rota profile first, so the person's rota
+  profile, shifts and Staff Diary history are retained.
+- Admin keeps the existing Disable/Enable control.
+
+
+## v9.3.8 user delete and rota image fix
+
+- Managers use `Delete user` for staff accounts instead of Disable.
+- Deleting a login does not delete that person's rota profile or historical
+  rota/diary records; it only removes the login link.
+- Fixed saved rota images being clipped at the bottom. The PNG canvas now
+  includes the column-heading row as well as every staff row.
+
+
+## v9.3.9 persistent restored staff and delete users
+
+- Fixed Hannah/Charl/Leoni/Erin being re-archived after being restored.
+- The initial seed now sets archived status only when a rota profile is first
+  created. After that, archive/restore is manager-controlled and persists
+  through page changes and server restarts.
+- Managers now use `Delete user` rather than Disable for staff accounts.
+- Admin can delete non-admin user accounts too.
+- Deleting a login preserves the rota profile, shifts, diary history and rota
+  history by clearing the login references before deleting the account.
+
+
+## v9.3.9 roster persistence and navigation cleanup
+
+- Restored staff remain active across navigation and server restarts until explicitly archived.
+- Managers use Delete user for staff; Admin can delete staff or manager accounts.
+- Removed the Email shortcut beside the logged-in username.
+- Removed email status from the main Users list; Admin email management remains inside Edit.
+- More and Management menus are mutually exclusive: opening one closes the other.
