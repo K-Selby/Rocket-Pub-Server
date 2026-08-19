@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Repeat Booking | Pub Booking System{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h1>Edit repeat booking</h1>
+        <p>{{ rule.customer.name }} — change the weekly rule used for future prompts.</p>
+    </div>
+</div>
+
+<form class="card form-grid" method="post">
+    <label>
+        Day
+        <select name="weekday" required>
+            {% for value, name in [(0,"Monday"),(1,"Tuesday"),(2,"Wednesday"),(3,"Thursday"),(4,"Friday"),(5,"Saturday"),(6,"Sunday")] %}
+                <option value="{{ value }}"
+                    {% if rule.weekday == value %}selected{% endif %}>
+                    {{ name }}
+                </option>
+            {% endfor %}
+        </select>
+    </label>
+
+    <label>
+        Time
+        <input type="time"
+               name="booking_time"
+               value="{{ rule.booking_time.strftime('%H:%M') }}"
+               required>
+    </label>
+
+    <label>
+        Party size
+        <input type="number"
+               name="party_size"
+               min="1"
+               value="{{ rule.party_size }}"
+               required>
+    </label>
+
+    <label>
+        Number of children
+        <input type="number"
+               name="number_of_children"
+               min="0"
+               value="{{ rule.number_of_children }}">
+        <span class="field-note">Under 13.</span>
+    </label>
+
+    <label>
+        Preferred area
+        <select name="preferred_area_id">
+            <option value="">No preference</option>
+            {% for area in areas %}
+                <option value="{{ area.id }}"
+                    {% if rule.preferred_area_id == area.id %}selected{% endif %}>
+                    {{ area.name }}
+                </option>
+            {% endfor %}
+        </select>
+    </label>
+
+    <label>
+        Preferred table
+        <select name="preferred_table_id">
+            <option value="">No preference</option>
+            {% for table in tables %}
+                <option value="{{ table.id }}"
+                    {% if rule.preferred_table_id == table.id %}selected{% endif %}>
+                    Table {{ table.number }}
+                </option>
+            {% endfor %}
+        </select>
+    </label>
+
+    <label class="checkbox-row">
+        <input type="checkbox"
+               name="is_eating_food"
+               {% if rule.is_eating_food %}checked{% endif %}>
+        Eating food
+    </label>
+
+    <label class="checkbox-row">
+        <input type="checkbox"
+               name="wants_near_tv"
+               {% if rule.wants_near_tv %}checked{% endif %}>
+        Near TV
+    </label>
+
+    <label class="checkbox-row">
+        <input type="checkbox"
+               name="avoids_bench"
+               {% if rule.avoids_bench %}checked{% endif %}>
+        Avoid bench seating
+    </label>
+
+    <label>
+        Occasion
+        <input name="occasion" value="{{ rule.occasion or '' }}">
+    </label>
+
+    <label class="checkbox-row">
+        <input type="checkbox"
+               name="active"
+               {% if rule.active %}checked{% endif %}>
+        Repeat booking active
+    </label>
+
+    <label class="full-width">
+        Notes
+        <textarea name="notes" rows="4">{{ rule.notes or '' }}</textarea>
+    </label>
+
+    <div class="full-width">
+        <button class="button" type="submit">Save repeat booking</button>
+    </div>
+</form>
+{% endblock %}

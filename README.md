@@ -1,40 +1,34 @@
-# Pub Booking System - v3
+# Pub Booking System - v4.1
 
-## New in this version
+## Added in v4
 
-### Normal bookings
-- Manual time entry instead of an interval dropdown
-- Earliest booking: 12:15pm
-- Latest Monday-Saturday: 7:30pm
-- Latest Sunday: 7:00pm
-- Invalid times are cleared immediately in the browser with a popup message
-- Server-side time validation remains in place too
-- Number of children field (under 13)
-- Automatic deposit calculation for parties over 10:
-  - £5 per head
-  - capped at £100
-- Customer-facing deposit callback warning shown before saving
-- Deposit paid can be tracked and edited
-- Existing bookings can now be edited
-- Existing table clash detection works correctly while editing
+- Real Rocket Pub buffet packages from the supplied menu:
+  - Option 1 — The Basics — £8.95/head
+  - Option 2 — The Classic — £9.95/head
+  - Option 3 — The Upgraded — £10.95/head
+  - Option 4 — The Full Works — £12.95/head
+- Package contents shown in the Large Party section
+- Standard extra hot dishes at £6.50/head, minimum 25 people
+- Multiple extra dishes per enquiry
+- Each extra dish can have its own headcount
+- Custom extra dishes with custom price/head and quantity
+- "Unsuitable for food" table characteristic
+- Normal bookings default to "Eating food"
+- Drinks-only bookings can untick Eating food
+- Automatic allocation heavily penalises food-unsuitable tables but keeps them
+  available as a last resort
+- Dashboard previous/next day navigation and date picker
+- New bookings cannot be in the past, including earlier on the current day
+- Customer edit and delete controls
+- Weekly repeat booking rules
+- Repeat bookings appear on the dashboard one week before the next occurrence
+- Confirm, Skip this time, and Edit repeat controls
+- Confirm creates the actual booking and runs normal automatic table allocation
 
-### Large party enquiries
-- Separate Large Party Enquiry workflow
-- Designed as an open/editable enquiry rather than a confirmed booking
-- Name + phone
-- Estimated party size
-- Number of children (under 13)
-- Optional date/time
-- Occasion
-- Status
-- Menu / Buffet selection
-- Options 1-4
-- Configurable price per head for each option
-- Number being catered for can be lower than total attendance
-- Automatic food estimate when a price has been configured
-- Deposit estimate/tracking
-- Notes / call history
-- Enquiries can be repeatedly edited as details are confirmed
+## Important delete behaviour
+
+Deleting a saved customer also deletes their linked normal booking history and
+repeat schedules. The UI displays a confirmation warning before doing this.
 
 ## Run
 
@@ -48,6 +42,9 @@ Open:
 
 http://127.0.0.1:8000
 
-The app keeps using the existing SQLite database in:
 
-instance/pub_booking.db
+## v4.1 hotfix
+
+Fixed an IntegrityError when enabling a weekly repeat booking from an existing
+booking. RepeatBooking rows now receive weekday, time, party size and all other
+required fields before SQLAlchemy first flushes them to SQLite.

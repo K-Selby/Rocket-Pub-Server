@@ -14,12 +14,7 @@ function normalisePhone(phone) {
 
 function calculateDeposit(partySize) {
     const size = Number(partySize || 0);
-
-    if (size <= 10) {
-        return 0;
-    }
-
-    return Math.min(size * 5, 100);
+    return size > 10 ? Math.min(size * 5, 100) : 0;
 }
 
 
@@ -37,25 +32,19 @@ function setupCustomerLookup() {
     const message = document.getElementById("returning-customer-message");
 
     function applyCustomer(customer) {
-        if (!customer) {
-            message.hidden = true;
-            return;
-        }
+        if (!customer) return;
 
         nameInput.value = customer.name;
         phoneInput.value = customer.phone;
-
         areaSelect.value = customer.preferred_area_id || "";
         tableSelect.value = customer.preferred_table_id || "";
         nearTv.checked = Boolean(customer.prefers_near_tv);
         avoidsBench.checked = Boolean(customer.avoids_bench);
-
         message.hidden = false;
     }
 
     phoneInput.addEventListener("input", () => {
         const phone = normalisePhone(phoneInput.value);
-
         const customer = customers.find(
             item => normalisePhone(item.phone) === phone && phone.length > 0
         );
@@ -69,64 +58,93 @@ function setupCustomerLookup() {
 
     nameInput.addEventListener("change", () => {
         const name = nameInput.value.trim().toLowerCase();
-
         const matches = customers.filter(
             item => item.name.trim().toLowerCase() === name
         );
 
-        if (matches.length === 1) {
-            applyCustomer(matches[0]);
-        }
+        if (matches.length === 1) applyCustomer(matches[0]);
     });
 }
 
 
 function setupBookingTimeValidation() {
+    const form = document.getElementById("booking-form");
     const dateInput = document.getElementById("booking-date");
     const timeInput = document.getElementById("booking-time");
 
-    if (!dateInput || !timeInput) return;
+    if (!form || !dateInput || !timeInput) return;
+
+    const today = form.dataset.today;
+    const nowTime = form.dataset.now;
+    const editing = form.dataset.editing === "1";
+    const originalDate = dateInput.value;
+    const originalTime = timeInput.value;
 
     function latestTime() {
-        if (!dateInput.value) {
-            return "19:30";
-        }
+        if (!dateInput.value) return "19:30";
 
-        const date = new Date(dateInput.value + "T12:00:00");
-        return date.getDay() === 0 ? "19:00" : "19:30";
+        const selected = new Date(dateInput.value + "T12:00:00");
+        return selected.getDay() === 0 ? "19:00" : "19:30";
     }
 
-    function validateTime(showPopup = true) {
-        if (!timeInput.value) return true;
-
+    function invalidMessage() {
         const latest = latestTime();
-        const tooEarly = timeInput.value < "12:15";
-        const tooLate = timeInput.value > latest;
+        const latestDisplay = latest === "19:00" ? "7:00pm" : "7:30pm";
 
-        if (tooEarly || tooLate) {
-            const latestDisplay = latest === "19:00" ? "7:00pm" : "7:30pm";
+        if (dateInput.value < today) {
+            return "Bookings cannot be created for a previous day.";
+        }
+
+        if (
+            dateInput.value === today &&
+            timeInput.value &&
+            timeInput.value <= nowTime
+        ) {
+            return "That time has already passed. Please choose a later time.";
+        }
+
+        return (
+            "The earliest available booking time is 12:15pm and " +
+            `the latest available time is ${latestDisplay}.`
+        );
+    }
+
+    function validate(showPopup = true) {
+        if (!timeInput.value || !dateInput.value) return true;
+
+        // Existing historical bookings can still be opened/edited without
+        // instantly blanking their original slot. Moving them to another past
+        // slot is still rejected by the server.
+        const unchangedHistoricalEdit = (
+            editing &&
+            dateInput.value === originalDate &&
+            timeInput.value === originalTime
+        );
+
+        if (unchangedHistoricalEdit) return true;
+
+        const invalidDate = dateInput.value < today;
+        const invalidHours = (
+            timeInput.value < "12:15" ||
+            timeInput.value > latestTime()
+        );
+        const pastToday = (
+            dateInput.value === today &&
+            timeInput.value <= nowTime
+        );
+
+        if (invalidDate || invalidHours || pastToday) {
             timeInput.value = "";
 
-            if (showPopup) {
-                alert(
-                    "The earliest available booking time is 12:15pm and " +
-                    `the latest available time is ${latestDisplay}.`
-                );
-            }
-
+            if (showPopup) alert(invalidMessage());
             return false;
         }
 
         return true;
     }
 
-    timeInput.addEventListener("change", () => validateTime(true));
-
-    dateInput.addEventListener("change", () => {
-        // If the date is changed to a Sunday, a previously valid 7:30pm time
-        // should immediately be rejected and cleared.
-        validateTime(true);
-    });
+    timeInput.addEventListener("change", () => validate(true));
+    dateInput.addEventListener("change", () => validate(true));
 }
 
 
@@ -134,22 +152,23 @@ function setupKitchenWarning() {
     const dateInput = document.getElementById("booking-date");
     const timeInput = document.getElementById("booking-time");
     const warning = document.getElementById("late-food-warning");
+    const eating = document.getElementById("is-eating-food");
 
     if (!dateInput || !timeInput || !warning) return;
 
-    function updateWarning() {
-        const dateValue = dateInput.value;
-        const timeValue = timeInput.value;
-
-        if (!dateValue || !timeValue || timeValue <= "18:45") {
+    function update() {
+        if (
+            !dateInput.value ||
+            !timeInput.value ||
+            timeInput.value <= "18:45" ||
+            (eating && !eating.checked)
+        ) {
             warning.hidden = true;
-            warning.textContent = "";
             return;
         }
 
-        const selectedDate = new Date(dateValue + "T12:00:00");
-        const isSunday = selectedDate.getDay() === 0;
-        const closeTime = isSunday ? "7:30pm" : "8:00pm";
+        const selectedDate = new Date(dateInput.value + "T12:00:00");
+        const closeTime = selectedDate.getDay() === 0 ? "7:30pm" : "8:00pm";
 
         warning.textContent =
             `Please let the customer know that the kitchen closes at ${closeTime}. ` +
@@ -159,9 +178,10 @@ function setupKitchenWarning() {
         warning.hidden = false;
     }
 
-    dateInput.addEventListener("change", updateWarning);
-    timeInput.addEventListener("change", updateWarning);
-    updateWarning();
+    dateInput.addEventListener("change", update);
+    timeInput.addEventListener("change", update);
+    if (eating) eating.addEventListener("change", update);
+    update();
 }
 
 
@@ -179,7 +199,6 @@ function setupDepositWarning() {
         if (due <= 0) {
             warning.hidden = true;
             paymentField.hidden = true;
-            paidInput.max = "";
             return;
         }
 
@@ -211,13 +230,11 @@ function setupLargePartyDepositWarning() {
         if (due <= 0) {
             warning.hidden = true;
             paymentField.hidden = true;
-            paidInput.max = "";
             return;
         }
 
         warning.textContent =
-            `If this enquiry proceeds, a deposit of £${due.toFixed(2)} may be required. ` +
-            "The customer can be called back once the details are confirmed.";
+            `If this enquiry proceeds, a deposit of £${due.toFixed(2)} may be required.`;
 
         warning.hidden = false;
         paymentField.hidden = false;
@@ -247,21 +264,105 @@ function setupLargePartyFoodQuote() {
         }
 
         const selected = optionSelect.options[optionSelect.selectedIndex];
-        const rawPrice = selected ? selected.dataset.price : "";
-        const price = rawPrice === "" ? null : Number(rawPrice);
+        const price = selected && selected.dataset.price
+            ? Number(selected.dataset.price)
+            : null;
 
-        if (!catered || price === null || Number.isNaN(price)) {
-            preview.textContent = "Not calculated";
-            return;
-        }
-
-        preview.textContent = `£${(price * catered).toFixed(2)}`;
+        preview.textContent = (
+            catered > 0 && price !== null
+                ? `£${(price * catered).toFixed(2)}`
+                : "Not calculated"
+        );
     }
 
     partyInput.addEventListener("input", update);
     cateredInput.addEventListener("input", update);
     optionSelect.addEventListener("change", update);
     update();
+}
+
+
+function setupExtraDishes() {
+    const container = document.getElementById("extra-dish-rows");
+    const addButton = document.getElementById("add-extra-dish");
+    const template = document.getElementById("extra-dish-template");
+    const totalPreview = document.getElementById("extras-total-preview");
+
+    if (!container || !addButton || !template || !totalPreview) return;
+
+    function updateTotal() {
+        let total = 0;
+
+        container.querySelectorAll(".extra-dish-row").forEach(row => {
+            const price = Number(
+                row.querySelector(".extra-dish-price").value || 0
+            );
+            const quantity = Number(
+                row.querySelector(".extra-dish-quantity").value || 0
+            );
+
+            total += price * quantity;
+        });
+
+        totalPreview.textContent = `£${total.toFixed(2)}`;
+    }
+
+    function configureRow(row) {
+        const select = row.querySelector(".extra-dish-select");
+        const customField = row.querySelector(".custom-dish-field");
+        const customName = row.querySelector(".custom-dish-name");
+        const hiddenName = row.querySelector(".extra-dish-name");
+        const hiddenCustom = row.querySelector(".extra-dish-custom");
+        const price = row.querySelector(".extra-dish-price");
+        const quantity = row.querySelector(".extra-dish-quantity");
+        const remove = row.querySelector(".remove-extra");
+
+        function syncDish() {
+            if (select.value === "__custom__") {
+                customField.hidden = false;
+                hiddenCustom.value = "1";
+                hiddenName.value = customName.value.trim();
+            } else {
+                customField.hidden = true;
+                hiddenCustom.value = "0";
+                hiddenName.value = select.value;
+
+                const option = select.options[select.selectedIndex];
+
+                if (option && option.dataset.price) {
+                    price.value = Number(option.dataset.price).toFixed(2);
+                }
+            }
+
+            updateTotal();
+        }
+
+        select.addEventListener("change", syncDish);
+
+        customName.addEventListener("input", () => {
+            hiddenName.value = customName.value.trim();
+        });
+
+        price.addEventListener("input", updateTotal);
+        quantity.addEventListener("input", updateTotal);
+
+        remove.addEventListener("click", () => {
+            row.remove();
+            updateTotal();
+        });
+
+        syncDish();
+    }
+
+    container.querySelectorAll(".extra-dish-row").forEach(configureRow);
+
+    addButton.addEventListener("click", () => {
+        const row = template.content.firstElementChild.cloneNode(true);
+        container.appendChild(row);
+        configureRow(row);
+    });
+
+    updateTotal();
 }
 
 
@@ -272,4 +373,5 @@ document.addEventListener("DOMContentLoaded", () => {
     setupDepositWarning();
     setupLargePartyDepositWarning();
     setupLargePartyFoodQuote();
+    setupExtraDishes();
 });

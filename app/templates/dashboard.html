@@ -6,21 +6,81 @@
 <div class="page-heading">
     <div>
         <h1>Dashboard</h1>
-        <p>Today's bookings — {{ today.strftime("%d %B %Y") }}</p>
+        <p>{{ selected_date.strftime("%A %d %B %Y") }}</p>
     </div>
 
     <a class="button" href="{{ url_for('main.new_booking') }}">New booking</a>
 </div>
 
-<div class="stats-grid">
-    <div class="stat-card">
-        <span class="stat-number">{{ bookings|length }}</span>
-        <span>Bookings today</span>
-    </div>
+<div class="date-nav">
+    <a class="button secondary"
+       href="{{ url_for('main.dashboard', date=previous_date.isoformat()) }}">
+        ← Previous day
+    </a>
+
+    <form method="get">
+        <input type="date"
+               name="date"
+               value="{{ selected_date.isoformat() }}"
+               onchange="this.form.submit()">
+    </form>
+
+    <a class="button secondary"
+       href="{{ url_for('main.dashboard', date=next_date.isoformat()) }}">
+        Next day →
+    </a>
 </div>
 
+{% if repeat_prompts %}
+<div class="card repeat-card">
+    <h2>Repeat bookings to confirm for {{ repeat_target_date.strftime("%A %d %B") }}</h2>
+    <p class="muted">
+        These repeat bookings are due next week. Confirm one to create the
+        booking and allocate a table, or skip just this occurrence.
+    </p>
+
+    {% for rule in repeat_prompts %}
+        <div class="repeat-row">
+            <div>
+                <strong>{{ rule.booking_time.strftime("%H:%M") }} — {{ rule.customer.name }}</strong>
+                <div class="muted">
+                    {{ rule.party_size }} people
+                    {% if rule.number_of_children %}
+                        · {{ rule.number_of_children }} under 13
+                    {% endif %}
+                    · {% if rule.is_eating_food %}Eating{% else %}Drinks only{% endif %}
+                </div>
+            </div>
+
+            <div class="row-actions">
+                <form method="post"
+                      action="{{ url_for('main.confirm_repeat_booking', repeat_id=rule.id) }}">
+                    <input type="hidden"
+                           name="occurrence_date"
+                           value="{{ repeat_target_date.isoformat() }}">
+                    <button class="button" type="submit">Confirm</button>
+                </form>
+
+                <form method="post"
+                      action="{{ url_for('main.skip_repeat_booking', repeat_id=rule.id) }}">
+                    <input type="hidden"
+                           name="occurrence_date"
+                           value="{{ repeat_target_date.isoformat() }}">
+                    <button class="button secondary" type="submit">Skip this time</button>
+                </form>
+
+                <a class="small-link"
+                   href="{{ url_for('main.edit_repeat_booking', repeat_id=rule.id) }}">
+                    Edit repeat
+                </a>
+            </div>
+        </div>
+    {% endfor %}
+</div>
+{% endif %}
+
 <div class="card">
-    <h2>Today's bookings</h2>
+    <h2>Bookings</h2>
 
     {% if bookings %}
         <div class="booking-list">
@@ -32,24 +92,28 @@
                         <strong>{{ booking.customer.name }}</strong>
                         <div class="muted">
                             {{ booking.party_size }} people
-                            {% if booking.occasion %} · {{ booking.occasion }}{% endif %}
+                            {% if booking.number_of_children %}
+                                · {{ booking.number_of_children }} under 13
+                            {% endif %}
+                            · {% if booking.is_eating_food %}Eating{% else %}Drinks only{% endif %}
                         </div>
                     </div>
 
                     <div>
-                        {% if booking.tables %}
-                            {% for table in booking.tables %}
-                                <span class="badge">T{{ table.number }}</span>
-                            {% endfor %}
-                        {% else %}
-                            <span class="muted">No table</span>
-                        {% endif %}
+                        {% for table in booking.tables %}
+                            <span class="badge">T{{ table.number }}</span>
+                        {% endfor %}
                     </div>
+
+                    <a class="small-link"
+                       href="{{ url_for('main.edit_booking', booking_id=booking.id) }}">
+                        Edit
+                    </a>
                 </div>
             {% endfor %}
         </div>
     {% else %}
-        <p class="muted">No bookings for today yet.</p>
+        <p class="muted">No bookings for this day.</p>
     {% endif %}
 </div>
 {% endblock %}

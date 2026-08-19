@@ -26,95 +26,205 @@ def create_app():
         db.create_all()
         ensure_starter_schema_updates()
         seed_default_areas()
-        seed_large_party_menu_options()
+        seed_buffet_options()
+        seed_extra_dishes()
 
     return app
 
 
+def add_column_if_missing(inspector, table_name, column_name, sql_type):
+    """Small development-only compatibility helper for the existing SQLite DB."""
+    if table_name not in inspector.get_table_names():
+        return
+
+    columns = {c["name"] for c in inspector.get_columns(table_name)}
+
+    if column_name not in columns:
+        db.session.execute(
+            text(
+                f"ALTER TABLE {table_name} "
+                f"ADD COLUMN {column_name} {sql_type}"
+            )
+        )
+
+
 def ensure_starter_schema_updates():
     """
-    Keep the early development database compatible with newer starter versions.
+    Keep early test databases compatible while the schema is still changing.
 
-    Proper Flask-Migrate migrations can replace this helper once the schema
-    settles down. For now it lets you keep existing test data between versions.
+    Once the design settles we will replace this with normal Flask-Migrate
+    migration files.
     """
     inspector = inspect(db.engine)
-    table_names = inspector.get_table_names()
 
-    if "pub_table" in table_names:
-        columns = {c["name"] for c in inspector.get_columns("pub_table")}
-        if "has_bench" not in columns:
-            db.session.execute(
-                text("ALTER TABLE pub_table ADD COLUMN has_bench BOOLEAN DEFAULT 0")
-            )
+    add_column_if_missing(
+        inspector, "pub_table", "has_bench", "BOOLEAN DEFAULT 0"
+    )
+    add_column_if_missing(
+        inspector, "pub_table", "unsuitable_for_food", "BOOLEAN DEFAULT 0"
+    )
 
-    if "customer" in table_names:
-        columns = {c["name"] for c in inspector.get_columns("customer")}
-        if "avoids_bench" not in columns:
-            db.session.execute(
-                text("ALTER TABLE customer ADD COLUMN avoids_bench BOOLEAN DEFAULT 0")
-            )
+    add_column_if_missing(
+        inspector, "customer", "avoids_bench", "BOOLEAN DEFAULT 0"
+    )
 
-    if "booking" in table_names:
-        columns = {c["name"] for c in inspector.get_columns("booking")}
+    booking_additions = {
+        "avoids_bench": "BOOLEAN DEFAULT 0",
+        "preferred_table_id": "INTEGER",
+        "number_of_children": "INTEGER DEFAULT 0",
+        "deposit_required_amount": "FLOAT DEFAULT 0",
+        "deposit_paid_amount": "FLOAT DEFAULT 0",
+        "is_eating_food": "BOOLEAN DEFAULT 1",
+        "repeat_booking_id": "INTEGER",
+    }
 
-        additions = {
-            "avoids_bench": "BOOLEAN DEFAULT 0",
-            "preferred_table_id": "INTEGER",
-            "number_of_children": "INTEGER DEFAULT 0",
-            "deposit_required_amount": "FLOAT DEFAULT 0",
-            "deposit_paid_amount": "FLOAT DEFAULT 0",
-        }
+    for name, sql_type in booking_additions.items():
+        add_column_if_missing(inspector, "booking", name, sql_type)
 
-        for name, sql_type in additions.items():
-            if name not in columns:
-                db.session.execute(
-                    text(f"ALTER TABLE booking ADD COLUMN {name} {sql_type}")
-                )
+    menu_additions = {
+        "option_number": "INTEGER",
+        "items_text": "TEXT",
+    }
+
+    for name, sql_type in menu_additions.items():
+        add_column_if_missing(
+            inspector, "large_party_menu_option", name, sql_type
+        )
 
     db.session.commit()
 
 
 def seed_default_areas():
-    """Add the pub's initial named areas on first launch."""
     from app.models import Area
 
-    default_areas = ["Restaurant", "Bar", "Snug / Cubby", "Pool Room"]
-
-    for area_name in default_areas:
+    for area_name in ["Restaurant", "Bar", "Snug / Cubby", "Pool Room"]:
         exists = db.session.scalar(
             db.select(Area).where(Area.name == area_name)
         )
+
         if not exists:
             db.session.add(Area(name=area_name))
 
     db.session.commit()
 
 
-def seed_large_party_menu_options():
-    """
-    Create four configurable menu/buffet options.
-
-    Prices are deliberately left blank because no actual pub prices have been
-    supplied yet. They can be edited from the Large Party area.
-    """
+def seed_buffet_options():
+    """Load the four packages from the supplied Rocket Pub buffet sheet."""
     from app.models import LargePartyMenuOption
 
-    for option_number in range(1, 5):
-        name = f"Option {option_number}"
-        exists = db.session.scalar(
+    packages = [
+        {
+            "number": 1,
+            "name": "The Basics",
+            "price": 8.95,
+            "items": [
+                "Assorted Sandwiches & Wraps",
+                "Pork Pies",
+                "Sausage Rolls",
+                "Tuna Pasta",
+                "Coleslaw",
+                "Salad Bowl",
+                "Chips",
+            ],
+        },
+        {
+            "number": 2,
+            "name": "The Classic",
+            "price": 9.95,
+            "items": [
+                "Assorted Sandwiches & Wraps",
+                "Chicken Wings",
+                "Pork Pies",
+                "Sausage Rolls",
+                "Coleslaw",
+                "Salad Bowl",
+                "Chips",
+                "Tuna Pasta",
+            ],
+        },
+        {
+            "number": 3,
+            "name": "The Upgraded",
+            "price": 10.95,
+            "items": [
+                "Assorted Sandwiches & Wraps",
+                "Southern Fried Chicken Strips",
+                "Fish Goujons",
+                "Chicken & Bacon BBQ Parcels",
+                "Coleslaw",
+                "Salad Bowl",
+                "Chips",
+            ],
+        },
+        {
+            "number": 4,
+            "name": "The Full Works",
+            "price": 12.95,
+            "items": [
+                "Chinese Chicken Curry",
+                "Rice & Chips",
+                "Duck Spring Rolls",
+                "Salt & Pepper Chicken Wings",
+                "Sui Mais",
+                "Sweet & Sour Chicken",
+                "Prawn Crackers",
+                "Sauces and Dips",
+            ],
+        },
+    ]
+
+    for package in packages:
+        option = db.session.scalar(
             db.select(LargePartyMenuOption).where(
-                LargePartyMenuOption.name == name
+                LargePartyMenuOption.option_number == package["number"]
             )
         )
 
-        if not exists:
-            db.session.add(
-                LargePartyMenuOption(
-                    name=name,
-                    price_per_head=None,
-                    active=True,
+        if option is None:
+            # Upgrade an old "Option N" starter row if one exists.
+            option = db.session.scalar(
+                db.select(LargePartyMenuOption).where(
+                    LargePartyMenuOption.name == f"Option {package['number']}"
                 )
             )
+
+        if option is None:
+            option = LargePartyMenuOption()
+            db.session.add(option)
+
+        option.option_number = package["number"]
+        option.name = package["name"]
+        option.price_per_head = package["price"]
+        option.items_text = "\n".join(package["items"])
+        option.active = True
+
+    db.session.commit()
+
+
+def seed_extra_dishes():
+    """Load the standard £6.50/head hot-dish list from the supplied sheet."""
+    from app.models import ExtraDishOption
+
+    names = [
+        "Sweet & Sour Chicken",
+        "Chicken Tikka Masala",
+        "Lasagne",
+        "Spaghetti Bolognese",
+        "Chilli con Carne",
+        "Chinese Chicken Curry",
+    ]
+
+    for name in names:
+        option = db.session.scalar(
+            db.select(ExtraDishOption).where(ExtraDishOption.name == name)
+        )
+
+        if option is None:
+            option = ExtraDishOption(name=name)
+            db.session.add(option)
+
+        option.default_price_per_head = 6.50
+        option.minimum_people = 25
+        option.active = True
 
     db.session.commit()

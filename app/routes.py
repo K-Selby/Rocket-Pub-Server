@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import re
 
 from flask import (
@@ -17,9 +17,13 @@ from app.models import (
     Booking,
     BookingTable,
     Customer,
+    ExtraDishOption,
+    InquiryExtraDish,
     LargePartyInquiry,
     LargePartyMenuOption,
     PubTable,
+    RepeatBooking,
+    RepeatBookingOccurrence,
     TablePairing,
 )
 
@@ -32,7 +36,6 @@ SUNDAY_LATEST_BOOKING = "19:00"
 
 
 def normalise_phone(phone):
-    """Normalise common UK phone formats for matching recurring customers."""
     cleaned = re.sub(r"\D", "", phone or "")
 
     if cleaned.startswith("44") and len(cleaned) >= 12:
@@ -42,12 +45,10 @@ def normalise_phone(phone):
 
 
 def table_order_clause():
-    """Sort table text like 1, 2, 3, 10 instead of 1, 10, 2, 3."""
     return (cast(PubTable.number, Integer), PubTable.number)
 
 
 def calculate_deposit(party_size):
-    """£5/head above 10 people, capped at £100."""
     if not party_size or party_size <= 10:
         return 0.0
 
@@ -55,7 +56,6 @@ def calculate_deposit(party_size):
 
 
 def latest_booking_time_for_date(date_value):
-    """Sunday closes bookings earlier than the rest of the week."""
     if date_value.weekday() == 6:
         return datetime.strptime(SUNDAY_LATEST_BOOKING, "%H:%M").time()
 
@@ -65,11 +65,32 @@ def latest_booking_time_for_date(date_value):
 def validate_booking_time(date_value, booking_time):
     earliest = datetime.strptime(EARLIEST_BOOKING, "%H:%M").time()
     latest = latest_booking_time_for_date(date_value)
-    return earliest <= booking_time <= latest
+
+    if not (earliest <= booking_time <= latest):
+        return False
+
+    # A normal booking must also be in the future.
+    requested = datetime.combine(date_value, booking_time)
+
+    if requested <= datetime.now():
+        return False
+
+    return True
 
 
-def booking_time_error_message(date_value):
+def booking_time_error_message(date_value, booking_time=None):
     latest_text = "7:00pm" if date_value.weekday() == 6 else "7:30pm"
+
+    if date_value < date.today():
+        return "Bookings cannot be created for a previous day."
+
+    if (
+        date_value == date.today()
+        and booking_time
+        and datetime.combine(date_value, booking_time) <= datetime.now()
+    ):
+        return "That time has already passed. Please choose a later time."
+
     return (
         "The earliest available booking time is 12:15pm and the latest "
         f"available time is {latest_text}."
@@ -89,7 +110,6 @@ def table_is_available(
     duration_minutes,
     exclude_booking_id=None,
 ):
-    """Check availability, optionally ignoring the booking currently being edited."""
     requested_start = datetime.combine(date_value, time_value)
     requested_end = requested_start + timedelta(minutes=duration_minutes)
 
@@ -124,6 +144,7 @@ def score_candidate(
     preferred_table_id,
     wants_near_tv,
     avoids_bench,
+    is_eating_food,
 ):
     capacity = sum(table.capacity for table in tables)
 
@@ -151,6 +172,10 @@ def score_candidate(
     if wants_near_tv and any(table.near_tv for table in tables):
         score += 15
 
+    # Food-unsuitable tables remain possible, but only as a last resort.
+    if is_eating_food:
+        score -= sum(60 for table in tables if table.unsuitable_for_food)
+
     return score
 
 
@@ -163,9 +188,9 @@ def suggest_tables(
     preferred_table_id=None,
     wants_near_tv=False,
     avoids_bench=False,
+    is_eating_food=True,
     exclude_booking_id=None,
 ):
-    """Return the highest-scoring available table or configured table pair."""
     tables = db.session.scalars(
         db.select(PubTable)
         .where(PubTable.active.is_(True))
@@ -191,14 +216,13 @@ def suggest_tables(
             preferred_table_id,
             wants_near_tv,
             avoids_bench,
+            is_eating_food,
         )
 
         if score is not None:
             candidates.append((score, [table]))
 
-    pairings = db.session.scalars(db.select(TablePairing)).all()
-
-    for pairing in pairings:
+    for pairing in db.session.scalars(db.select(TablePairing)).all():
         pair = [pairing.table_a, pairing.table_b]
 
         if not all(table.active for table in pair):
@@ -223,6 +247,7 @@ def suggest_tables(
             preferred_table_id,
             wants_near_tv,
             avoids_bench,
+            is_eating_food,
         )
 
         if score is not None:
@@ -250,7 +275,7 @@ def validate_selected_tables(
     exclude_booking_id=None,
 ):
     if not selected_tables:
-        return "No table was selected or available."
+        return "No suitable table is currently available."
 
     for table in selected_tables:
         if not table_is_available(
@@ -300,19 +325,6 @@ def get_or_create_customer(name, phone):
     return customer
 
 
-def save_customer_preferences(
-    customer,
-    preferred_area_id,
-    preferred_table_id,
-    wants_near_tv,
-    avoids_bench,
-):
-    customer.preferred_area_id = preferred_area_id
-    customer.preferred_table_id = preferred_table_id
-    customer.prefers_near_tv = wants_near_tv
-    customer.avoids_bench = avoids_bench
-
-
 def customer_lookup_payload():
     customers = db.session.scalars(
         db.select(Customer).order_by(Customer.name)
@@ -331,23 +343,74 @@ def customer_lookup_payload():
     ]
 
 
+def repeat_prompts_for_dashboard(selected_date):
+    """
+    Show repeat occurrences exactly one week before they are due.
+
+    Example: viewing Sunday shows recurring Sunday bookings for the following
+    Sunday with Confirm / Skip / Edit controls.
+    """
+    target_date = selected_date + timedelta(days=7)
+
+    rules = db.session.scalars(
+        db.select(RepeatBooking)
+        .where(
+            RepeatBooking.active.is_(True),
+            RepeatBooking.weekday == target_date.weekday(),
+        )
+        .order_by(RepeatBooking.booking_time)
+    ).all()
+
+    prompts = []
+
+    for rule in rules:
+        occurrence = db.session.scalar(
+            db.select(RepeatBookingOccurrence).where(
+                RepeatBookingOccurrence.repeat_booking_id == rule.id,
+                RepeatBookingOccurrence.occurrence_date == target_date,
+            )
+        )
+
+        if occurrence is None:
+            prompts.append(rule)
+
+    return target_date, prompts
+
+
 @main.route("/")
 def dashboard():
-    today = datetime.now().date()
+    selected_text = request.args.get("date")
 
-    todays_bookings = db.session.scalars(
+    try:
+        selected_date = (
+            datetime.strptime(selected_text, "%Y-%m-%d").date()
+            if selected_text
+            else date.today()
+        )
+    except ValueError:
+        selected_date = date.today()
+
+    bookings = db.session.scalars(
         db.select(Booking)
         .where(
-            Booking.booking_date == today,
+            Booking.booking_date == selected_date,
             Booking.status != "Cancelled",
         )
         .order_by(Booking.booking_time)
     ).all()
 
+    repeat_target_date, repeat_prompts = repeat_prompts_for_dashboard(
+        selected_date
+    )
+
     return render_template(
         "dashboard.html",
-        bookings=todays_bookings,
-        today=today,
+        bookings=bookings,
+        selected_date=selected_date,
+        previous_date=selected_date - timedelta(days=1),
+        next_date=selected_date + timedelta(days=1),
+        repeat_target_date=repeat_target_date,
+        repeat_prompts=repeat_prompts,
     )
 
 
@@ -376,6 +439,72 @@ def customers():
     )
 
 
+@main.route("/customers/<int:customer_id>/edit", methods=["GET", "POST"])
+def edit_customer(customer_id):
+    customer = db.get_or_404(Customer, customer_id)
+    areas = db.session.scalars(db.select(Area).order_by(Area.name)).all()
+    tables = db.session.scalars(
+        db.select(PubTable).order_by(*table_order_clause())
+    ).all()
+
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        phone = normalise_phone(request.form.get("phone", ""))
+
+        if not name or not phone:
+            flash("Name and phone number are required.", "error")
+            return redirect(request.url)
+
+        duplicate = db.session.scalar(
+            db.select(Customer).where(
+                Customer.phone == phone,
+                Customer.id != customer.id,
+            )
+        )
+
+        if duplicate:
+            flash("Another customer already uses that phone number.", "error")
+            return redirect(request.url)
+
+        customer.name = name
+        customer.phone = phone
+        customer.preferred_area_id = request.form.get(
+            "preferred_area_id", type=int
+        )
+        customer.preferred_table_id = request.form.get(
+            "preferred_table_id", type=int
+        )
+        customer.prefers_near_tv = request.form.get(
+            "prefers_near_tv"
+        ) == "on"
+        customer.avoids_bench = request.form.get("avoids_bench") == "on"
+        customer.notes = request.form.get("notes", "").strip() or None
+
+        db.session.commit()
+        flash("Customer updated.", "success")
+        return redirect(url_for("main.customers"))
+
+    return render_template(
+        "customer_edit.html",
+        customer=customer,
+        areas=areas,
+        tables=tables,
+    )
+
+
+@main.route("/customers/<int:customer_id>/delete", methods=["POST"])
+def delete_customer(customer_id):
+    customer = db.get_or_404(Customer, customer_id)
+
+    # Because normal bookings belong to a customer, a true delete also removes
+    # their normal booking history and repeat schedules.
+    db.session.delete(customer)
+    db.session.commit()
+
+    flash("Customer and their linked booking history were deleted.", "success")
+    return redirect(url_for("main.customers"))
+
+
 # -------------------------
 # Tables
 # -------------------------
@@ -402,13 +531,13 @@ def new_table():
 
         if not number or not capacity or not area_id:
             flash("Table number, capacity and area are required.", "error")
-            return redirect(url_for("main.new_table"))
+            return redirect(request.url)
 
         if db.session.scalar(
             db.select(PubTable).where(PubTable.number == number)
         ):
             flash("That table number already exists.", "error")
-            return redirect(url_for("main.new_table"))
+            return redirect(request.url)
 
         db.session.add(
             PubTable(
@@ -418,6 +547,9 @@ def new_table():
                 near_tv=request.form.get("near_tv") == "on",
                 has_bench=request.form.get("has_bench") == "on",
                 accessible=request.form.get("accessible") == "on",
+                unsuitable_for_food=(
+                    request.form.get("unsuitable_for_food") == "on"
+                ),
             )
         )
         db.session.commit()
@@ -440,7 +572,7 @@ def edit_table(table_id):
 
         if not number or not capacity or not area_id:
             flash("Table number, capacity and area are required.", "error")
-            return redirect(url_for("main.edit_table", table_id=table.id))
+            return redirect(request.url)
 
         duplicate = db.session.scalar(
             db.select(PubTable).where(
@@ -451,7 +583,7 @@ def edit_table(table_id):
 
         if duplicate:
             flash("Another table already uses that number.", "error")
-            return redirect(url_for("main.edit_table", table_id=table.id))
+            return redirect(request.url)
 
         table.number = number
         table.capacity = capacity
@@ -459,10 +591,12 @@ def edit_table(table_id):
         table.near_tv = request.form.get("near_tv") == "on"
         table.has_bench = request.form.get("has_bench") == "on"
         table.accessible = request.form.get("accessible") == "on"
+        table.unsuitable_for_food = (
+            request.form.get("unsuitable_for_food") == "on"
+        )
         table.active = request.form.get("active") == "on"
 
         db.session.commit()
-
         flash(f"Table {table.number} updated.", "success")
         return redirect(url_for("main.tables"))
 
@@ -508,10 +642,10 @@ def bookings():
         selected_date = (
             datetime.strptime(selected_date_text, "%Y-%m-%d").date()
             if selected_date_text
-            else datetime.now().date()
+            else date.today()
         )
     except ValueError:
-        selected_date = datetime.now().date()
+        selected_date = date.today()
 
     booking_list = db.session.scalars(
         db.select(Booking)
@@ -576,29 +710,45 @@ def booking_form_handler(booking=None):
             flash("Please enter a valid booking date and time.", "error")
             return redirect(request.url)
 
-        if not validate_booking_time(booking_date, booking_time):
-            flash(booking_time_error_message(booking_date), "error")
+        if booking is None and not validate_booking_time(
+            booking_date, booking_time
+        ):
+            flash(
+                booking_time_error_message(booking_date, booking_time),
+                "error",
+            )
             return redirect(request.url)
+
+        # Existing bookings may be edited after their date/time has passed,
+        # but changing them onto a new past slot is not allowed.
+        if booking is not None:
+            changed_slot = (
+                booking.booking_date != booking_date
+                or booking.booking_time != booking_time
+            )
+
+            if changed_slot and not validate_booking_time(
+                booking_date, booking_time
+            ):
+                flash(
+                    booking_time_error_message(booking_date, booking_time),
+                    "error",
+                )
+                return redirect(request.url)
 
         preferred_area_id = request.form.get("preferred_area_id", type=int)
         preferred_table_id = request.form.get("preferred_table_id", type=int)
         wants_near_tv = request.form.get("wants_near_tv") == "on"
         avoids_bench = request.form.get("avoids_bench") == "on"
+        is_eating_food = request.form.get("is_eating_food") == "on"
 
         selected_table_ids = request.form.getlist("table_ids", type=int)
 
-        current_customer = get_or_create_customer(
-            customer_name,
-            customer_phone,
-        )
-
-        save_customer_preferences(
-            current_customer,
-            preferred_area_id,
-            preferred_table_id,
-            wants_near_tv,
-            avoids_bench,
-        )
+        customer = get_or_create_customer(customer_name, customer_phone)
+        customer.preferred_area_id = preferred_area_id
+        customer.preferred_table_id = preferred_table_id
+        customer.prefers_near_tv = wants_near_tv
+        customer.avoids_bench = avoids_bench
 
         exclude_id = booking.id if booking else None
 
@@ -612,6 +762,7 @@ def booking_form_handler(booking=None):
                 preferred_table_id,
                 wants_near_tv,
                 avoids_bench,
+                is_eating_food,
                 exclude_booking_id=exclude_id,
             )
             selected_table_ids = [table.id for table in suggested]
@@ -639,10 +790,10 @@ def booking_form_handler(booking=None):
         deposit_paid = max(0.0, min(deposit_paid, deposit_due))
 
         if booking is None:
-            booking = Booking(customer_id=current_customer.id)
+            booking = Booking(customer_id=customer.id)
             db.session.add(booking)
         else:
-            booking.customer_id = current_customer.id
+            booking.customer_id = customer.id
             BookingTable.query.filter_by(booking_id=booking.id).delete()
 
         booking.booking_date = booking_date
@@ -650,6 +801,7 @@ def booking_form_handler(booking=None):
         booking.duration_minutes = STANDARD_BOOKING_DURATION
         booking.party_size = party_size
         booking.number_of_children = number_of_children
+        booking.is_eating_food = is_eating_food
         booking.occasion = request.form.get("occasion", "").strip() or None
         booking.preferred_area_id = preferred_area_id
         booking.preferred_table_id = preferred_table_id
@@ -666,6 +818,55 @@ def booking_form_handler(booking=None):
                 BookingTable(booking_id=booking.id, table_id=table.id)
             )
 
+        repeat_weekly = request.form.get("repeat_weekly") == "on"
+
+        if repeat_weekly:
+            repeat_rule = booking.repeat_booking
+
+            if repeat_rule is None:
+                # All NOT NULL fields must be populated BEFORE the first flush.
+                # The previous version created an empty RepeatBooking and then
+                # flushed it to obtain an ID, which caused SQLite to reject the
+                # row because weekday/time/party_size were still NULL.
+                repeat_rule = RepeatBooking(
+                    customer_id=customer.id,
+                    weekday=booking_date.weekday(),
+                    booking_time=booking_time,
+                    party_size=party_size,
+                    number_of_children=number_of_children,
+                    is_eating_food=is_eating_food,
+                    preferred_area_id=preferred_area_id,
+                    preferred_table_id=preferred_table_id,
+                    wants_near_tv=wants_near_tv,
+                    avoids_bench=avoids_bench,
+                    occasion=booking.occasion,
+                    notes=booking.notes,
+                    active=True,
+                )
+                db.session.add(repeat_rule)
+
+                # Flush is now safe because every required field has a value.
+                db.session.flush()
+                booking.repeat_booking_id = repeat_rule.id
+            else:
+                # Existing repeat rules can simply be updated in place.
+                repeat_rule.customer_id = customer.id
+                repeat_rule.weekday = booking_date.weekday()
+                repeat_rule.booking_time = booking_time
+                repeat_rule.party_size = party_size
+                repeat_rule.number_of_children = number_of_children
+                repeat_rule.is_eating_food = is_eating_food
+                repeat_rule.preferred_area_id = preferred_area_id
+                repeat_rule.preferred_table_id = preferred_table_id
+                repeat_rule.wants_near_tv = wants_near_tv
+                repeat_rule.avoids_bench = avoids_bench
+                repeat_rule.occasion = booking.occasion
+                repeat_rule.notes = booking.notes
+                repeat_rule.active = True
+
+        elif booking.repeat_booking:
+            booking.repeat_booking.active = False
+
         db.session.commit()
 
         flash(
@@ -681,7 +882,8 @@ def booking_form_handler(booking=None):
         areas=areas,
         tables=tables,
         customer_lookup=customer_lookup_payload(),
-        today=datetime.now().date(),
+        today=date.today(),
+        now_time=datetime.now().strftime("%H:%M"),
         booking=booking,
         selected_table_ids=(
             [table.id for table in booking.tables] if booking else []
@@ -702,6 +904,207 @@ def cancel_booking(booking_id):
 
 
 # -------------------------
+# Repeat booking prompts
+# -------------------------
+
+@main.route("/repeat-bookings/<int:repeat_id>/confirm", methods=["POST"])
+def confirm_repeat_booking(repeat_id):
+    rule = db.get_or_404(RepeatBooking, repeat_id)
+    occurrence_date = datetime.strptime(
+        request.form["occurrence_date"], "%Y-%m-%d"
+    ).date()
+
+    existing_occurrence = db.session.scalar(
+        db.select(RepeatBookingOccurrence).where(
+            RepeatBookingOccurrence.repeat_booking_id == rule.id,
+            RepeatBookingOccurrence.occurrence_date == occurrence_date,
+        )
+    )
+
+    if existing_occurrence:
+        flash("That repeat occurrence has already been handled.", "error")
+        return redirect(url_for("main.dashboard"))
+
+    if not validate_booking_time(occurrence_date, rule.booking_time):
+        flash("That repeat occurrence is no longer a valid future slot.", "error")
+        return redirect(url_for("main.dashboard"))
+
+    tables = suggest_tables(
+        rule.party_size,
+        occurrence_date,
+        rule.booking_time,
+        STANDARD_BOOKING_DURATION,
+        rule.preferred_area_id,
+        rule.preferred_table_id,
+        rule.wants_near_tv,
+        rule.avoids_bench,
+        rule.is_eating_food,
+    )
+
+    if not tables:
+        flash(
+            "No suitable table is available for that repeat booking. "
+            "Edit the repeat booking or create it manually.",
+            "error",
+        )
+        return redirect(
+            url_for(
+                "main.dashboard",
+                date=(occurrence_date - timedelta(days=7)).isoformat(),
+            )
+        )
+
+    booking = Booking(
+        customer_id=rule.customer_id,
+        repeat_booking_id=rule.id,
+        booking_date=occurrence_date,
+        booking_time=rule.booking_time,
+        duration_minutes=STANDARD_BOOKING_DURATION,
+        party_size=rule.party_size,
+        number_of_children=rule.number_of_children,
+        is_eating_food=rule.is_eating_food,
+        occasion=rule.occasion,
+        preferred_area_id=rule.preferred_area_id,
+        preferred_table_id=rule.preferred_table_id,
+        wants_near_tv=rule.wants_near_tv,
+        avoids_bench=rule.avoids_bench,
+        deposit_required_amount=calculate_deposit(rule.party_size),
+        notes=rule.notes,
+    )
+
+    db.session.add(booking)
+    db.session.flush()
+
+    for table in tables:
+        db.session.add(
+            BookingTable(booking_id=booking.id, table_id=table.id)
+        )
+
+    db.session.add(
+        RepeatBookingOccurrence(
+            repeat_booking_id=rule.id,
+            occurrence_date=occurrence_date,
+            status="Confirmed",
+            booking_id=booking.id,
+        )
+    )
+
+    db.session.commit()
+    flash("Repeat booking confirmed for next week.", "success")
+
+    return redirect(
+        url_for(
+            "main.dashboard",
+            date=(occurrence_date - timedelta(days=7)).isoformat(),
+        )
+    )
+
+
+@main.route("/repeat-bookings/<int:repeat_id>/skip", methods=["POST"])
+def skip_repeat_booking(repeat_id):
+    rule = db.get_or_404(RepeatBooking, repeat_id)
+    occurrence_date = datetime.strptime(
+        request.form["occurrence_date"], "%Y-%m-%d"
+    ).date()
+
+    existing = db.session.scalar(
+        db.select(RepeatBookingOccurrence).where(
+            RepeatBookingOccurrence.repeat_booking_id == rule.id,
+            RepeatBookingOccurrence.occurrence_date == occurrence_date,
+        )
+    )
+
+    if not existing:
+        db.session.add(
+            RepeatBookingOccurrence(
+                repeat_booking_id=rule.id,
+                occurrence_date=occurrence_date,
+                status="Skipped",
+            )
+        )
+        db.session.commit()
+
+    flash("This week's repeat booking was skipped.", "success")
+
+    return redirect(
+        url_for(
+            "main.dashboard",
+            date=(occurrence_date - timedelta(days=7)).isoformat(),
+        )
+    )
+
+
+@main.route("/repeat-bookings/<int:repeat_id>/edit", methods=["GET", "POST"])
+def edit_repeat_booking(repeat_id):
+    rule = db.get_or_404(RepeatBooking, repeat_id)
+    areas = db.session.scalars(db.select(Area).order_by(Area.name)).all()
+    tables = db.session.scalars(
+        db.select(PubTable)
+        .where(PubTable.active.is_(True))
+        .order_by(*table_order_clause())
+    ).all()
+
+    if request.method == "POST":
+        weekday = request.form.get("weekday", type=int)
+        party_size = request.form.get("party_size", type=int)
+        children = request.form.get("number_of_children", type=int) or 0
+
+        try:
+            booking_time = datetime.strptime(
+                request.form["booking_time"], "%H:%M"
+            ).time()
+        except (ValueError, KeyError):
+            flash("Enter a valid repeat booking time.", "error")
+            return redirect(request.url)
+
+        if weekday is None or not party_size:
+            flash("Day, time and party size are required.", "error")
+            return redirect(request.url)
+
+        earliest = datetime.strptime(EARLIEST_BOOKING, "%H:%M").time()
+        latest = (
+            datetime.strptime(SUNDAY_LATEST_BOOKING, "%H:%M").time()
+            if weekday == 6
+            else datetime.strptime(LATEST_BOOKING, "%H:%M").time()
+        )
+
+        if not earliest <= booking_time <= latest:
+            flash(
+                "Repeat booking time is outside the allowed booking window.",
+                "error",
+            )
+            return redirect(request.url)
+
+        if children < 0 or children > party_size:
+            flash("Children cannot exceed total party size.", "error")
+            return redirect(request.url)
+
+        rule.weekday = weekday
+        rule.booking_time = booking_time
+        rule.party_size = party_size
+        rule.number_of_children = children
+        rule.is_eating_food = request.form.get("is_eating_food") == "on"
+        rule.preferred_area_id = request.form.get("preferred_area_id", type=int)
+        rule.preferred_table_id = request.form.get("preferred_table_id", type=int)
+        rule.wants_near_tv = request.form.get("wants_near_tv") == "on"
+        rule.avoids_bench = request.form.get("avoids_bench") == "on"
+        rule.occasion = request.form.get("occasion", "").strip() or None
+        rule.notes = request.form.get("notes", "").strip() or None
+        rule.active = request.form.get("active") == "on"
+
+        db.session.commit()
+        flash("Repeat booking rule updated.", "success")
+        return redirect(url_for("main.dashboard"))
+
+    return render_template(
+        "repeat_booking_form.html",
+        rule=rule,
+        areas=areas,
+        tables=tables,
+    )
+
+
+# -------------------------
 # Large-party enquiries
 # -------------------------
 
@@ -718,7 +1121,7 @@ def large_parties():
 
     options = db.session.scalars(
         db.select(LargePartyMenuOption)
-        .order_by(LargePartyMenuOption.id)
+        .order_by(LargePartyMenuOption.option_number)
     ).all()
 
     return render_template(
@@ -743,14 +1146,20 @@ def large_party_form_handler(inquiry=None):
     options = db.session.scalars(
         db.select(LargePartyMenuOption)
         .where(LargePartyMenuOption.active.is_(True))
-        .order_by(LargePartyMenuOption.id)
+        .order_by(LargePartyMenuOption.option_number)
+    ).all()
+
+    extra_options = db.session.scalars(
+        db.select(ExtraDishOption)
+        .where(ExtraDishOption.active.is_(True))
+        .order_by(ExtraDishOption.name)
     ).all()
 
     if request.method == "POST":
         customer_name = request.form.get("customer_name", "").strip()
         customer_phone = normalise_phone(request.form.get("customer_phone", ""))
         party_size = request.form.get("party_size", type=int)
-        number_of_children = request.form.get("number_of_children", type=int) or 0
+        children = request.form.get("number_of_children", type=int) or 0
 
         if not customer_name or not customer_phone or not party_size:
             flash(
@@ -759,9 +1168,9 @@ def large_party_form_handler(inquiry=None):
             )
             return redirect(request.url)
 
-        if number_of_children < 0 or number_of_children > party_size:
+        if children < 0 or children > party_size:
             flash(
-                "Number of children cannot be greater than the total party size.",
+                "Number of children cannot exceed the total party size.",
                 "error",
             )
             return redirect(request.url)
@@ -772,8 +1181,7 @@ def large_party_form_handler(inquiry=None):
         if request.form.get("event_date"):
             try:
                 event_date = datetime.strptime(
-                    request.form["event_date"],
-                    "%Y-%m-%d",
+                    request.form["event_date"], "%Y-%m-%d"
                 ).date()
             except ValueError:
                 flash("Please enter a valid event date.", "error")
@@ -782,8 +1190,7 @@ def large_party_form_handler(inquiry=None):
         if request.form.get("event_time"):
             try:
                 event_time = datetime.strptime(
-                    request.form["event_time"],
-                    "%H:%M",
+                    request.form["event_time"], "%H:%M"
                 ).time()
             except ValueError:
                 flash("Please enter a valid event time.", "error")
@@ -793,13 +1200,14 @@ def large_party_form_handler(inquiry=None):
         menu_option_id = request.form.get("menu_option_id", type=int)
         catered_people = request.form.get("catered_people", type=int)
 
-        if catered_people is not None:
-            if catered_people < 0 or catered_people > party_size:
-                flash(
-                    "People being catered for cannot exceed the total party size.",
-                    "error",
-                )
-                return redirect(request.url)
+        if catered_people is not None and (
+            catered_people < 0 or catered_people > party_size
+        ):
+            flash(
+                "People being catered for cannot exceed total attendance.",
+                "error",
+            )
+            return redirect(request.url)
 
         selected_option = (
             db.session.get(LargePartyMenuOption, menu_option_id)
@@ -807,7 +1215,6 @@ def large_party_form_handler(inquiry=None):
             else None
         )
 
-        # Save the current option price into the enquiry as a quote snapshot.
         price_per_head = (
             selected_option.price_per_head
             if selected_option and selected_option.price_per_head is not None
@@ -833,7 +1240,7 @@ def large_party_form_handler(inquiry=None):
         inquiry.event_date = event_date
         inquiry.event_time = event_time
         inquiry.party_size = party_size
-        inquiry.number_of_children = number_of_children
+        inquiry.number_of_children = children
         inquiry.food_type = food_type
         inquiry.menu_option_id = menu_option_id
         inquiry.catered_people = catered_people
@@ -844,6 +1251,54 @@ def large_party_form_handler(inquiry=None):
         inquiry.occasion = request.form.get("occasion", "").strip() or None
         inquiry.notes = request.form.get("notes", "").strip() or None
         inquiry.status = request.form.get("status", "Enquiry").strip() or "Enquiry"
+
+        db.session.flush()
+
+        # Rebuild the extra-dish rows from the editable form.
+        InquiryExtraDish.query.filter_by(inquiry_id=inquiry.id).delete()
+
+        names = request.form.getlist("extra_dish_name")
+        prices = request.form.getlist("extra_dish_price")
+        quantities = request.form.getlist("extra_dish_quantity")
+        custom_flags = request.form.getlist("extra_dish_custom")
+
+        for index, raw_name in enumerate(names):
+            dish_name = raw_name.strip()
+
+            if not dish_name:
+                continue
+
+            try:
+                price = float(prices[index])
+                quantity = int(quantities[index])
+            except (ValueError, IndexError):
+                flash(
+                    "Every extra dish needs a valid price and quantity.",
+                    "error",
+                )
+                db.session.rollback()
+                return redirect(request.url)
+
+            if price < 0 or quantity <= 0:
+                flash(
+                    "Extra dish price must be non-negative and quantity above zero.",
+                    "error",
+                )
+                db.session.rollback()
+                return redirect(request.url)
+
+            db.session.add(
+                InquiryExtraDish(
+                    inquiry_id=inquiry.id,
+                    dish_name=dish_name,
+                    price_per_head=round(price, 2),
+                    quantity_people=quantity,
+                    is_custom=(
+                        index < len(custom_flags)
+                        and custom_flags[index] == "1"
+                    ),
+                )
+            )
 
         db.session.commit()
 
@@ -859,28 +1314,6 @@ def large_party_form_handler(inquiry=None):
         "large_party_form.html",
         inquiry=inquiry,
         options=options,
-        today=datetime.now().date(),
+        extra_options=extra_options,
+        today=date.today(),
     )
-
-
-@main.route("/large-party-options/<int:option_id>/price", methods=["POST"])
-def update_large_party_option_price(option_id):
-    option = db.get_or_404(LargePartyMenuOption, option_id)
-
-    raw_price = request.form.get("price_per_head", "").strip()
-
-    if raw_price == "":
-        option.price_per_head = None
-    else:
-        try:
-            price = float(raw_price)
-            if price < 0:
-                raise ValueError
-            option.price_per_head = round(price, 2)
-        except ValueError:
-            flash("Enter a valid non-negative price.", "error")
-            return redirect(url_for("main.large_parties"))
-
-    db.session.commit()
-    flash(f"{option.name} price updated.", "success")
-    return redirect(url_for("main.large_parties"))

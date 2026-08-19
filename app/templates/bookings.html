@@ -45,9 +45,9 @@
                             {% if booking.number_of_children %}
                                 · {{ booking.number_of_children }} under 13
                             {% endif %}
-                            · 3 hours
-                            {% if booking.occasion %}
-                                · {{ booking.occasion }}
+                            · {% if booking.is_eating_food %}Eating{% else %}Drinks only{% endif %}
+                            {% if booking.repeat_booking and booking.repeat_booking.active %}
+                                · Weekly repeat
                             {% endif %}
                         </div>
 

@@ -9,10 +9,7 @@
 <div class="page-heading">
     <div>
         <h1>{% if booking %}Edit booking{% else %}New booking{% endif %}</h1>
-        <p>
-            New customers are saved automatically and returning customers are
-            recognised by phone number.
-        </p>
+        <p>New customers are saved automatically from this form.</p>
     </div>
 
     {% if not booking %}
@@ -23,25 +20,23 @@
     {% endif %}
 </div>
 
-{% if not tables %}
-<div class="flash error">
-    You need to configure at least one table first.
-    <a href="{{ url_for('main.new_table') }}">Add table</a>
-</div>
-{% endif %}
+<form class="card form-grid"
+      method="post"
+      id="booking-form"
+      data-today="{{ today.isoformat() }}"
+      data-now="{{ now_time }}"
+      data-editing="{{ '1' if booking else '0' }}">
 
-<form class="card form-grid" method="post" id="booking-form">
     <section class="form-section full-width">
         <h2>Customer</h2>
-
         <div class="nested-grid">
             <label>
                 Name *
                 <input name="customer_name"
                        id="customer-name"
                        list="customer-names"
-                       autocomplete="off"
                        value="{{ booking.customer.name if booking else '' }}"
+                       autocomplete="off"
                        required>
                 <datalist id="customer-names">
                     {% for customer in customer_lookup %}
@@ -55,7 +50,6 @@
                 <input name="customer_phone"
                        id="customer-phone"
                        inputmode="tel"
-                       autocomplete="tel"
                        value="{{ booking.customer.phone if booking else '' }}"
                        required>
             </label>
@@ -72,12 +66,13 @@
         <h2>Booking</h2>
 
         <div class="nested-grid">
-            <label class="date-field">
+            <label>
                 Date *
                 <input class="booking-date-input"
                        id="booking-date"
                        type="date"
                        name="booking_date"
+                       min="{{ today.isoformat() }}"
                        value="{% if booking %}{{ booking.booking_date.isoformat() }}{% else %}{{ today.isoformat() }}{% endif %}"
                        required>
             </label>
@@ -92,7 +87,7 @@
                        value="{% if booking %}{{ booking.booking_time.strftime('%H:%M') }}{% endif %}"
                        required>
                 <span class="field-note">
-                    Earliest 12:15pm · latest 7:30pm, or 7:00pm on Sundays.
+                    12:15pm–7:30pm, or 12:15pm–7:00pm on Sundays.
                 </span>
             </label>
 
@@ -102,7 +97,6 @@
                        name="party_size"
                        id="party-size"
                        min="1"
-                       max="50"
                        value="{{ booking.party_size if booking else '' }}"
                        required>
             </label>
@@ -112,9 +106,8 @@
                 <input type="number"
                        name="number_of_children"
                        min="0"
-                       id="number-of-children"
                        value="{{ booking.number_of_children if booking else 0 }}">
-                <span class="field-note">Children are counted as under 13 years old.</span>
+                <span class="field-note">Children are under 13 years old.</span>
             </label>
 
             <label>
@@ -123,18 +116,22 @@
                        value="{{ booking.occasion if booking and booking.occasion else '' }}"
                        placeholder="Birthday, anniversary...">
             </label>
+
+            <label class="checkbox-row prominent-checkbox">
+                <input type="checkbox"
+                       name="is_eating_food"
+                       id="is-eating-food"
+                       {% if not booking or booking.is_eating_food %}checked{% endif %}>
+                Eating food
+                <span class="field-note">
+                    Untick for drinks-only visits. Food bookings avoid unsuitable
+                    tables unless they are the last suitable option.
+                </span>
+            </label>
         </div>
 
-        <div class="info-strip">
-            Standard table time: <strong>3 hours</strong>
-        </div>
-
-        <div id="deposit-warning"
-             class="deposit-warning"
-             data-existing-paid="{{ booking.deposit_paid_amount if booking else 0 }}"
-             hidden>
-        </div>
-
+        <div class="info-strip">Standard table time: <strong>3 hours</strong></div>
+        <div id="deposit-warning" class="deposit-warning" hidden></div>
         <div id="deposit-payment-field"
              class="deposit-payment-field"
              {% if not booking or booking.party_size <= 10 %}hidden{% endif %}>
@@ -147,11 +144,7 @@
                        step="0.01"
                        value="{{ '%.2f'|format(booking.deposit_paid_amount or 0) if booking else '0.00' }}">
             </label>
-            <span class="field-note">
-                This can be updated later when the customer pays.
-            </span>
         </div>
-
         <div id="late-food-warning" class="late-food-warning" hidden></div>
     </section>
 
@@ -206,8 +199,7 @@
     <fieldset class="full-width">
         <legend>Manual table selection</legend>
         <p class="muted">
-            Leave all unticked and the system will automatically choose the
-            best available table or valid table pair.
+            Leave all unticked for automatic allocation.
         </p>
 
         <div class="table-checkbox-grid">
@@ -217,18 +209,32 @@
                            name="table_ids"
                            value="{{ table.id }}"
                            {% if table.id in selected_table_ids %}checked{% endif %}>
-
                     <strong>T{{ table.number }}</strong>
-
                     <span>
                         {{ table.capacity }} seats · {{ table.area.name }}
                         {% if table.near_tv %} · TV{% endif %}
                         {% if table.has_bench %} · Bench{% endif %}
+                        {% if table.unsuitable_for_food %} · Food last resort{% endif %}
                     </span>
                 </label>
             {% endfor %}
         </div>
     </fieldset>
+
+    <section class="form-section full-width">
+        <h2>Repeat booking</h2>
+        <label class="checkbox-row prominent-checkbox">
+            <input type="checkbox"
+                   name="repeat_weekly"
+                   {% if booking and booking.repeat_booking and booking.repeat_booking.active %}checked{% endif %}>
+            Repeat this booking every week
+        </label>
+        <p class="field-note">
+            The system will not automatically book the table. One week before
+            each occurrence, the dashboard will show Confirm, Skip this time,
+            and Edit options.
+        </p>
+    </section>
 
     <label class="full-width">
         Booking notes
@@ -238,8 +244,7 @@
 
     <div class="full-width">
         <button class="button"
-                type="submit"
-                {% if not tables %}disabled{% endif %}>
+                type="submit">
             {% if booking %}Save booking changes{% else %}Create booking{% endif %}
         </button>
     </div>

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Customer | Pub Booking System{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h1>Edit customer</h1>
+        <p>Update saved details and default preferences.</p>
+    </div>
+</div>
+
+<form class="card form-grid" method="post">
+    <label>
+        Name *
+        <input name="name" value="{{ customer.name }}" required>
+    </label>
+
+    <label>
+        Phone number *
+        <input name="phone" value="{{ customer.phone }}" required>
+    </label>
+
+    <label>
+        Preferred area
+        <select name="preferred_area_id">
+            <option value="">No preference</option>
+            {% for area in areas %}
+                <option value="{{ area.id }}"
+                    {% if customer.preferred_area_id == area.id %}selected{% endif %}>
+                    {{ area.name }}
+                </option>
+            {% endfor %}
+        </select>
+    </label>
+
+    <label>
+        Preferred table
+        <select name="preferred_table_id">
+            <option value="">No preference</option>
+            {% for table in tables %}
+                <option value="{{ table.id }}"
+                    {% if customer.preferred_table_id == table.id %}selected{% endif %}>
+                    Table {{ table.number }}
+                </option>
+            {% endfor %}
+        </select>
+    </label>
+
+    <label class="checkbox-row">
+        <input type="checkbox"
+               name="prefers_near_tv"
+               {% if customer.prefers_near_tv %}checked{% endif %}>
+        Prefers near a TV
+    </label>
+
+    <label class="checkbox-row">
+        <input type="checkbox"
+               name="avoids_bench"
+               {% if customer.avoids_bench %}checked{% endif %}>
+        Avoids bench seating
+    </label>
+
+    <label class="full-width">
+        Notes
+        <textarea name="notes" rows="5">{{ customer.notes or '' }}</textarea>
+    </label>
+
+    <div class="full-width">
+        <button class="button" type="submit">Save customer</button>
+    </div>
+</form>
+{% endblock %}

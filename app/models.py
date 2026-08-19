@@ -26,6 +26,12 @@ class Customer(db.Model):
         cascade="all, delete-orphan"
     )
 
+    repeat_bookings = db.relationship(
+        "RepeatBooking",
+        back_populates="customer",
+        cascade="all, delete-orphan"
+    )
+
 
 class Area(db.Model):
     """Named sections of the pub."""
@@ -47,8 +53,13 @@ class PubTable(db.Model):
     near_tv = db.Column(db.Boolean, default=False)
     has_bench = db.Column(db.Boolean, default=False)
     accessible = db.Column(db.Boolean, default=False)
+
+    # This table can still be used for food, but should be a last-resort choice.
+    unsuitable_for_food = db.Column(db.Boolean, default=False)
+
     active = db.Column(db.Boolean, default=True)
 
+    # Reserved for the future drag-and-drop floor plan.
     x_position = db.Column(db.Float, default=0)
     y_position = db.Column(db.Float, default=0)
 
@@ -76,11 +87,77 @@ class TablePairing(db.Model):
     )
 
 
+class RepeatBooking(db.Model):
+    """
+    Weekly repeat-booking rule.
+
+    It does not automatically create reservations. A prompt appears one week
+    before the next occurrence so staff can Confirm, Skip, or edit the rule.
+    """
+
+    id = db.Column(db.Integer, primary_key=True)
+    customer_id = db.Column(db.Integer, db.ForeignKey("customer.id"), nullable=False)
+
+    weekday = db.Column(db.Integer, nullable=False)  # Monday=0 ... Sunday=6
+    booking_time = db.Column(db.Time, nullable=False)
+
+    party_size = db.Column(db.Integer, nullable=False)
+    number_of_children = db.Column(db.Integer, nullable=False, default=0)
+    is_eating_food = db.Column(db.Boolean, nullable=False, default=True)
+
+    preferred_area_id = db.Column(db.Integer, db.ForeignKey("area.id"))
+    preferred_table_id = db.Column(db.Integer, db.ForeignKey("pub_table.id"))
+    wants_near_tv = db.Column(db.Boolean, default=False)
+    avoids_bench = db.Column(db.Boolean, default=False)
+
+    occasion = db.Column(db.String(120))
+    notes = db.Column(db.Text)
+    active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    customer = db.relationship("Customer", back_populates="repeat_bookings")
+    preferred_area = db.relationship("Area")
+    preferred_table = db.relationship("PubTable", foreign_keys=[preferred_table_id])
+
+    occurrences = db.relationship(
+        "RepeatBookingOccurrence",
+        back_populates="repeat_booking",
+        cascade="all, delete-orphan"
+    )
+
+
+class RepeatBookingOccurrence(db.Model):
+    """Records whether a specific repeat occurrence was confirmed or skipped."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    repeat_booking_id = db.Column(
+        db.Integer,
+        db.ForeignKey("repeat_booking.id"),
+        nullable=False
+    )
+    occurrence_date = db.Column(db.Date, nullable=False)
+    status = db.Column(db.String(20), nullable=False)  # Confirmed / Skipped
+    booking_id = db.Column(db.Integer, db.ForeignKey("booking.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    repeat_booking = db.relationship("RepeatBooking", back_populates="occurrences")
+    booking = db.relationship("Booking", foreign_keys=[booking_id])
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "repeat_booking_id",
+            "occurrence_date",
+            name="uq_repeat_occurrence"
+        ),
+    )
+
+
 class Booking(db.Model):
     """A normal table booking. Standard table time is three hours."""
 
     id = db.Column(db.Integer, primary_key=True)
     customer_id = db.Column(db.Integer, db.ForeignKey("customer.id"), nullable=False)
+    repeat_booking_id = db.Column(db.Integer, db.ForeignKey("repeat_booking.id"))
 
     booking_date = db.Column(db.Date, nullable=False, index=True)
     booking_time = db.Column(db.Time, nullable=False)
@@ -88,6 +165,7 @@ class Booking(db.Model):
 
     party_size = db.Column(db.Integer, nullable=False)
     number_of_children = db.Column(db.Integer, nullable=False, default=0)
+    is_eating_food = db.Column(db.Boolean, nullable=False, default=True)
     occasion = db.Column(db.String(120))
 
     preferred_area_id = db.Column(db.Integer, db.ForeignKey("area.id"))
@@ -95,7 +173,6 @@ class Booking(db.Model):
     wants_near_tv = db.Column(db.Boolean, default=False)
     avoids_bench = db.Column(db.Boolean, default=False)
 
-    # For parties above 10 people the system calculates £5/head capped at £100.
     deposit_required_amount = db.Column(db.Float, nullable=False, default=0)
     deposit_paid_amount = db.Column(db.Float, nullable=False, default=0)
 
@@ -106,6 +183,7 @@ class Booking(db.Model):
     customer = db.relationship("Customer", back_populates="bookings")
     preferred_area = db.relationship("Area")
     preferred_table = db.relationship("PubTable", foreign_keys=[preferred_table_id])
+    repeat_booking = db.relationship("RepeatBooking", foreign_keys=[repeat_booking_id])
 
     table_links = db.relationship(
         "BookingTable",
@@ -142,21 +220,28 @@ class BookingTable(db.Model):
 
 
 class LargePartyMenuOption(db.Model):
-    """Configurable food/buffet option used for large-party enquiries."""
+    """One of the pub's four buffet packages."""
 
     id = db.Column(db.Integer, primary_key=True)
+    option_number = db.Column(db.Integer, unique=True)
     name = db.Column(db.String(80), nullable=False, unique=True)
     price_per_head = db.Column(db.Float)
+    items_text = db.Column(db.Text)
+    active = db.Column(db.Boolean, nullable=False, default=True)
+
+
+class ExtraDishOption(db.Model):
+    """Standard additional hot dish available for buffet enquiries."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False, unique=True)
+    default_price_per_head = db.Column(db.Float, nullable=False, default=6.50)
+    minimum_people = db.Column(db.Integer, nullable=False, default=25)
     active = db.Column(db.Boolean, nullable=False, default=True)
 
 
 class LargePartyInquiry(db.Model):
-    """
-    A flexible enquiry rather than a confirmed table booking.
-
-    Most details can be filled in later because callers may initially only ask
-    about availability and then call back with food/final-number information.
-    """
+    """Open/editable large-party enquiry rather than an automatic reservation."""
 
     id = db.Column(db.Integer, primary_key=True)
 
@@ -169,15 +254,11 @@ class LargePartyInquiry(db.Model):
     party_size = db.Column(db.Integer, nullable=False)
     number_of_children = db.Column(db.Integer, nullable=False, default=0)
 
-    # "Menu", "Buffet", or blank/undecided.
-    food_type = db.Column(db.String(30))
-
+    food_type = db.Column(db.String(30))  # Menu / Buffet / blank
     menu_option_id = db.Column(
         db.Integer,
         db.ForeignKey("large_party_menu_option.id")
     )
-
-    # Food can be ordered for fewer people than the total party size.
     catered_people = db.Column(db.Integer)
 
     quoted_price_per_head = db.Column(db.Float)
@@ -198,6 +279,11 @@ class LargePartyInquiry(db.Model):
     )
 
     menu_option = db.relationship("LargePartyMenuOption")
+    extra_dishes = db.relationship(
+        "InquiryExtraDish",
+        back_populates="inquiry",
+        cascade="all, delete-orphan"
+    )
 
     @property
     def deposit_balance(self):
@@ -205,4 +291,38 @@ class LargePartyInquiry(db.Model):
             float(self.deposit_required_amount or 0)
             - float(self.deposit_paid_amount or 0),
             0,
+        )
+
+    @property
+    def extras_total(self):
+        return sum(float(item.total_price or 0) for item in self.extra_dishes)
+
+
+class InquiryExtraDish(db.Model):
+    """
+    Extra hot dish attached to a large-party enquiry.
+
+    The name/price/quantity are snapshots so staff can use a standard listed
+    dish or enter a custom dish with a custom price and headcount.
+    """
+
+    id = db.Column(db.Integer, primary_key=True)
+    inquiry_id = db.Column(
+        db.Integer,
+        db.ForeignKey("large_party_inquiry.id"),
+        nullable=False
+    )
+
+    dish_name = db.Column(db.String(150), nullable=False)
+    price_per_head = db.Column(db.Float, nullable=False)
+    quantity_people = db.Column(db.Integer, nullable=False)
+    is_custom = db.Column(db.Boolean, nullable=False, default=False)
+
+    inquiry = db.relationship("LargePartyInquiry", back_populates="extra_dishes")
+
+    @property
+    def total_price(self):
+        return round(
+            float(self.price_per_head or 0) * int(self.quantity_people or 0),
+            2,
         )

@@ -6,9 +6,7 @@
 <div class="page-heading">
     <div>
         <h1>Large party enquiries</h1>
-        <p>
-            Keep an enquiry open while details are confirmed over several calls.
-        </p>
+        <p>Open enquiries can be changed as details are confirmed over time.</p>
     </div>
 
     <a class="button"
@@ -18,7 +16,7 @@
 </div>
 
 <div class="card">
-    <h2>Open enquiries</h2>
+    <h2>Enquiries</h2>
 
     {% if inquiries %}
         <div class="inquiry-list">
@@ -36,27 +34,21 @@
                             {% else %}
                                 · Date not confirmed
                             {% endif %}
-                            {% if inquiry.event_time %}
-                                · {{ inquiry.event_time.strftime("%H:%M") }}
-                            {% endif %}
                         </div>
                     </div>
 
                     <div>
                         <span class="badge">{{ inquiry.status }}</span>
-                        {% if inquiry.food_type %}
-                            <span class="badge">{{ inquiry.food_type }}</span>
-                        {% endif %}
-                        {% if inquiry.menu_option %}
-                            <span class="badge">{{ inquiry.menu_option.name }}</span>
-                        {% endif %}
+                        {% if inquiry.food_type %}<span class="badge">{{ inquiry.food_type }}</span>{% endif %}
+                        {% if inquiry.menu_option %}<span class="badge">{{ inquiry.menu_option.name }}</span>{% endif %}
                     </div>
 
                     <div>
-                        {% if inquiry.deposit_required_amount %}
-                            Deposit:
-                            £{{ "%.2f"|format(inquiry.deposit_paid_amount or 0) }}
-                            / £{{ "%.2f"|format(inquiry.deposit_required_amount) }}
+                        {% if inquiry.quoted_food_total is not none %}
+                            Buffet £{{ "%.2f"|format(inquiry.quoted_food_total) }}
+                        {% endif %}
+                        {% if inquiry.extras_total %}
+                            · Extras £{{ "%.2f"|format(inquiry.extras_total) }}
                         {% endif %}
                     </div>
 
@@ -73,34 +65,27 @@
 </div>
 
 <div class="card">
-    <h2>Large party food prices</h2>
-    <p class="muted">
-        The four options are ready, but prices have been left blank until you
-        enter the pub's actual price per head.
-    </p>
+    <h2>Buffet packages</h2>
 
-    <div class="option-price-grid">
+    <div class="buffet-grid">
         {% for option in options %}
-            <form class="option-price-card"
-                  method="post"
-                  action="{{ url_for('main.update_large_party_option_price', option_id=option.id) }}">
-                <strong>{{ option.name }}</strong>
+            <div class="buffet-card">
+                <div class="buffet-option">Option {{ option.option_number }}</div>
+                <h3>{{ option.name }}</h3>
+                <strong>£{{ "%.2f"|format(option.price_per_head) }} per head</strong>
 
-                <label>
-                    Price per head (£)
-                    <input type="number"
-                           name="price_per_head"
-                           min="0"
-                           step="0.01"
-                           value="{% if option.price_per_head is not none %}{{ '%.2f'|format(option.price_per_head) }}{% endif %}"
-                           placeholder="Not set">
-                </label>
-
-                <button class="button secondary" type="submit">
-                    Save price
-                </button>
-            </form>
+                <ul>
+                    {% for item in option.items_text.split('\n') %}
+                        <li>{{ item }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
         {% endfor %}
     </div>
+
+    <p class="field-note">
+        Additional hot dishes are £6.50 per head with a minimum of 25 people.
+        Custom dishes/prices can also be entered on an enquiry.
+    </p>
 </div>
 {% endblock %}

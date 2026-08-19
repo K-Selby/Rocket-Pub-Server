@@ -8,28 +8,17 @@
 {% block content %}
 <div class="page-heading">
     <div>
-        <h1>
-            {% if inquiry %}
-                Edit large party enquiry
-            {% else %}
-                Large party enquiry
-            {% endif %}
-        </h1>
+        <h1>{% if inquiry %}Edit large party enquiry{% else %}Large party enquiry{% endif %}</h1>
         <p>
-            This is an enquiry, not a confirmed table booking. Only fill in the
-            details currently known — the record can be edited whenever the
-            customer calls back.
+            This is an enquiry, not a confirmed table booking. Save what is known
+            now and update it whenever the customer calls back.
         </p>
     </div>
 </div>
 
-<form class="card form-grid"
-      method="post"
-      id="large-party-form">
-
+<form class="card form-grid" method="post" id="large-party-form">
     <section class="form-section full-width">
         <h2>Contact</h2>
-
         <div class="nested-grid">
             <label>
                 Name *
@@ -68,7 +57,7 @@
                        name="number_of_children"
                        min="0"
                        value="{{ inquiry.number_of_children if inquiry else 0 }}">
-                <span class="field-note">Children are counted as under 13 years old.</span>
+                <span class="field-note">Under 13.</span>
             </label>
 
             <label>
@@ -76,7 +65,6 @@
                 <input type="date"
                        name="event_date"
                        value="{% if inquiry and inquiry.event_date %}{{ inquiry.event_date.isoformat() }}{% endif %}">
-                <span class="field-note">Leave blank if they have not decided yet.</span>
             </label>
 
             <label>
@@ -89,12 +77,11 @@
             <label>
                 Occasion
                 <input name="occasion"
-                       value="{{ inquiry.occasion if inquiry and inquiry.occasion else '' }}"
-                       placeholder="Birthday, wake, celebration...">
+                       value="{{ inquiry.occasion if inquiry and inquiry.occasion else '' }}">
             </label>
 
             <label>
-                Enquiry status
+                Status
                 <select name="status">
                     {% for status in ["Enquiry", "Awaiting customer", "Provisional", "Confirmed", "Cancelled"] %}
                         <option value="{{ status }}"
@@ -106,11 +93,7 @@
             </label>
         </div>
 
-        <div id="large-deposit-warning"
-             class="deposit-warning"
-             data-existing-paid="{{ inquiry.deposit_paid_amount if inquiry else 0 }}"
-             hidden>
-        </div>
+        <div id="large-deposit-warning" class="deposit-warning" hidden></div>
 
         <div id="large-deposit-payment-field"
              class="deposit-payment-field"
@@ -124,22 +107,16 @@
                        step="0.01"
                        value="{{ '%.2f'|format(inquiry.deposit_paid_amount or 0) if inquiry else '0.00' }}">
             </label>
-            <span class="field-note">
-                This can be left at £0 during the initial enquiry and updated later.
-            </span>
         </div>
     </section>
 
     <section class="form-section full-width">
         <h2>Food / buffet</h2>
-        <p class="muted">
-            This section can be left undecided and completed on a later call.
-        </p>
 
         <div class="nested-grid">
             <label>
                 Food type
-                <select name="food_type">
+                <select name="food_type" id="large-food-type">
                     <option value="">Not decided</option>
                     <option value="Menu"
                         {% if inquiry and inquiry.food_type == "Menu" %}selected{% endif %}>
@@ -153,39 +130,34 @@
             </label>
 
             <label>
-                Food option
+                Buffet option
                 <select name="menu_option_id" id="menu-option">
                     <option value="">Not decided</option>
                     {% for option in options %}
                         <option value="{{ option.id }}"
-                                data-price="{{ option.price_per_head if option.price_per_head is not none else '' }}"
+                                data-price="{{ option.price_per_head }}"
                                 {% if inquiry and inquiry.menu_option_id == option.id %}selected{% endif %}>
-                            {{ option.name }}
-                            {% if option.price_per_head is not none %}
-                                — £{{ "%.2f"|format(option.price_per_head) }} per head
-                            {% else %}
-                                — price not set
-                            {% endif %}
+                            Option {{ option.option_number }} — {{ option.name }}
+                            — £{{ "%.2f"|format(option.price_per_head) }}/head
                         </option>
                     {% endfor %}
                 </select>
             </label>
 
             <label>
-                Number of people having food
+                People having the main buffet
                 <input type="number"
                        name="catered_people"
                        id="catered-people"
                        min="0"
-                       value="{{ inquiry.catered_people if inquiry and inquiry.catered_people is not none else '' }}"
-                       placeholder="e.g. 50">
+                       value="{{ inquiry.catered_people if inquiry and inquiry.catered_people is not none else '' }}">
                 <span class="field-note">
-                    This can be lower than the total party size, e.g. 70 attending but food for 50.
+                    Can be lower than total attendance, e.g. 70 attending but buffet for 50.
                 </span>
             </label>
 
             <div class="quote-preview">
-                <span class="field-note">Current food estimate</span>
+                <span class="field-note">Main buffet estimate</span>
                 <strong id="food-quote-preview">
                     {% if inquiry and inquiry.quoted_food_total is not none %}
                         £{{ "%.2f"|format(inquiry.quoted_food_total) }}
@@ -195,13 +167,174 @@
                 </strong>
             </div>
         </div>
+
+        <div class="buffet-mini-grid">
+            {% for option in options %}
+                <details class="buffet-mini-card">
+                    <summary>
+                        Option {{ option.option_number }} — {{ option.name }}
+                        (£{{ "%.2f"|format(option.price_per_head) }}/head)
+                    </summary>
+                    <ul>
+                        {% for item in option.items_text.split('\n') %}
+                            <li>{{ item }}</li>
+                        {% endfor %}
+                    </ul>
+                </details>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="form-section full-width">
+        <div class="section-heading-inline">
+            <div>
+                <h2>Extra hot dishes</h2>
+                <p class="muted">
+                    Standard dishes are £6.50 per head, minimum 25 people.
+                    Each extra can have its own quantity. Custom dishes can use
+                    any price and quantity.
+                </p>
+            </div>
+            <button class="button secondary"
+                    type="button"
+                    id="add-extra-dish">
+                Add extra dish
+            </button>
+        </div>
+
+        <div id="extra-dish-rows">
+            {% if inquiry %}
+                {% for extra in inquiry.extra_dishes %}
+                    <div class="extra-dish-row">
+                        <label>
+                            Dish
+                            <select class="extra-dish-select">
+                                <option value="">Choose...</option>
+                                {% for standard in extra_options %}
+                                    <option value="{{ standard.name }}"
+                                            data-price="{{ standard.default_price_per_head }}"
+                                            {% if not extra.is_custom and extra.dish_name == standard.name %}selected{% endif %}>
+                                        {{ standard.name }}
+                                    </option>
+                                {% endfor %}
+                                <option value="__custom__"
+                                    {% if extra.is_custom %}selected{% endif %}>
+                                    Custom dish
+                                </option>
+                            </select>
+                        </label>
+
+                        <label class="custom-dish-field"
+                               {% if not extra.is_custom %}hidden{% endif %}>
+                            Custom dish name
+                            <input class="custom-dish-name"
+                                   value="{{ extra.dish_name if extra.is_custom else '' }}">
+                        </label>
+
+                        <input type="hidden"
+                               name="extra_dish_name"
+                               class="extra-dish-name"
+                               value="{{ extra.dish_name }}">
+
+                        <input type="hidden"
+                               name="extra_dish_custom"
+                               class="extra-dish-custom"
+                               value="{{ 1 if extra.is_custom else 0 }}">
+
+                        <label>
+                            Price/head (£)
+                            <input type="number"
+                                   name="extra_dish_price"
+                                   class="extra-dish-price"
+                                   step="0.01"
+                                   min="0"
+                                   value="{{ '%.2f'|format(extra.price_per_head) }}">
+                        </label>
+
+                        <label>
+                            People
+                            <input type="number"
+                                   name="extra_dish_quantity"
+                                   class="extra-dish-quantity"
+                                   min="1"
+                                   value="{{ extra.quantity_people }}">
+                        </label>
+
+                        <button type="button"
+                                class="link-button danger remove-extra">
+                            Remove
+                        </button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+
+        <div class="quote-preview extras-preview">
+            <span class="field-note">Extra dishes estimate</span>
+            <strong id="extras-total-preview">
+                {% if inquiry %}£{{ "%.2f"|format(inquiry.extras_total) }}{% else %}£0.00{% endif %}
+            </strong>
+        </div>
+
+        <template id="extra-dish-template">
+            <div class="extra-dish-row">
+                <label>
+                    Dish
+                    <select class="extra-dish-select">
+                        <option value="">Choose...</option>
+                        {% for standard in extra_options %}
+                            <option value="{{ standard.name }}"
+                                    data-price="{{ standard.default_price_per_head }}">
+                                {{ standard.name }}
+                            </option>
+                        {% endfor %}
+                        <option value="__custom__">Custom dish</option>
+                    </select>
+                </label>
+
+                <label class="custom-dish-field" hidden>
+                    Custom dish name
+                    <input class="custom-dish-name">
+                </label>
+
+                <input type="hidden"
+                       name="extra_dish_name"
+                       class="extra-dish-name">
+                <input type="hidden"
+                       name="extra_dish_custom"
+                       class="extra-dish-custom"
+                       value="0">
+
+                <label>
+                    Price/head (£)
+                    <input type="number"
+                           name="extra_dish_price"
+                           class="extra-dish-price"
+                           step="0.01"
+                           min="0"
+                           value="6.50">
+                </label>
+
+                <label>
+                    People
+                    <input type="number"
+                           name="extra_dish_quantity"
+                           class="extra-dish-quantity"
+                           min="1">
+                </label>
+
+                <button type="button"
+                        class="link-button danger remove-extra">
+                    Remove
+                </button>
+            </div>
+        </template>
     </section>
 
     <label class="full-width">
         Enquiry notes / call history
         <textarea name="notes"
-                  rows="8"
-                  placeholder="Add what was discussed, what still needs confirming, callback notes, etc.">{{ inquiry.notes if inquiry and inquiry.notes else '' }}</textarea>
+                  rows="8">{{ inquiry.notes if inquiry and inquiry.notes else '' }}</textarea>
     </label>
 
     <div class="full-width">

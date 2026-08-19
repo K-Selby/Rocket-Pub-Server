@@ -6,10 +6,7 @@
 <div class="page-heading">
     <div>
         <h1>Customers</h1>
-        <p>
-            Customers are created automatically from bookings.
-            Search by name or phone number.
-        </p>
+        <p>Search, edit or remove saved customer records.</p>
     </div>
 </div>
 
@@ -30,6 +27,7 @@
                     <th>Phone</th>
                     <th>Preference</th>
                     <th>Bookings</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
@@ -38,20 +36,25 @@
                         <td>{{ customer.name }}</td>
                         <td>{{ customer.phone }}</td>
                         <td>
-                            {% if customer.preferred_area %}
-                                {{ customer.preferred_area.name }}
-                            {% endif %}
-                            {% if customer.preferred_table %}
-                                · T{{ customer.preferred_table.number }}
-                            {% endif %}
-                            {% if customer.prefers_near_tv %}
-                                · Near TV
-                            {% endif %}
-                            {% if customer.avoids_bench %}
-                                · No bench
-                            {% endif %}
+                            {% if customer.preferred_area %}{{ customer.preferred_area.name }}{% endif %}
+                            {% if customer.preferred_table %} · T{{ customer.preferred_table.number }}{% endif %}
+                            {% if customer.prefers_near_tv %} · Near TV{% endif %}
+                            {% if customer.avoids_bench %} · No bench{% endif %}
                         </td>
                         <td>{{ customer.bookings|length }}</td>
+                        <td class="row-actions">
+                            <a class="small-link"
+                               href="{{ url_for('main.edit_customer', customer_id=customer.id) }}">
+                                Edit
+                            </a>
+                            <form method="post"
+                                  action="{{ url_for('main.delete_customer', customer_id=customer.id) }}"
+                                  onsubmit="return confirm('Delete this customer? This also deletes their linked normal booking history and repeat schedules.');">
+                                <button class="link-button danger" type="submit">
+                                    Delete
+                                </button>
+                            </form>
+                        </td>
                     </tr>
                 {% endfor %}
             </tbody>
