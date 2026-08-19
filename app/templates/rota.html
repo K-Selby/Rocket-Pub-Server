@@ -8,12 +8,6 @@
         <p>Week from Sunday {{ week_start.strftime("%d %B %Y") }}</p>
     </div>
 
-    {% if current_user.is_manager %}
-    <div class="heading-actions">
-        <a class="button secondary" href="{{ url_for('main.rota_profiles') }}">Staff Profiles</a>
-        <a class="button secondary" href="{{ url_for('main.rota_settings') }}">Rota Settings</a>
-    </div>
-    {% endif %}
 </div>
 
 <div class="week-switcher card">

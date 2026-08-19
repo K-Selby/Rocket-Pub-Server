@@ -4,10 +4,9 @@
 {% block content %}
 <div class="page-heading">
     <div>
-        <h1>Rota Staff Profiles</h1>
-        <p>Normal availability, role and expected hours used by Auto-fill.</p>
+        <h1>Rota Staff</h1>
+        <p>Archive or restore staff from the rota.</p>
     </div>
-    <a class="button" href="{{ url_for('main.rota_profile_new') }}">Add staff</a>
 </div>
 
 <div class="card">
@@ -16,25 +15,9 @@
         <div class="staff-profile-row {% if not profile.active %}user-disabled{% endif %}">
             <div>
                 <strong>{{ profile.display_name }}</strong>
-                <div class="muted">
-                    {% if profile.user %}Login: {{ profile.user.username }}{% else %}No login linked{% endif %}
-                </div>
-                {% if profile.rota_notes %}
-                    <small>{{ profile.rota_notes }}</small>
-                {% endif %}
-            </div>
-
-            <div class="staff-hours-summary">
-                Target {{ profile.target_hours|round(1) }}h
-                · Max {{ profile.max_hours|round(1) }}h
             </div>
 
             <div class="row-actions">
-                <a class="small-link"
-                   href="{{ url_for('main.rota_profile_edit', profile_id=profile.id) }}">
-                    Edit
-                </a>
-
                 {% if profile.active %}
                     <form method="post"
                           action="{{ url_for('main.rota_profile_archive', profile_id=profile.id) }}"

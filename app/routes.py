@@ -201,6 +201,7 @@ MANAGER_ENDPOINTS = {
     "main.rota_create",
     "main.rota_edit",
     "main.rota_add_shift",
+    "main.rota_use_availability",
     "main.rota_edit_shift",
     "main.rota_delete_shift",
     "main.rota_publish",
@@ -2126,6 +2127,60 @@ def new_user():
     )
 
 
+@main.route("/users/<int:user_id>/rename", methods=["POST"])
+def rename_user(user_id):
+    if not current_user().is_manager:
+        flash("Manager access is required.", "error")
+        return redirect(url_for("main.dashboard"))
+
+    target = db.get_or_404(AppUser, user_id)
+
+    # Managers can rename staff. Admin can rename staff/managers.
+    if target.is_admin and not current_user().is_admin:
+        flash("Managers cannot rename administrator accounts.", "error")
+        return redirect(url_for("main.users"))
+
+    if target.role == "manager" and not current_user().is_admin:
+        flash("Only an administrator can rename a manager.", "error")
+        return redirect(url_for("main.users"))
+
+    new_name = request.form.get("username", "").strip()
+
+    if not new_name:
+        flash("Enter a name.", "error")
+        return redirect(url_for("main.users"))
+
+    duplicate = db.session.scalar(
+        db.select(AppUser).where(
+            db.func.lower(AppUser.username) == new_name.lower(),
+            AppUser.id != target.id,
+        )
+    )
+
+    if duplicate:
+        flash("That name is already in use.", "error")
+        return redirect(url_for("main.users"))
+
+    old_name = target.username
+    target.username = new_name
+
+    # If this login is linked to a rota profile, keep the displayed rota name
+    # in sync with the account name.
+    linked_profile = db.session.scalar(
+        db.select(StaffProfile).where(
+            StaffProfile.user_id == target.id
+        )
+    )
+
+    if linked_profile:
+        linked_profile.display_name = new_name
+
+    db.session.commit()
+
+    flash(f"{old_name} renamed to {new_name}.", "success")
+    return redirect(url_for("main.users"))
+
+
 @main.route("/users/<int:user_id>/reset-password", methods=["POST"])
 def reset_user_password(user_id):
     if not current_user().is_manager:
@@ -2259,6 +2314,9 @@ def time_label(value):
 
 
 def shift_label(shift):
+    if shift.note == "__ROTA_K__":
+        return "K"
+
     end = "F" if shift.end_is_finish else time_label(shift.end_time)
     return f"{time_label(shift.start_time)}-{end}"
 
@@ -2296,18 +2354,10 @@ def projected_shift_hours(shift):
 
 def availability_for(profile, target_date):
     """
-    Return (available, earliest, latest, reason).
+    Availability is now controlled only by date-specific Staff Diary entries.
 
-    Approved date-specific diary entries override recurring availability.
+    Recurring weekday availability/profile-hour rules are no longer used.
     """
-    global_block = db.session.scalar(
-        db.select(StaffDiaryEntry).where(
-            StaffDiaryEntry.entry_date == target_date,
-            StaffDiaryEntry.entry_type == "no_one_off",
-            StaffDiaryEntry.status.in_(["approved", "info"]),
-        )
-    )
-
     entries = db.session.scalars(
         db.select(StaffDiaryEntry).where(
             StaffDiaryEntry.staff_id == profile.id,
@@ -2329,21 +2379,6 @@ def availability_for(profile, target_date):
                 entry.note or "Date-specific availability",
             )
 
-    rule = db.session.scalar(
-        db.select(StaffAvailabilityRule).where(
-            StaffAvailabilityRule.staff_id == profile.id,
-            StaffAvailabilityRule.weekday == target_date.weekday(),
-        )
-    )
-
-    if rule and not rule.available:
-        return False, None, None, "Normally unavailable"
-
-    if rule:
-        return True, rule.available_from, rule.available_until, None
-
-    # No rule = available by default. Casual staff still get penalised by
-    # Auto-fill rather than being treated as unavailable.
     return True, None, None, None
 
 
@@ -2521,34 +2556,37 @@ def rota_candidate_score(profile, week, target_date, start, end, end_is_finish, 
 
 def parse_rota_shift_text(value):
     """
-    Parse the same shorthand used on the paper rota:
-    12-3, 5-9, 4-F, 6-F.
+    Parse rota shorthand such as 5-9, 12-6, 4-F and K.
     """
     value = (value or "").strip().upper().replace(" ", "")
 
+    if value == "K":
+        # K is a rota code rather than a timed shift. The placeholder noon
+        # start is never displayed; shift_label() returns K from the marker.
+        return time(12, 0), None, False
+
     if not value or "-" not in value:
-        raise ValueError("Enter a shift like 5-9, 12-3 or 4-F.")
+        raise ValueError("Enter a shift time or K.")
 
     start_text, end_text = value.split("-", 1)
 
     def parse_clock(text_value):
         if ":" in text_value:
-            hour_text, minute_text = text_value.split(":", 1)
-            hour = int(hour_text)
-            minute = int(minute_text)
+            h_text, m_text = text_value.split(":", 1)
+            hour = int(h_text)
+            minute = int(m_text)
         else:
             hour = int(text_value)
             minute = 0
 
-        if not 0 <= minute <= 59:
-            raise ValueError("Invalid minute.")
+        if minute < 0 or minute > 59:
+            raise ValueError("Invalid minutes.")
 
-        # Pub rota shorthand: 1-11 means afternoon/evening.
         if 1 <= hour <= 11:
             hour += 12
         elif hour == 12:
             hour = 12
-        elif not 0 <= hour <= 23:
+        elif hour < 0 or hour > 23:
             raise ValueError("Invalid hour.")
 
         return time(hour, minute)
@@ -2747,35 +2785,68 @@ def rota_edit(rota_id):
                 state["unavailable_status"] = entry.status
 
             elif entry.entry_type == "available_window":
-                if entry.available_from or entry.available_until:
-                    start_label = (
-                        time_label(entry.available_from)
-                        if entry.available_from
-                        else "Any"
-                    )
-                    end_label = (
-                        time_label(entry.available_until)
-                        if entry.available_until
-                        else "Any"
-                    )
-                    availability_text = (
-                        f"{start_label}-{end_label}"
-                    )
-                else:
-                    availability_text = "Available"
+                # The first part of note stores the original rota-style
+                # shorthand, e.g. "4-9" or "5-F".
+                availability_text = None
 
-                state["availability"].append(
-                    {
-                        "text": availability_text,
-                        "status": entry.status,
-                        "note": entry.note,
-                    }
-                )
+                if entry.note:
+                    possible_shift = entry.note.split(" · ", 1)[0].strip()
+
+                    if "-" in possible_shift:
+                        availability_text = possible_shift
+
+                if not availability_text:
+                    if entry.available_from or entry.available_until:
+                        start_label = (
+                            time_label(entry.available_from)
+                            if entry.available_from
+                            else "Any"
+                        )
+                        end_label = (
+                            time_label(entry.available_until)
+                            if entry.available_until
+                            else "F"
+                        )
+                        availability_text = (
+                            f"{start_label}-{end_label}"
+                        )
+                    else:
+                        availability_text = "Available"
+
+                # If this exact requested shift has already been added to
+                # the rota, do not show the availability suggestion as a
+                # second visual slot in the same cell.
+                existing_shift_labels = {
+                    shift_label(existing_shift).upper()
+                    for existing_shift in shift_map.get(key, [])
+                }
+
+                if availability_text.upper() not in existing_shift_labels:
+                    state["availability"].append(
+                        {
+                            "id": entry.id,
+                            "text": availability_text,
+                            "status": entry.status,
+                            "note": entry.note,
+                        }
+                    )
+
+    archived_staff = db.session.scalars(
+        db.select(StaffProfile)
+        .where(
+            StaffProfile.active.is_(False),
+            db.func.lower(StaffProfile.display_name).in_(
+                {"hannah", "charl", "leoni", "erin"}
+            ),
+        )
+        .order_by(StaffProfile.sort_order, StaffProfile.display_name)
+    ).all()
 
     return render_template(
         "rota_edit.html",
         week=week,
         profiles=profiles,
+        archived_staff=archived_staff,
         days=days,
         shift_map=shift_map,
         diary_by_day=diary_by_day,
@@ -2797,6 +2868,102 @@ def parse_shift_form():
     return shift_date, start_time, end_time, end_is_finish
 
 
+@main.route(
+    "/rota/<int:rota_id>/availability/<int:entry_id>/use",
+    methods=["POST"],
+)
+def rota_use_availability(rota_id, entry_id):
+    """
+    Put a Staff Diary specific-shift request straight onto the rota.
+
+    The manager clicks + beside A 4-8 / A 5-F. The diary request is approved
+    at the same time because the requested shift has been accepted.
+    """
+    week = db.get_or_404(RotaWeek, rota_id)
+    entry = db.get_or_404(StaffDiaryEntry, entry_id)
+
+    if (
+        entry.entry_type != "available_window"
+        or entry.staff_id is None
+        or not (
+            week.week_start
+            <= entry.entry_date
+            <= week.week_start + timedelta(days=6)
+        )
+    ):
+        flash("That availability request cannot be added to this rota.", "error")
+        return redirect(url_for("main.rota_edit", rota_id=week.id))
+
+    shift_text = None
+
+    if entry.note:
+        possible_shift = entry.note.split(" · ", 1)[0].strip()
+
+        if "-" in possible_shift:
+            shift_text = possible_shift
+
+    if not shift_text:
+        if not entry.available_from:
+            flash("That availability request has no shift time.", "error")
+            return redirect(url_for("main.rota_edit", rota_id=week.id))
+
+        start_text = time_label(entry.available_from)
+        end_text = (
+            time_label(entry.available_until)
+            if entry.available_until
+            else "F"
+        )
+        shift_text = f"{start_text}-{end_text}"
+
+    try:
+        start_time, end_time, end_is_finish = parse_rota_shift_text(
+            shift_text
+        )
+    except ValueError:
+        flash("That requested shift time is invalid.", "error")
+        return redirect(url_for("main.rota_edit", rota_id=week.id))
+
+    # Do not create a duplicate shift in the same staff/date cell.
+    existing = db.session.scalar(
+        db.select(RotaShift).where(
+            RotaShift.rota_week_id == week.id,
+            RotaShift.staff_id == entry.staff_id,
+            RotaShift.shift_date == entry.entry_date,
+        )
+    )
+
+    if existing:
+        flash("That staff member already has a shift on this day.", "error")
+        return redirect(url_for("main.rota_edit", rota_id=week.id))
+
+    db.session.add(
+        RotaShift(
+            rota_week_id=week.id,
+            staff_id=entry.staff_id,
+            shift_date=entry.entry_date,
+            start_time=start_time,
+            end_time=end_time,
+            end_is_finish=end_is_finish,
+            shift_role="front_of_house",
+            note=None,
+            auto_suggested=False,
+        )
+    )
+
+    if entry.status == "requested":
+        entry.status = "approved"
+        entry.reviewed_by_user_id = current_user().id
+        entry.reviewed_at = datetime.now()
+
+    db.session.commit()
+
+    flash(
+        f"{entry.staff.display_name}'s {shift_text} availability added to the rota.",
+        "success",
+    )
+    return redirect(url_for("main.rota_edit", rota_id=week.id))
+
+
 @main.route("/rota/<int:rota_id>/shift/add", methods=["POST"])
 def rota_add_shift(rota_id):
     week = db.get_or_404(RotaWeek, rota_id)
@@ -2804,8 +2971,11 @@ def rota_add_shift(rota_id):
     try:
         shift_date, start, end, is_finish = parse_shift_form()
         staff_id = int(request.form["staff_id"])
-    except (ValueError, KeyError):
+    except KeyError:
         flash("Check the shift details.", "error")
+        return redirect(url_for("main.rota_edit", rota_id=rota_id))
+    except ValueError as exc:
+        flash(str(exc), "error")
         return redirect(url_for("main.rota_edit", rota_id=rota_id))
 
     if not (
@@ -2830,6 +3000,8 @@ def rota_add_shift(rota_id):
         )
         return redirect(url_for("main.rota_edit", rota_id=rota_id))
 
+    raw_shift_text = request.form.get("shift_text", "").strip().upper()
+
     db.session.add(
         RotaShift(
             rota_week_id=week.id,
@@ -2839,7 +3011,7 @@ def rota_add_shift(rota_id):
             end_time=end,
             end_is_finish=is_finish,
             shift_role="front_of_house",
-            note=request.form.get("note", "").strip() or None,
+            note="__ROTA_K__" if raw_shift_text == "K" else None,
         )
     )
     db.session.commit()
@@ -2853,14 +3025,19 @@ def rota_edit_shift(shift_id):
 
     try:
         _, start, end, is_finish = parse_shift_form()
-    except (ValueError, KeyError):
+    except KeyError:
         flash("Check the shift details.", "error")
         return redirect(url_for("main.rota_edit", rota_id=shift.rota_week_id))
+    except ValueError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("main.rota_edit", rota_id=shift.rota_week_id))
+
+    raw_shift_text = request.form.get("shift_text", "").strip().upper()
 
     shift.start_time = start
     shift.end_time = end
     shift.end_is_finish = is_finish
-    shift.note = request.form.get("note", "").strip() or None
+    shift.note = "__ROTA_K__" if raw_shift_text == "K" else None
     shift.auto_suggested = False
 
     db.session.commit()
@@ -2875,6 +3052,38 @@ def rota_delete_shift(shift_id):
     db.session.delete(shift)
     db.session.commit()
     return redirect(url_for("main.rota_edit", rota_id=rota_id))
+
+
+@main.route("/rota/<int:rota_id>/clear", methods=["POST"])
+def rota_clear_draft(rota_id):
+    week = db.get_or_404(RotaWeek, rota_id)
+
+    if week.status != "draft":
+        flash(
+            "Only a draft rota can be cleared. Return it to draft first.",
+            "error",
+        )
+        return redirect(url_for("main.rota_edit", rota_id=week.id))
+
+    shifts = db.session.scalars(
+        db.select(RotaShift).where(
+            RotaShift.rota_week_id == week.id
+        )
+    ).all()
+
+    removed = len(shifts)
+
+    for shift in shifts:
+        db.session.delete(shift)
+
+    db.session.commit()
+
+    flash(
+        f"Rota draft cleared. {removed} shift"
+        f"{'' if removed == 1 else 's'} removed.",
+        "success",
+    )
+    return redirect(url_for("main.rota_edit", rota_id=week.id))
 
 
 @main.route("/rota/<int:rota_id>/publish", methods=["POST"])
@@ -3048,112 +3257,64 @@ def rota_profiles():
 
 @main.route("/rota/staff/new", methods=["GET", "POST"])
 def rota_profile_new():
-    if request.method == "POST":
-        return save_rota_profile()
+    """
+    Add Staff does not create new people.
 
-    users = db.session.scalars(
-        db.select(AppUser).where(AppUser.active.is_(True))
+    It restores one of the known archived staff members to the active rota.
+    Login-account linking can be handled separately later.
+    """
+    allowed_names = {"hannah", "charl", "leoni", "erin"}
+
+    archived_staff = db.session.scalars(
+        db.select(StaffProfile)
+        .where(
+            StaffProfile.active.is_(False),
+            db.func.lower(StaffProfile.display_name).in_(allowed_names),
+        )
+        .order_by(StaffProfile.sort_order, StaffProfile.display_name)
     ).all()
 
+    if request.method == "POST":
+        try:
+            profile_id = int(request.form.get("profile_id", ""))
+        except ValueError:
+            flash("Choose a staff member to add.", "error")
+            return redirect(url_for("main.rota_profile_new"))
+
+        profile = db.session.get(StaffProfile, profile_id)
+
+        if (
+            profile is None
+            or profile.active
+            or profile.display_name.strip().lower() not in allowed_names
+        ):
+            flash("That archived staff member cannot be added here.", "error")
+            return redirect(url_for("main.rota_profile_new"))
+
+        profile.active = True
+        db.session.commit()
+
+        flash(
+            f"{profile.display_name} added back to future rotas.",
+            "success",
+        )
+        return redirect(url_for("main.rota_home"))
+
     return render_template(
-        "rota_profile_form.html",
-        profile=None,
-        users=users,
-        rules={},
+        "rota_add_staff.html",
+        archived_staff=archived_staff,
     )
 
 
 @main.route("/rota/staff/<int:profile_id>/edit", methods=["GET", "POST"])
 def rota_profile_edit(profile_id):
-    profile = db.get_or_404(StaffProfile, profile_id)
-
-    if request.method == "POST":
-        return save_rota_profile(profile)
-
-    rules = {
-        rule.weekday: rule
-        for rule in profile.availability_rules
-    }
-
-    users = db.session.scalars(
-        db.select(AppUser).where(AppUser.active.is_(True))
-    ).all()
-
-    return render_template(
-        "rota_profile_form.html",
-        profile=profile,
-        users=users,
-        rules=rules,
-    )
+    # Staff profile configuration has been retired from the rota workflow.
+    # Staff accounts can be linked separately later.
+    db.get_or_404(StaffProfile, profile_id)
+    flash("Staff settings are managed directly from the rota.", "success")
+    return redirect(url_for("main.rota_home"))
 
 
-def save_rota_profile(profile=None):
-    name = request.form.get("display_name", "").strip()
-
-    if not name:
-        flash("Enter the staff member's name.", "error")
-        return redirect(request.url)
-
-    if profile is None:
-        profile = StaffProfile(display_name=name)
-        db.session.add(profile)
-    else:
-        profile.display_name = name
-
-    user_id_text = request.form.get("user_id", "")
-    profile.user_id = int(user_id_text) if user_id_text else None
-
-    try:
-        profile.sort_order = int(request.form.get("sort_order", 100) or 100)
-        profile.target_hours = float(request.form.get("target_hours", 0) or 0)
-        profile.max_hours = float(request.form.get("max_hours", 40) or 40)
-    except ValueError:
-        flash("Hours must be numbers.", "error")
-        return redirect(request.url)
-
-    profile.rota_notes = request.form.get("rota_notes", "").strip() or None
-    profile.preferred_shifts = (
-        request.form.get("preferred_shifts", "").strip() or None
-    )
-    profile.active = request.form.get("active", "1") == "1"
-
-    db.session.flush()
-
-    for weekday in range(7):
-        rule = db.session.scalar(
-            db.select(StaffAvailabilityRule).where(
-                StaffAvailabilityRule.staff_id == profile.id,
-                StaffAvailabilityRule.weekday == weekday,
-            )
-        )
-
-        if rule is None:
-            rule = StaffAvailabilityRule(
-                staff_id=profile.id,
-                weekday=weekday,
-            )
-            db.session.add(rule)
-
-        rule.available = request.form.get(
-            f"available_{weekday}"
-        ) == "1"
-
-        from_text = request.form.get(f"available_from_{weekday}", "")
-        until_text = request.form.get(f"available_until_{weekday}", "")
-
-        rule.available_from = (
-            datetime.strptime(from_text, "%H:%M").time()
-            if from_text else None
-        )
-        rule.available_until = (
-            datetime.strptime(until_text, "%H:%M").time()
-            if until_text else None
-        )
-
-    db.session.commit()
-
-    flash("Staff rota profile saved.", "success")
-    return redirect(url_for("main.rota_profiles"))
 
 
 @main.route("/rota/staff/<int:profile_id>/delete", methods=["POST"])
@@ -3191,9 +3352,17 @@ def rota_profile_restore(profile_id):
     db.session.commit()
 
     flash(
-        f"{profile.display_name} restored to future rotas.",
+        f"{profile.display_name} added back to the rota.",
         "success",
     )
+
+    rota_id_text = request.form.get("rota_id", "").strip()
+
+    if rota_id_text.isdigit():
+        return redirect(
+            url_for("main.rota_edit", rota_id=int(rota_id_text))
+        )
+
     return redirect(url_for("main.rota_profiles"))
 
 
@@ -3233,52 +3402,145 @@ def staff_diary():
             else profile.id
         )
 
-        entry_type = request.form.get("entry_type", "day_off_request")
-        entry_date = datetime.strptime(
-            request.form["entry_date"],
-            "%Y-%m-%d",
-        ).date()
+        entry_type = request.form.get(
+            "entry_type",
+            "day_off_request",
+        )
 
         if entry_type == "no_one_off" and not current_user().is_manager:
             flash("Only managers can add No one off.", "error")
             return redirect(request.url)
 
+        start_text = request.form.get("start_date", "").strip()
+        end_text = request.form.get("end_date", "").strip()
+
+        try:
+            start_date = datetime.strptime(
+                start_text,
+                "%Y-%m-%d",
+            ).date()
+        except ValueError:
+            flash("Choose a start date.", "error")
+            return redirect(
+                url_for(
+                    "main.staff_diary",
+                    week=week_start.isoformat(),
+                )
+            )
+
+        if end_text:
+            try:
+                end_date = datetime.strptime(
+                    end_text,
+                    "%Y-%m-%d",
+                ).date()
+            except ValueError:
+                flash("Choose a valid end date.", "error")
+                return redirect(
+                    url_for(
+                        "main.staff_diary",
+                        week=week_start.isoformat(),
+                    )
+                )
+        else:
+            end_date = start_date
+
+        if end_date < start_date:
+            flash("End date cannot be before start date.", "error")
+            return redirect(
+                url_for(
+                    "main.staff_diary",
+                    week=sunday_for_date(start_date).isoformat(),
+                )
+            )
+
+        # Stop accidental enormous ranges while allowing normal holidays.
+        if (end_date - start_date).days > 62:
+            flash("A diary range can be up to 63 days.", "error")
+            return redirect(
+                url_for(
+                    "main.staff_diary",
+                    week=sunday_for_date(start_date).isoformat(),
+                )
+            )
+
         available_from = None
         available_until = None
+        shorthand = None
 
         if entry_type == "available_window":
-            from_text = request.form.get("available_from", "")
-            until_text = request.form.get("available_until", "")
-            available_from = (
-                datetime.strptime(from_text, "%H:%M").time()
-                if from_text else None
-            )
-            available_until = (
-                datetime.strptime(until_text, "%H:%M").time()
-                if until_text else None
+            shorthand = request.form.get(
+                "availability_shift",
+                "",
+            ).strip().upper().replace(" ", "")
+
+            try:
+                (
+                    available_from,
+                    available_until,
+                    end_is_finish,
+                ) = parse_rota_shift_text(shorthand)
+            except ValueError:
+                flash("Enter a valid shift time.", "error")
+                return redirect(
+                    url_for(
+                        "main.staff_diary",
+                        week=sunday_for_date(start_date).isoformat(),
+                    )
+                )
+
+            if end_is_finish:
+                available_until = None
+
+        manager_note = request.form.get("note", "").strip() or None
+
+        date_count = (end_date - start_date).days + 1
+
+        for offset in range(date_count):
+            entry_date = start_date + timedelta(days=offset)
+            entry_note = manager_note
+
+            if entry_type == "available_window":
+                if entry_note:
+                    entry_note = f"{shorthand} · {entry_note}"
+                else:
+                    entry_note = shorthand
+
+            db.session.add(
+                StaffDiaryEntry(
+                    staff_id=(
+                        None
+                        if entry_type == "no_one_off"
+                        else target_profile_id
+                    ),
+                    entry_date=entry_date,
+                    entry_type=entry_type,
+                    available_from=available_from,
+                    available_until=available_until,
+                    note=entry_note,
+                    status=(
+                        "approved"
+                        if current_user().is_manager
+                        else "requested"
+                    ),
+                    created_by_user_id=current_user().id,
+                )
             )
 
-        entry = StaffDiaryEntry(
-            staff_id=None if entry_type == "no_one_off" else target_profile_id,
-            entry_date=entry_date,
-            entry_type=entry_type,
-            available_from=available_from,
-            available_until=available_until,
-            note=request.form.get("note", "").strip() or None,
-            status=(
-                "approved"
-                if current_user().is_manager
-                else "requested"
-            ),
-            created_by_user_id=current_user().id,
-        )
-
-        db.session.add(entry)
         db.session.commit()
 
-        flash("Diary entry added.", "success")
+        flash(
+            "Diary entry added."
+            if date_count == 1
+            else f"Diary entry added for {date_count} days.",
+            "success",
+        )
+
         return redirect(
-            url_for("main.staff_diary", week=week_start.isoformat())
+            url_for(
+                "main.staff_diary",
+                week=sunday_for_date(start_date).isoformat(),
+            )
         )
 
     entries = db.session.scalars(
@@ -3287,18 +3549,28 @@ def staff_diary():
             StaffDiaryEntry.entry_date >= week_start,
             StaffDiaryEntry.entry_date <= week_start + timedelta(days=6),
         )
-        .order_by(StaffDiaryEntry.entry_date, StaffDiaryEntry.created_at)
+        .order_by(
+            StaffDiaryEntry.entry_date,
+            StaffDiaryEntry.created_at,
+        )
     ).all()
 
     profiles = db.session.scalars(
         db.select(StaffProfile)
         .where(StaffProfile.active.is_(True))
-        .order_by(StaffProfile.sort_order, StaffProfile.display_name)
+        .order_by(
+            StaffProfile.sort_order,
+            StaffProfile.display_name,
+        )
     ).all()
 
     by_day = {day: [] for day in days}
+
     for entry in entries:
-        by_day.setdefault(entry.entry_date, []).append(entry)
+        by_day.setdefault(
+            entry.entry_date,
+            [],
+        ).append(entry)
 
     return render_template(
         "staff_diary.html",

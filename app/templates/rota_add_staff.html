@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Add Staff | Rocket Pub Server{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h1>Add Staff</h1>
+        <p>Add an archived staff member back onto future rotas.</p>
+    </div>
+</div>
+
+<div class="card">
+    {% if archived_staff %}
+        <div class="archived-staff-picker">
+            {% for profile in archived_staff %}
+                <form method="post"
+                      class="archived-staff-option"
+                      action="{{ url_for('main.rota_profile_new') }}">
+                    <input type="hidden"
+                           name="profile_id"
+                           value="{{ profile.id }}">
+
+                    <div>
+                        <strong>{{ profile.display_name }}</strong>
+                    </div>
+
+                    <button class="button" type="submit">
+                        Add to rota
+                    </button>
+                </form>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <strong>No archived staff available to add.</strong>
+            <p class="muted">
+                Hannah, Charl, Leoni and Erin are already active.
+            </p>
+        </div>
+    {% endif %}
+</div>
+
+<div class="form-actions">
+    <a class="button secondary"
+       href="{{ url_for('main.rota_home') }}">
+        Back to rota
+    </a>
+</div>
+{% endblock %}

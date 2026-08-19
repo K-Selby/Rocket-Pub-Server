@@ -4169,3 +4169,575 @@ main.container {
         height: 68px;
     }
 }
+
+
+/* v9.3.2 simple add staff */
+.add-staff-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.add-staff-option {
+    position: relative;
+    cursor: pointer;
+}
+
+.add-staff-option input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.add-staff-option span {
+    display: block;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: #f8faf7;
+    font-size: 15px;
+    font-weight: 800;
+}
+
+.add-staff-option span:hover {
+    border-color: #8fa994;
+    background: #eef5eb;
+}
+
+.add-staff-option input:checked + span {
+    border-color: #4f7d5c;
+    background: #dfeedd;
+    box-shadow: 0 0 0 2px rgba(79, 125, 92, 0.12);
+}
+
+
+/* v9.3.2 archived-only add staff */
+.archived-staff-picker {
+    display: flex;
+    flex-direction: column;
+}
+
+.archived-staff-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 4px;
+    border-bottom: 1px solid var(--border);
+}
+
+.archived-staff-option:last-child {
+    border-bottom: 0;
+}
+
+
+/* v9.3.3 inline archived staff row */
+.rota-add-staff-row th,
+.rota-add-staff-row td {
+    background: rgba(246, 248, 244, 0.9);
+}
+
+.rota-archived-staff-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.rota-archived-staff-list form {
+    margin: 0;
+}
+
+.rota-add-person {
+    min-height: 34px;
+    padding: 6px 12px;
+}
+
+
+/* v9.3.3 inline staff + diary multi-day */
+.rota-add-staff-row th,
+.rota-add-staff-row td {
+    background: #f4f7f2;
+}
+
+.rota-archived-staff-list {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.rota-archived-staff-list form {
+    margin: 0;
+}
+
+.rota-add-person {
+    border: 1px dashed #91aa98;
+    border-radius: 7px;
+    padding: 7px 11px;
+    background: white;
+    color: #345a40;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 750;
+}
+
+.rota-add-person:hover {
+    border-style: solid;
+    background: #e9f2e6;
+}
+
+.diary-entry-form-v2 {
+    grid-template-columns: repeat(3, minmax(160px, 1fr));
+}
+
+.diary-day-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.diary-day-checkboxes {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(85px, 1fr));
+    gap: 7px;
+}
+
+.diary-day-checkbox {
+    position: relative;
+}
+
+.diary-day-checkbox input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.diary-day-checkbox span {
+    display: flex;
+    min-height: 58px;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 2px;
+    border: 1px solid #c5d1c7;
+    border-radius: 8px;
+    background: white;
+    cursor: pointer;
+}
+
+.diary-day-checkbox input:checked + span {
+    border-color: #5d8668;
+    background: #e5f0e2;
+    box-shadow: inset 0 0 0 1px #5d8668;
+    color: #2f573a;
+}
+
+.diary-day-checkbox small {
+    color: var(--muted);
+    font-size: 10px;
+}
+
+.diary-shift-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.diary-shift-value {
+    display: inline-flex;
+    align-self: flex-start;
+    margin-top: 3px;
+    padding: 3px 6px;
+    border-radius: 6px;
+    background: #e4f0e1;
+    color: #315e3b;
+    font-weight: 800;
+}
+
+@media (max-width: 820px) {
+    .diary-entry-form-v2 {
+        grid-template-columns: 1fr;
+    }
+
+    .diary-day-checkboxes {
+        grid-template-columns: repeat(4, minmax(70px, 1fr));
+    }
+}
+
+@media (max-width: 480px) {
+    .diary-day-checkboxes {
+        grid-template-columns: repeat(2, minmax(90px, 1fr));
+    }
+}
+
+
+/* v9.3.4 compact rota shift editor */
+.rota-cell-editor {
+    padding: 4px !important;
+    overflow: visible;
+}
+
+.rota-inline-shift-form {
+    display: grid !important;
+    grid-template-columns: minmax(54px, 1fr) 25px 25px;
+    gap: 3px !important;
+    align-items: center;
+    width: 100%;
+}
+
+.rota-inline-shift-form input[type="text"] {
+    width: 100%;
+    min-width: 0 !important;
+    box-sizing: border-box;
+    padding: 5px 4px !important;
+    font-size: 11px !important;
+    text-align: center;
+}
+
+.rota-editor-confirm,
+.rota-editor-cancel {
+    width: 25px;
+    height: 27px;
+    padding: 0;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 850;
+    line-height: 1;
+}
+
+.rota-editor-confirm {
+    border: 1px solid #6f9d78;
+    background: #e1efdf;
+    color: #2f6239;
+}
+
+.rota-editor-cancel {
+    border: 1px solid #c8ceca;
+    background: #f4f5f4;
+    color: #68716b;
+}
+
+.rota-remove-shift-form {
+    margin: 3px 0 0 !important;
+}
+
+.rota-editor-remove {
+    width: 100%;
+    padding: 3px 4px;
+    border: 0;
+    background: transparent;
+    color: #9b3d3d;
+    cursor: pointer;
+    font-size: 9px;
+    font-weight: 700;
+}
+
+.rota-edit-table .rota-edit-cell {
+    min-width: 108px;
+}
+
+
+/* v9.3.4 rota editor + diary range fixes */
+
+/* Give the in-cell editor room instead of squeezing input/Add/Cancel
+   into the width of one rota column. */
+.rota-edit-cell {
+    overflow: visible;
+}
+
+.rota-cell-editor {
+    position: absolute !important;
+    z-index: 80 !important;
+    left: 5px;
+    top: 5px;
+    width: 190px !important;
+    min-width: 190px !important;
+    padding: 7px !important;
+}
+
+.rota-inline-shift-form {
+    display: grid !important;
+    grid-template-columns: minmax(86px, 1fr) auto auto !important;
+    gap: 5px !important;
+    align-items: center !important;
+}
+
+.rota-inline-shift-form input[type="text"] {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 30px;
+    padding: 5px 7px !important;
+}
+
+.rota-inline-shift-form .small-link,
+.rota-inline-shift-form .link-button,
+.rota-editor-cancel {
+    width: auto !important;
+    min-width: 0 !important;
+    padding: 5px 6px !important;
+    font-size: 11px !important;
+    line-height: 1 !important;
+    white-space: nowrap;
+}
+
+/* Requested specific shift should be obvious and usable. */
+.rota-availability-badges {
+    display: flex !important;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    margin: 0 0 4px;
+    pointer-events: auto !important;
+}
+
+.rota-availability-request {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 5px;
+    min-height: 25px;
+    padding: 3px 4px 3px 8px;
+    border: 1px solid #8fb29a;
+    border-radius: 7px;
+    background: #e3f1e3;
+    color: #315e3b;
+    font-size: 11px;
+    font-weight: 850;
+}
+
+.rota-availability-request.pending {
+    border-color: #d0b75c;
+    background: #fff1bc;
+    color: #70590c;
+}
+
+.rota-availability-request form {
+    margin: 0;
+}
+
+.rota-availability-text {
+    flex: 1;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.rota-use-availability {
+    display: inline-flex;
+    width: 23px;
+    height: 23px;
+    flex: 0 0 23px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid currentColor;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.72);
+    color: inherit;
+    cursor: pointer;
+    font-size: 17px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.rota-use-availability:hover {
+    background: white;
+}
+
+/* Staff Diary form: every control is the same compact size and aligned. */
+.diary-entry-form-clean {
+    display: grid !important;
+    grid-template-columns: repeat(6, minmax(120px, 1fr));
+    gap: 10px !important;
+    align-items: end;
+}
+
+.diary-entry-form-clean label {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin: 0;
+}
+
+.diary-entry-form-clean input,
+.diary-entry-form-clean select {
+    height: 39px !important;
+    min-height: 39px !important;
+    padding: 7px 9px !important;
+    font-size: 13px !important;
+}
+
+.diary-entry-form-clean [hidden] {
+    display: none !important;
+}
+
+.diary-submit-field {
+    display: flex;
+    align-items: end;
+}
+
+.diary-submit-field .button {
+    width: 100%;
+    min-height: 39px;
+    padding: 7px 12px;
+}
+
+.diary-shift-value {
+    margin-top: 3px;
+}
+
+@media (max-width: 1050px) {
+    .diary-entry-form-clean {
+        grid-template-columns: repeat(3, minmax(140px, 1fr));
+    }
+}
+
+@media (max-width: 650px) {
+    .diary-entry-form-clean {
+        grid-template-columns: 1fr;
+    }
+
+    .rota-cell-editor {
+        width: 175px !important;
+        min-width: 175px !important;
+    }
+}
+
+
+/* v9.3.6 simplified staff + K + menu stacking */
+
+/* Let the staff options popup sit above rows below it. */
+.rota-table,
+.rota-table tbody,
+.rota-table tr,
+.rota-table th,
+.rota-table td {
+    overflow: visible;
+}
+
+.rota-table tbody tr {
+    position: relative;
+    z-index: 1;
+}
+
+.rota-table tbody tr:has(.rota-name-options[open]) {
+    z-index: 200;
+}
+
+.rota-name-cell,
+.rota-name-options {
+    position: relative;
+}
+
+.rota-name-options[open] {
+    z-index: 250;
+}
+
+.rota-name-options-menu {
+    z-index: 300 !important;
+}
+
+/* Old profile availability/hour UI is retired. */
+.availability-editor,
+.staff-hours-summary {
+    display: none !important;
+}
+
+
+/* v9.3.6 rota cleanup */
+
+/* Keep staff options above following table rows. */
+.rota-table tbody tr {
+    position: relative;
+}
+
+.rota-name-cell,
+.rota-name-options {
+    position: relative;
+    overflow: visible;
+}
+
+.rota-name-options[open] {
+    z-index: 300;
+}
+
+.rota-name-options-menu {
+    z-index: 400 !important;
+    left: auto !important;
+    right: 0;
+}
+
+.rota-table th:first-child {
+    overflow: visible !important;
+}
+
+/* The shift editor now stays INSIDE its own cell so Saturday cannot be
+   clipped by the outer page/background edge. */
+.rota-cell-editor {
+    position: relative !important;
+    inset: auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 5px !important;
+    box-shadow: none !important;
+}
+
+.rota-inline-shift-form {
+    display: grid !important;
+    grid-template-columns: 1fr 30px 30px !important;
+    gap: 4px !important;
+    width: 100%;
+}
+
+.rota-inline-shift-form input[type="text"] {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 29px;
+    padding: 4px 6px !important;
+}
+
+.rota-editor-confirm,
+.rota-editor-cancel {
+    display: inline-flex;
+    width: 30px !important;
+    height: 29px !important;
+    min-width: 30px !important;
+    align-items: center;
+    justify-content: center;
+    padding: 0 !important;
+    border-radius: 5px;
+    line-height: 1;
+}
+
+/* No unused staff-profile configuration layout remains. */
+.rota-name-edit-form {
+    max-width: 520px;
+}
+
+.rota-name-edit-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.inline-rename-user-form {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin: 0;
+}
+
+.inline-rename-user-form input {
+    width: 135px;
+    padding: 6px 7px;
+    font-size: 12px;
+}
+
+/* Diary fields stay uniform. */
+.diary-entry-form-clean input,
+.diary-entry-form-clean select {
+    width: 100%;
+    height: 39px !important;
+    min-height: 39px !important;
+}

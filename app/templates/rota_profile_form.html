@@ -1,109 +1,39 @@
 {% extends "base.html" %}
-{% block title %}Staff Rota Profile | Rocket Pub Server{% endblock %}
+{% block title %}Edit Staff Name | Rocket Pub Server{% endblock %}
 
 {% block content %}
 <div class="page-heading">
     <div>
-        <h1>{{ "Edit" if profile else "Add" }} Staff Profile</h1>
-        <p>Set the normal pattern Auto-fill should work around.</p>
+        <h1>Edit staff name</h1>
     </div>
 </div>
 
-<form method="post" class="form-grid">
-    <section class="form-section full-width">
-        <div class="nested-grid">
-            <label>Name
-                <input name="display_name"
-                       value="{{ profile.display_name if profile else '' }}"
-                       required>
-            </label>
+<form method="post" class="card rota-name-edit-form">
+    {% if rota_id %}
+        <input type="hidden" name="rota_id" value="{{ rota_id }}">
+    {% endif %}
 
-            <label>Link login account
-                <select name="user_id">
-                    <option value="">No login linked</option>
-                    {% for user in users %}
-                    <option value="{{ user.id }}"
-                            {% if profile and profile.user_id == user.id %}selected{% endif %}>
-                        {{ user.username }}
-                    </option>
-                    {% endfor %}
-                </select>
-            </label>
+    <label>
+        Name
+        <input type="text"
+               name="display_name"
+               value="{{ profile.display_name }}"
+               required>
+    </label>
 
-            <label>Rota order
-                <input type="number"
-                       name="sort_order"
-                       value="{{ profile.sort_order if profile else 100 }}">
-                <span class="field-note">Lower numbers appear nearer the top.</span>
-            </label>
-
-            <label>Common shifts
-                <input name="preferred_shifts"
-                       value="{{ profile.preferred_shifts if profile and profile.preferred_shifts else '' }}"
-                       placeholder="e.g. 5-F, 4-8, 4-9">
-                <span class="field-note">Used as an Auto-fill hint only.</span>
-            </label>
-
-<label>Target weekly hours
-                <input type="number" step="0.5" min="0" name="target_hours"
-                       value="{{ profile.target_hours if profile else 0 }}">
-            </label>
-
-            <label>Maximum weekly hours
-                <input type="number" step="0.5" min="0" name="max_hours"
-                       value="{{ profile.max_hours if profile else 40 }}">
-            </label>
-
-            <label class="full-width">Manager rota notes
-                <input name="rota_notes"
-                       value="{{ profile.rota_notes if profile and profile.rota_notes else '' }}"
-                       placeholder="e.g. Has another job; normally only Friday-Sunday">
-            </label>
-
-            <label class="checkbox-row">
-                <input type="checkbox" name="active" value="1"
-                       {% if not profile or profile.active %}checked{% endif %}>
-                Active on rota
-            </label>
-        </div>
-    </section>
-
-    <section class="form-section full-width">
-        <h2>Normal weekly availability</h2>
-        <p class="muted">
-            These are the normal rules. The Staff Diary can override them for a
-            specific date.
-        </p>
-
-        <div class="availability-editor">
-            {% for weekday, day_name in [
-                (0,"Monday"),(1,"Tuesday"),(2,"Wednesday"),(3,"Thursday"),
-                (4,"Friday"),(5,"Saturday"),(6,"Sunday")
-            ] %}
-            {% set rule = rules.get(weekday) %}
-            <div class="availability-row">
-                <strong>{{ day_name }}</strong>
-                <label class="checkbox-row">
-                    <input type="checkbox" name="available_{{ weekday }}" value="1"
-                           {% if not rule or rule.available %}checked{% endif %}>
-                    Available
-                </label>
-                <label>From
-                    <input type="time" name="available_from_{{ weekday }}"
-                           value="{{ rule.available_from.strftime('%H:%M') if rule and rule.available_from else '' }}">
-                </label>
-                <label>Until
-                    <input type="time" name="available_until_{{ weekday }}"
-                           value="{{ rule.available_until.strftime('%H:%M') if rule and rule.available_until else '' }}">
-                </label>
-            </div>
-            {% endfor %}
-        </div>
-    </section>
-
-    <div class="full-width form-actions">
-        <button class="button" type="submit">Save staff profile</button>
-        <a class="button secondary" href="{{ url_for('main.rota_profiles') }}">Cancel</a>
+    <div class="form-actions">
+        <button class="button" type="submit">Save</button>
+        {% if rota_id %}
+            <a class="button secondary"
+               href="{{ url_for('main.rota_edit', rota_id=rota_id) }}">
+                Cancel
+            </a>
+        {% else %}
+            <a class="button secondary"
+               href="{{ url_for('main.rota_profiles') }}">
+                Cancel
+            </a>
+        {% endif %}
     </div>
 </form>
 {% endblock %}

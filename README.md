@@ -705,3 +705,109 @@ Manager rota tools are accessible from the Rota screen.
   shift.
 - Pending availability requests use a yellow availability badge; approved
   availability uses green.
+
+
+## v9.3.1 clear rota draft
+
+- Managers now have a `Clear rota` button while editing a draft.
+- Clearing removes every shift from that rota week in one action.
+- A confirmation prompt warns that all entered shifts for the week will be removed.
+- Staff Diary / availability entries are not deleted.
+- Published rotas cannot be cleared unless they are first returned to draft.
+
+
+## v9.3.2 simple add staff
+
+- The detailed Add Staff Profile form is no longer used for adding staff.
+- Pressing `Add staff` now shows only the four archived occasional staff:
+  Hannah, Charl, Leoni and Erin.
+- Selecting one restores that profile to future rotas.
+- The detailed staff form remains available only from Edit Staff.
+
+
+## v9.3.2 archived-only Add Staff
+
+- `Add staff` no longer creates a new staff profile.
+- It now shows only archived Hannah, Charl, Leoni and Erin.
+- Pressing `Add to rota` restores that person to the active future rota list.
+- Matt remains archived and is not offered in Add Staff.
+- Login-account linking is left for a later stage.
+
+
+## v9.3.3 inline Add Staff
+
+- Removed the Add Staff button from the top of the rota editor.
+- Archived Hannah, Charl, Leoni and Erin now appear in an Add Staff row at the bottom of the rota table.
+- Managers can restore a person directly from that row without leaving the rota editor.
+- Once restored, that person's name disappears from the Add Staff row and returns to the active rota list.
+
+
+## v9.3.3 inline Add Staff and diary changes
+
+- Add Staff is now a row at the bottom of the Rota Builder table.
+- The row lists only archived Hannah, Charl, Leoni and Erin.
+- Clicking a name immediately restores them and returns to the same rota.
+- No separate Add Staff page is needed from the Rota Builder.
+- Staff Diary uses rota shorthand for specific availability: `4-9`, `5-F`,
+  `12-6`, etc.
+- The rota shows those requests as compact `A 4-9` / `A 5-F` markers.
+- Staff Diary now shows all seven dates in the selected week as checkboxes.
+  Multiple dates can be selected and submitted together, including several
+  days off in one request.
+
+
+## v9.3.4 compact shift editor fix
+
+- Fixed the narrow rota-cell editor so Add/Cancel no longer spill outside the cell.
+- Add and Cancel are now compact ✓ / × controls beside the shift field.
+- The shorthand parser explicitly supports `4-8`, `5-9`, `12-6`, `4-F`, etc.
+- Invalid shift text now shows the actual validation error instead of the generic
+  "Check the shift details" message.
+
+
+## v9.3.4 rota request and diary range fixes
+
+- Fixed the cramped rota cell editor so shift input, Add/Save and Cancel fit.
+- Specific-shift availability is now a full-width visible marker such as `4-8`.
+- Managers can press `+` beside a requested specific shift to put that shift
+  directly onto the rota; a pending request is approved at the same time.
+- Staff Diary no longer contains format-help comments or example placeholders.
+- Staff Diary controls are aligned to the same compact height.
+- Day-off requests now use From / To dates rather than seven checkboxes tied to
+  the visible week.
+- Date ranges can cross rota weeks, e.g. Friday through Wednesday. One diary
+  entry is created for every date in the inclusive range.
+
+
+## v9.3.5 confirmed availability display fix
+
+- When a manager presses `+` on a requested shift such as `4-8`, the
+  availability suggestion no longer remains visible as a second rota slot.
+- The rota cell now shows only the actual confirmed shift.
+- The original Staff Diary request remains in the diary/history.
+
+
+## v9.3.6 simplified staff and K rota code
+
+- Removed target weekly hours and maximum weekly hours from the staff UI.
+- Removed recurring weekday availability and its edit form.
+- Removed Common Shifts / Auto-fill-related staff settings.
+- Rota availability is now based only on date-specific Staff Diary entries.
+- The staff options menu now contains Archive Staff only.
+- Fixed the staff `•••` menu stacking behind the row underneath.
+- Managers can type `K` directly into a rota cell. It is stored and displayed
+  as `K`, matching the paper rota.
+
+
+## v9.3.6 rota and staff cleanup
+
+- Removed the rota-builder instruction banner.
+- Removed the old target-hours, max-hours and recurring weekday-availability
+  editing UI. Staff rota editing now contains only the staff name.
+- `K` can be entered directly into a rota cell and displays as `K`.
+- Staff `•••` menus are layered above the following table rows.
+- Shift editors stay inside their own table cell, including Saturday.
+- Staff Diary automatically sets `To` to the selected `From` date. `To` cannot
+  be earlier than `From`, but the user can extend it to any later date.
+- Managers can rename staff accounts from the Users screen; administrators can
+  rename manager accounts as well.

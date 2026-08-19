@@ -12,12 +12,15 @@
     </div>
 
     <div class="heading-actions">
-        <a class="button secondary"
-           href="{{ url_for('main.rota_profile_new') }}">
-            Add staff
-        </a>
+{% if week.status == "draft" %}
+            <form method="post"
+                  action="{{ url_for('main.rota_clear_draft', rota_id=week.id) }}"
+                  onsubmit="return confirm('Clear the ENTIRE rota draft? Every shift entered for this week will be removed. Staff diary and availability entries will stay.');">
+                <button class="button secondary" type="submit">
+                    Clear rota
+                </button>
+            </form>
 
-        {% if week.status == "draft" %}
             <form method="post"
                   action="{{ url_for('main.rota_publish', rota_id=week.id) }}"
                   onsubmit="return confirm('Issue this rota to all staff?');">
@@ -32,13 +35,6 @@
             </form>
         {% endif %}
     </div>
-</div>
-
-<div class="rota-builder-notice">
-    <strong>Click an empty cell to add a shift.</strong>
-    Type it exactly like the paper rota, for example
-    <strong>12-6</strong>, <strong>5-9</strong> or <strong>4-F</strong>.
-    Grey cells are unavailable.
 </div>
 
 <div class="card rota-table-card">
@@ -66,11 +62,7 @@
                             <details class="rota-name-options">
                                 <summary title="Staff options">•••</summary>
                                 <div class="rota-name-options-menu">
-                                    <a href="{{ url_for('main.rota_profile_edit', profile_id=profile.id) }}">
-                                        Edit staff
-                                    </a>
-
-                                    <form method="post"
+<form method="post"
                                           action="{{ url_for('main.rota_profile_archive', profile_id=profile.id) }}"
                                           onsubmit="return confirm('Archive {{ profile.display_name }} from future rotas?');">
                                         <button class="link-button danger" type="submit">
@@ -107,11 +99,25 @@
                                 {% if diary.get('availability') %}
                                     <div class="rota-availability-badges">
                                         {% for availability in diary.get('availability') %}
-                                            <span class="rota-availability-badge
-                                                {% if availability.status == 'requested' %}pending{% endif %}"
-                                                title="{{ availability.note or 'Specific availability' }}">
-                                                A {{ availability.text }}
-                                            </span>
+                                            <div class="rota-availability-request
+                                                {% if availability.status == 'requested' %}pending{% endif %}">
+                                                <span class="rota-availability-text"
+                                                      title="{{ availability.note or 'Specific availability' }}">
+                                                    {{ availability.text }}
+                                                </span>
+
+                                                {% if not shifts %}
+                                                    <form method="post"
+                                                          action="{{ url_for('main.rota_use_availability', rota_id=week.id, entry_id=availability.id) }}">
+                                                        <button type="submit"
+                                                                class="rota-use-availability"
+                                                                title="Add {{ availability.text }} to rota"
+                                                                aria-label="Add requested shift {{ availability.text }}">
+                                                            +
+                                                        </button>
+                                                    </form>
+                                                {% endif %}
+                                            </div>
                                         {% endfor %}
                                     </div>
                                 {% endif %}
@@ -137,28 +143,32 @@
                                                 <input type="text"
                                                        name="shift_text"
                                                        value="{{ shift_label(shift) }}"
-                                                       placeholder="5-9 / 4-F"
+                                                       placeholder="4-8"
                                                        autocomplete="off"
+                                                       inputmode="text"
                                                        required>
 
-                                                <button class="small-link"
-                                                        type="submit">
-                                                    Save
+                                                <button class="rota-editor-confirm"
+                                                        type="submit"
+                                                        title="Save shift">
+                                                    ✓
                                                 </button>
 
-                                                <button class="link-button"
+                                                <button class="rota-editor-cancel"
                                                         type="button"
-                                                        data-cancel-shift>
-                                                    Cancel
+                                                        data-cancel-shift
+                                                        title="Cancel">
+                                                    ×
                                                 </button>
                                             </form>
 
                                             <form method="post"
+                                                  class="rota-remove-shift-form"
                                                   action="{{ url_for('main.rota_delete_shift', shift_id=shift.id) }}"
                                                   onsubmit="return confirm('Remove this shift?');">
-                                                <button class="link-button danger"
+                                                <button class="rota-editor-remove"
                                                         type="submit">
-                                                    Remove shift
+                                                    Remove
                                                 </button>
                                             </form>
                                         </div>
@@ -187,19 +197,22 @@
 
                                             <input type="text"
                                                    name="shift_text"
-                                                   placeholder="e.g. 5-9 or 4-F"
+                                                   placeholder="4-8"
                                                    autocomplete="off"
+                                                   inputmode="text"
                                                    required>
 
-                                            <button class="small-link"
-                                                    type="submit">
-                                                Add
+                                            <button class="rota-editor-confirm"
+                                                    type="submit"
+                                                    title="Add shift">
+                                                ✓
                                             </button>
 
-                                            <button class="link-button"
+                                            <button class="rota-editor-cancel"
                                                     type="button"
-                                                    data-cancel-shift>
-                                                Cancel
+                                                    data-cancel-shift
+                                                    title="Cancel">
+                                                ×
                                             </button>
                                         </form>
                                     </div>
@@ -209,6 +222,32 @@
                     {% endfor %}
                 </tr>
             {% endfor %}
+            
+            {% if archived_staff %}
+            <tr class="rota-add-staff-row">
+                <th scope="row">
+                    <strong>Add staff</strong>
+                </th>
+
+                <td colspan="7">
+                    <div class="rota-archived-staff-list">
+                        {% for archived in archived_staff %}
+                            <form method="post"
+                                  action="{{ url_for('main.rota_profile_restore', profile_id=archived.id) }}">
+                                <input type="hidden"
+                                       name="rota_id"
+                                       value="{{ week.id }}">
+
+                                <button type="submit"
+                                        class="rota-add-person">
+                                    + {{ archived.display_name }}
+                                </button>
+                            </form>
+                        {% endfor %}
+                    </div>
+                </td>
+            </tr>
+            {% endif %}
             </tbody>
         </table>
     </div>

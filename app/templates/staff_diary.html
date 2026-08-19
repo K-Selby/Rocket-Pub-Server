@@ -19,26 +19,28 @@
 
 <div class="card diary-add-card">
     <h2>Add diary entry</h2>
-    <form method="post" class="diary-entry-form">
+
+    <form method="post" class="diary-entry-form diary-entry-form-clean">
         {% if current_user.is_manager %}
-        <label>Staff
-            <select name="staff_id">
-                {% for profile in profiles %}
-                    <option value="{{ profile.id }}">{{ profile.display_name }}</option>
-                {% endfor %}
-            </select>
-        </label>
+            <label>
+                Staff
+                <select name="staff_id">
+                    {% for profile in profiles %}
+                        <option value="{{ profile.id }}">
+                            {{ profile.display_name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </label>
         {% endif %}
 
-        <label>Date
-            <input type="date" name="entry_date" required>
-        </label>
-
-        <label>Type
+        <label>
+            Type
             <select name="entry_type" id="diary-entry-type">
                 <option value="day_off_request">Day off / unavailable</option>
-                <option value="available_window">Can work specific times</option>
+                <option value="available_window">Can work a specific shift</option>
                 <option value="note">Note</option>
+
                 {% if current_user.is_manager %}
                     <option value="unavailable">Mark unavailable</option>
                     <option value="no_one_off">NO ONE OFF</option>
@@ -46,19 +48,36 @@
             </select>
         </label>
 
-        <label class="diary-time-field">Available from
-            <input type="time" name="available_from">
+        <label>
+            From
+            <input type="date"
+                   name="start_date"
+                   required>
         </label>
 
-        <label class="diary-time-field">Available until
-            <input type="time" name="available_until">
+        <label>
+            To
+            <input type="date"
+                   name="end_date">
         </label>
 
-        <label>Note
-            <input name="note" placeholder="Optional detail">
+        <label class="diary-shift-field">
+            Shift
+            <input type="text"
+                   name="availability_shift"
+                   autocomplete="off">
         </label>
 
-        <button class="button" type="submit">Add</button>
+        <label class="diary-note-field">
+            Note
+            <input name="note">
+        </label>
+
+        <div class="diary-submit-field">
+            <button class="button" type="submit">
+                Add
+            </button>
+        </div>
     </form>
 </div>
 
@@ -77,18 +96,32 @@
                         <strong>NO ONE OFF</strong>
                     {% else %}
                         <strong>{{ entry.staff.display_name }}</strong>
-                        <span>{{ entry.entry_type.replace("_", " ")|title }}</span>
+                        <span>
+                            {% if entry.entry_type == "available_window" %}
+                                Available
+                            {% else %}
+                                {{ entry.entry_type.replace("_", " ")|title }}
+                            {% endif %}
+                        </span>
                     {% endif %}
 
-                    {% if entry.available_from or entry.available_until %}
-                        <small>
-                            {{ entry.available_from.strftime("%H:%M") if entry.available_from else "Any" }}
-                            –
-                            {{ entry.available_until.strftime("%H:%M") if entry.available_until else "Any" }}
-                        </small>
-                    {% endif %}
+                    {% if entry.entry_type == "available_window" %}
+                        {% set stored_shift = entry.note.split(" · ", 1)[0] if entry.note else "" %}
 
-                    {% if entry.note %}<small>{{ entry.note }}</small>{% endif %}
+                        {% if stored_shift %}
+                            <small class="diary-shift-value">
+                                {{ stored_shift }}
+                            </small>
+                        {% endif %}
+
+                        {% if entry.note and " · " in entry.note %}
+                            <small>
+                                {{ entry.note.split(" · ", 1)[1] }}
+                            </small>
+                        {% endif %}
+                    {% elif entry.note %}
+                        <small>{{ entry.note }}</small>
+                    {% endif %}
                 </div>
 
                 <span class="badge">{{ entry.status|title }}</span>
@@ -115,15 +148,49 @@
 <script>
 (function () {
     const type = document.getElementById("diary-entry-type");
-    const timeFields = document.querySelectorAll(".diary-time-field");
+    const shiftField = document.querySelector(".diary-shift-field");
+    const shiftInput = document.querySelector(
+        'input[name="availability_shift"]'
+    );
+    const fromDate = document.querySelector('input[name="start_date"]');
+    const toDate = document.querySelector('input[name="end_date"]');
 
-    function update() {
-        const show = type && type.value === "available_window";
-        timeFields.forEach(field => field.style.display = show ? "" : "none");
+    function updateDiaryFields() {
+        const isShift = (
+            type &&
+            type.value === "available_window"
+        );
+
+        if (shiftField) {
+            shiftField.hidden = !isShift;
+        }
+
+        if (shiftInput) {
+            shiftInput.required = isShift;
+
+            if (!isShift) {
+                shiftInput.value = "";
+            }
+        }
     }
 
-    type?.addEventListener("change", update);
-    update();
+    function syncDateRange() {
+        if (!fromDate || !toDate || !fromDate.value) {
+            return;
+        }
+
+        toDate.min = fromDate.value;
+
+        if (!toDate.value || toDate.value < fromDate.value) {
+            toDate.value = fromDate.value;
+        }
+    }
+
+    type?.addEventListener("change", updateDiaryFields);
+    fromDate?.addEventListener("change", syncDateRange);
+
+    updateDiaryFields();
+    syncDateRange();
 })();
 </script>
 {% endblock %}
