@@ -16,7 +16,7 @@
             <label>Ask
                 <select name="target_staff_id" id="swap-target" required>
                     {% for profile in other_profiles %}
-                        <option value="{{ profile.id }}">{{ profile.display_name }}</option>
+                        <option value="{{ profile.id }}">{{ profile.rota_name }}</option>
                     {% endfor %}
                 </select>
             </label>
@@ -29,7 +29,7 @@
                         {% for target_shift in target_shifts.get(profile.id, []) %}
                             <option value="{{ target_shift.id }}"
                                     data-staff-id="{{ profile.id }}">
-                                {{ profile.display_name }} —
+                                {{ profile.rota_name }} —
                                 {{ target_shift.shift_date.strftime("%a %d %b") }}
                                 {{ shift_label(target_shift) }}
                             </option>

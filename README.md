@@ -871,3 +871,25 @@ Manager rota tools are accessible from the Rota screen.
 - Removed the Email shortcut beside the logged-in username.
 - Removed email status from the main Users list; Admin email management remains inside Edit.
 - More and Management menus are mutually exclusive: opening one closes the other.
+
+
+## v9.4.1 single username source
+
+- Removed `Charl` as a separate seeded/display rota name; the account is `Charlotte`.
+- Linked rota profiles display the linked `AppUser.username` everywhere.
+- The old `staff_profile.display_name` database column remains only for schema
+  compatibility and unlinked legacy records; linked records are automatically
+  kept identical to username.
+- Removed independent `Edit name` from the rota. Names are changed only through
+  Management → Users and immediately flow through to the rota.
+
+
+## v9.4.2 archive persistence and published edit cleanup
+
+- Archived staff now stay archived until explicitly restored from the Archived
+  staff row.
+- Adding/editing a shift no longer silently reactivates an archived person.
+- Archive/restore commits force a fresh database reload before the rota renders.
+- Removed `Return to draft` from an issued rota. Rota edits already save
+  immediately, so issued rota editing now has a simple `Save changes` button.
+- The supplied v9.4.2 database has Alara archived.

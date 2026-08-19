@@ -644,7 +644,7 @@ def seed_initial_staff_profiles():
 
         # These are archived only on the very first creation.
         ("Hannah", 200, False),
-        ("Charl", 210, False),
+        ("Charlotte", 210, False),
         ("Leoni", 220, False),
         ("Erin", 230, False),
         ("Matt", 240, False),
@@ -679,5 +679,8 @@ def seed_initial_staff_profiles():
 
             if profile.user_id is None and user is not None:
                 profile.user_id = user.id
+
+            if user is not None:
+                profile.display_name = user.username
 
     db.session.commit()

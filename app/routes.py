@@ -2499,7 +2499,7 @@ def historical_pattern_bonus(profile, weekday, start_time, end_is_finish):
     This never overrides availability. It only helps rank otherwise suitable
     staff for a suggested shift.
     """
-    name = profile.display_name.strip().lower()
+    name = profile.rota_name.strip().lower()
     bonus = 0
 
     # Brooke: Mon-Wed daytime, often Friday close.
@@ -2631,11 +2631,11 @@ def rota_candidate_score(profile, week, target_date, start, end, end_is_finish, 
 
     # Occasional staff are still available, but only used when they score well
     # or regular staff cannot cover the slot.
-    if profile.display_name.lower() in {"erin", "hannah", "leoni", "charl"}:
+    if profile.rota_name.lower() in {"erin", "hannah", "leoni", "charl"}:
         score -= 35
 
     # Alara is Friday-Sunday only and generally late.
-    if profile.display_name.lower() == "alara":
+    if profile.rota_name.lower() == "alara":
         if target_date.weekday() not in {4, 5, 6}:
             return None
         if start.hour < 17:
@@ -3080,12 +3080,6 @@ def rota_add_shift(rota_id):
 
     profile = db.get_or_404(StaffProfile, staff_id)
 
-    # Being placed onto a rota means this person is active again and should
-    # remain on future drafts until explicitly archived.
-    if not profile.active:
-        profile.active = True
-        db.session.flush()
-
     available, earliest, latest, reason = availability_for(
         profile,
         shift_date,
@@ -3093,7 +3087,7 @@ def rota_add_shift(rota_id):
 
     if not available:
         flash(
-            f"{profile.display_name} is marked unavailable: {reason or 'Unavailable'}.",
+            f"{profile.rota_name} is marked unavailable: {reason or 'Unavailable'}.",
             "error",
         )
         return redirect(url_for("main.rota_edit", rota_id=rota_id))
@@ -3290,7 +3284,7 @@ def rota_image(rota_id):
     for profile in profiles:
         x = x0
         draw.rectangle((x, y, x+name_w, y+row_h), fill="white", outline=line, width=2)
-        draw.text((x+12, y+26), profile.display_name, fill=text, font=text_font)
+        draw.text((x+12, y+26), profile.rota_name, fill=text, font=text_font)
         x += name_w
 
         for day in days:
@@ -3366,7 +3360,7 @@ def rota_profile_new():
         if (
             profile is None
             or profile.active
-            or profile.display_name.strip().lower() not in allowed_names
+            or profile.rota_name.strip().lower() not in allowed_names
         ):
             flash("That archived staff member cannot be added here.", "error")
             return redirect(url_for("main.rota_profile_new"))
@@ -3375,7 +3369,7 @@ def rota_profile_new():
         db.session.commit()
 
         flash(
-            f"{profile.display_name} added back to future rotas.",
+            f"{profile.rota_name} added back to future rotas.",
             "success",
         )
         return redirect(url_for("main.rota_home"))
@@ -3388,13 +3382,26 @@ def rota_profile_new():
 
 @main.route("/rota/staff/<int:profile_id>/edit", methods=["GET", "POST"])
 def rota_profile_edit(profile_id):
-    # Staff profile configuration has been retired from the rota workflow.
-    # Staff accounts can be linked separately later.
-    db.get_or_404(StaffProfile, profile_id)
-    flash("Staff settings are managed directly from the rota.", "success")
+    profile = db.get_or_404(StaffProfile, profile_id)
+
+    if profile.user_id:
+        flash(
+            "Change this person's name from Management → Users.",
+            "info",
+        )
+
+    rota_id_text = (
+        request.form.get("rota_id", "")
+        if request.method == "POST"
+        else request.args.get("rota_id", "")
+    )
+
+    if str(rota_id_text).isdigit():
+        return redirect(
+            url_for("main.rota_edit", rota_id=int(rota_id_text))
+        )
+
     return redirect(url_for("main.rota_home"))
-
-
 
 
 @main.route("/rota/staff/<int:profile_id>/delete", methods=["POST"])
@@ -3406,7 +3413,7 @@ def rota_profile_delete(profile_id):
     db.session.commit()
 
     flash(
-        f"{profile.display_name} archived from future rotas.",
+        f"{profile.rota_name} archived from future rotas.",
         "success",
     )
     return redirect(url_for("main.rota_profiles"))
@@ -3415,11 +3422,14 @@ def rota_profile_delete(profile_id):
 @main.route("/rota/staff/<int:profile_id>/archive", methods=["POST"])
 def rota_profile_archive(profile_id):
     profile = db.get_or_404(StaffProfile, profile_id)
+    archived_name = profile.rota_name
+
     profile.active = False
     db.session.commit()
+    db.session.expire_all()
 
     flash(
-        f"{profile.display_name} moved to the archived row.",
+        f"{archived_name} moved to Archived staff.",
         "success",
     )
 
@@ -3438,21 +3448,23 @@ def rota_profile_restore(profile_id):
     profile = db.get_or_404(StaffProfile, profile_id)
     profile.active = True
 
-    # Link the rota profile to its existing login if needed.
     if profile.user_id is None:
         matching_user = db.session.scalar(
             db.select(AppUser).where(
                 db.func.lower(AppUser.username)
-                == profile.display_name.lower()
+                == profile.rota_name.lower()
             )
         )
         if matching_user:
             profile.user_id = matching_user.id
 
+    restored_name = profile.rota_name
+
     db.session.commit()
+    db.session.expire_all()
 
     flash(
-        f"{profile.display_name} added back to the rota.",
+        f"{restored_name} added back to the rota.",
         "success",
     )
 

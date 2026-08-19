@@ -7,12 +7,12 @@
         <h1>Rota Builder</h1>
         <p>
             Week from Sunday {{ week.week_start.strftime("%d %B %Y") }}
-            · {{ week.status|title }}
+            {% if week.status == "published" %} · Issued{% endif %}
         </p>
     </div>
 
     <div class="heading-actions">
-{% if week.status == "draft" %}
+        {% if week.status == "draft" %}
             <form method="post"
                   action="{{ url_for('main.rota_clear_draft', rota_id=week.id) }}"
                   onsubmit="return confirm('Clear the ENTIRE rota draft? Every shift entered for this week will be removed. Staff diary and availability entries will stay.');">
@@ -24,15 +24,15 @@
             <form method="post"
                   action="{{ url_for('main.rota_publish', rota_id=week.id) }}"
                   onsubmit="return confirm('Issue this rota to all staff?');">
-                <button class="button" type="submit">Issue rota</button>
-            </form>
-        {% else %}
-            <form method="post"
-                  action="{{ url_for('main.rota_return_to_draft', rota_id=week.id) }}">
-                <button class="button secondary" type="submit">
-                    Return to draft
+                <button class="button" type="submit">
+                    Issue rota
                 </button>
             </form>
+        {% else %}
+            <a class="button"
+               href="{{ url_for('main.rota_home', week=week.week_start.isoformat()) }}">
+                Save changes
+            </a>
         {% endif %}
     </div>
 </div>
@@ -57,14 +57,14 @@
                 <tr>
                     <th>
                         <div class="rota-name-cell">
-                            <span>{{ profile.display_name }}</span>
+                            <span>{{ profile.rota_name }}</span>
 
                             <details class="rota-name-options">
                                 <summary title="Staff options">•••</summary>
                                 <div class="rota-name-options-menu">
 <form method="post"
                                           action="{{ url_for('main.rota_profile_archive', profile_id=profile.id) }}"
-                                          onsubmit="return confirm('Archive {{ profile.display_name }}?');">
+                                          onsubmit="return confirm('Archive {{ profile.rota_name }}?');">
                                         <input type="hidden"
                                                name="rota_id"
                                                value="{{ week.id }}">
@@ -182,7 +182,7 @@
                                     <button type="button"
                                             class="rota-blank-cell-button"
                                             data-add-shift
-                                            aria-label="Add shift for {{ profile.display_name }} on {{ day.strftime('%A') }}">
+                                            aria-label="Add shift for {{ profile.rota_name }} on {{ day.strftime('%A') }}">
                                     </button>
 
                                     <div class="rota-cell-editor"
@@ -243,7 +243,7 @@
 
                                 <button type="submit"
                                         class="rota-add-person">
-                                    {{ archived.display_name }}
+                                    {{ archived.rota_name }}
                                 </button>
                             </form>
                         {% endfor %}

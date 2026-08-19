@@ -14,14 +14,14 @@
     {% for profile in profiles %}
         <div class="staff-profile-row {% if not profile.active %}user-disabled{% endif %}">
             <div>
-                <strong>{{ profile.display_name }}</strong>
+                <strong>{{ profile.rota_name }}</strong>
             </div>
 
             <div class="row-actions">
                 {% if profile.active %}
                     <form method="post"
                           action="{{ url_for('main.rota_profile_archive', profile_id=profile.id) }}"
-                          onsubmit="return confirm('Archive {{ profile.display_name }} from future rotas?');">
+                          onsubmit="return confirm('Archive {{ profile.rota_name }} from future rotas?');">
                         <button class="link-button danger" type="submit">
                             Archive
                         </button>

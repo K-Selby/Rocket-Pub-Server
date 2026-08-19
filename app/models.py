@@ -725,6 +725,15 @@ class StaffProfile(db.Model):
 
     user = db.relationship("AppUser")
 
+    @property
+    def rota_name(self):
+        """The rota name is the linked user's username."""
+        if self.user is not None:
+            return self.user.username
+
+        # Only legacy/unlinked archived records fall back to the old column.
+        return self.display_name
+
     availability_rules = db.relationship(
         "StaffAvailabilityRule",
         back_populates="staff",
