@@ -1744,6 +1744,200 @@ function setupTableLayoutEditor() {
 }
 
 
+
+function setupDashboardFloorMap() {
+    const stage = document.getElementById("dashboard-floor-stage");
+    const shell = document.getElementById("dashboard-floor-shell");
+    const zoomSurface = document.getElementById(
+        "dashboard-floor-zoom-surface"
+    );
+    const fitButton = document.getElementById("dashboard-map-fit");
+    const tooltip = document.getElementById("dashboard-map-tooltip");
+
+    if (!stage || !shell || !zoomSurface || !tooltip) return;
+
+    const tableButtons = Array.from(
+        stage.querySelectorAll(".dashboard-map-table")
+    );
+
+    const bookingsByTable = window.DASHBOARD_TABLE_BOOKINGS || {};
+    const largePartiesByTable =
+        window.DASHBOARD_LARGE_PARTY_TABLES || {};
+
+    function fitMap() {
+        /*
+         * Dashboard map should use the full card width. Previously the zoom
+         * was also limited by the viewer height, which made a wide floor plan
+         * shrink unnecessarily and left a large empty strip on the right.
+         */
+        const availableWidth = Math.max(shell.clientWidth - 20, 100);
+
+        const zoom = Math.max(
+            Math.min(
+                availableWidth / stage.offsetWidth,
+                1
+            ),
+            0.25
+        );
+
+        const scaledWidth = stage.offsetWidth * zoom;
+        const scaledHeight = stage.offsetHeight * zoom;
+
+        stage.style.transform = `scale(${zoom})`;
+        stage.style.transformOrigin = "top left";
+
+        zoomSurface.style.width = `${scaledWidth}px`;
+        zoomSurface.style.height = `${scaledHeight}px`;
+
+        /*
+         * Let the dashboard viewer follow the fitted map height instead of
+         * forcing the map into a fixed-height viewport.
+         */
+        shell.style.height = `${scaledHeight + 20}px`;
+        shell.scrollLeft = 0;
+        shell.scrollTop = 0;
+    }
+
+    function tooltipHtml(tableNumber, bookings, largeParties) {
+        const count = bookings.length;
+
+        const largePartyRows = largeParties.map(party => `
+            <div class="dashboard-tooltip-large-party">
+                <div class="dashboard-tooltip-lp-label">
+                    Large party reservation
+                </div>
+                <div>
+                    <strong>${party.time_text}</strong>
+                    <span>${party.customer_name}</span>
+                </div>
+                <small>
+                    ${party.party_size} people · ${party.occasion}
+                    · ${party.status}
+                </small>
+            </div>
+        `).join("");
+
+        const bookingRows = bookings.map(booking => `
+            <div class="dashboard-tooltip-booking">
+                <div>
+                    <strong>
+                        ${booking.start_time}–${booking.end_time}
+                    </strong>
+                    <span>
+                        ${booking.customer_name}
+                    </span>
+                </div>
+                <small>
+                    ${booking.party_size} people
+                    · ${booking.is_eating_food ? "Eating" : "Drinks only"}
+                </small>
+            </div>
+        `).join("");
+
+        if (!count && !largeParties.length) {
+            return `
+                <div class="dashboard-tooltip-title">
+                    Table ${tableNumber}
+                </div>
+                <div class="dashboard-tooltip-empty">
+                    No bookings on this day
+                </div>
+            `;
+        }
+
+        return `
+            <div class="dashboard-tooltip-title">
+                Table ${tableNumber}
+                <span>
+                    ${largeParties.length
+                        ? "Large party reserved"
+                        : `${count} booking${count === 1 ? "" : "s"}`}
+                </span>
+            </div>
+            ${largePartyRows}
+            ${bookingRows}
+        `;
+    }
+
+    function showTooltip(button) {
+        const tableId = button.dataset.tableId;
+        const tableNumber = button.dataset.tableNumber;
+        const bookings = bookingsByTable[String(tableId)] || [];
+        const largeParties =
+            largePartiesByTable[String(tableId)] || [];
+
+        tooltip.innerHTML = tooltipHtml(
+            tableNumber,
+            bookings,
+            largeParties
+        );
+        tooltip.hidden = false;
+
+        /*
+         * Position in unscaled floor-plan coordinates so the tooltip moves
+         * with the map correctly when the whole plan is fitted/scaled.
+         */
+        const buttonCentreX =
+            button.offsetLeft + button.offsetWidth / 2;
+
+        let left =
+            buttonCentreX - tooltip.offsetWidth / 2;
+
+        left = Math.max(
+            8,
+            Math.min(
+                left,
+                stage.offsetWidth - tooltip.offsetWidth - 8
+            )
+        );
+
+        let top =
+            button.offsetTop - tooltip.offsetHeight - 12;
+
+        if (top < 8) {
+            top =
+                button.offsetTop + button.offsetHeight + 12;
+        }
+
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${top}px`;
+    }
+
+    function hideTooltip() {
+        tooltip.hidden = true;
+    }
+
+    tableButtons.forEach(button => {
+        button.addEventListener("mouseenter", () => {
+            tableButtons.forEach(other => {
+                if (other !== button) {
+                    other.classList.add("dashboard-map-table-dimmed");
+                }
+            });
+
+            button.classList.add("dashboard-map-table-hover");
+            showTooltip(button);
+        });
+
+        button.addEventListener("mouseleave", () => {
+            tableButtons.forEach(other => {
+                other.classList.remove("dashboard-map-table-dimmed");
+            });
+
+            button.classList.remove("dashboard-map-table-hover");
+            hideTooltip();
+        });
+
+        button.addEventListener("focus", () => showTooltip(button));
+        button.addEventListener("blur", hideTooltip);
+    });
+
+    fitButton?.addEventListener("click", fitMap);
+    window.addEventListener("resize", fitMap);
+
+    fitMap();
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     setupCustomerLookup();
     setupBookingTimeValidation();
@@ -1757,4 +1951,5 @@ document.addEventListener("DOMContentLoaded", () => {
     setupInquiryReminders();
     setupNormalTableAvailability();
     setupTableLayoutEditor();
+    setupDashboardFloorMap();
 });

@@ -34,12 +34,25 @@
 
 {% if reminders %}
 <div class="card reminder-card">
-    <h2>Reminders for today</h2>
+    <h2>Reminders for {{ selected_date.strftime("%A %d %B") }}</h2>
     {% for reminder in reminders %}
         <div class="reminder-dashboard-row">
             <div>
-                <strong>{{ reminder.inquiry.customer_name }}</strong>
+                <div class="dashboard-reminder-heading">
+                    <strong>{{ reminder.inquiry.customer_name }}</strong>
+                    {% if reminder.reminder_kind == "deposit_due" %}
+                        <span class="reminder-type-badge deposit-reminder-badge">
+                            Deposit due
+                        </span>
+                    {% else %}
+                        <span class="reminder-type-badge">
+                            Follow-up
+                        </span>
+                    {% endif %}
+                </div>
+
                 <div>{{ reminder.note }}</div>
+
                 <div class="muted">
                     Large party enquiry
                     {% if reminder.inquiry.event_date %}
@@ -105,6 +118,90 @@
 </div>
 {% endif %}
 
+
+{% if dashboard_large_parties %}
+<div class="card dashboard-large-parties-card">
+    <div class="dashboard-section-heading">
+        <div>
+            <h2>Large parties</h2>
+            <p class="muted">
+                Large-party enquiries taking place on this day.
+            </p>
+        </div>
+    </div>
+
+    <div class="dashboard-large-party-list">
+        {% for inquiry in dashboard_large_parties %}
+            <div class="dashboard-large-party-row">
+                <div class="large-party-time-block">
+                    {% if inquiry.event_time %}
+                        <strong>{{ inquiry.event_time.strftime("%H:%M") }}</strong>
+                        {% if inquiry.reserve_for_rest_of_day %}
+                            <span>rest of day</span>
+                        {% elif inquiry.expected_end_time %}
+                            <span>to {{ inquiry.expected_end_time.strftime("%H:%M") }}</span>
+                        {% endif %}
+                    {% else %}
+                        <strong>TBC</strong>
+                    {% endif %}
+                </div>
+
+                <div>
+                    <strong>{{ inquiry.customer_name }}</strong>
+                    <div class="muted">
+                        {{ inquiry.party_size }} people
+                        {% if inquiry.occasion %} · {{ inquiry.occasion }}{% endif %}
+                        · {{ inquiry.status }}
+                    </div>
+
+                    <div class="large-party-reservation-tags">
+                        {% for link in inquiry.reserved_areas %}
+                            <span class="badge large-party-badge">
+                                {{ link.area.name }}
+                            </span>
+                        {% endfor %}
+
+                        {% for link in inquiry.reserved_tables %}
+                            <span class="badge large-party-badge">
+                                T{{ link.table.number }}
+                            </span>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="large-party-finance-summary">
+                    <div class="large-party-finance-line">
+                        <span>Total</span>
+                        <strong>£{{ "%.2f"|format(inquiry.total_amount) }}</strong>
+                    </div>
+
+                    <div class="large-party-finance-line">
+                        <span>Deposit paid</span>
+                        <strong>£{{ "%.2f"|format(inquiry.deposit_paid_amount or 0) }}</strong>
+                    </div>
+
+                    <div class="large-party-finance-line outstanding-balance-line">
+                        <span>Outstanding</span>
+                        <strong>£{{ "%.2f"|format(inquiry.total_remainder) }}</strong>
+                    </div>
+
+                    {% if inquiry.deposit_due_date and inquiry.deposit_balance > 0 %}
+                        <small>
+                            Deposit expected {{ inquiry.deposit_due_date.strftime("%d/%m/%Y") }}
+                        </small>
+                    {% endif %}
+                </div>
+
+                <a class="small-link"
+                   href="{{ url_for('main.edit_large_party', inquiry_id=inquiry.id) }}">
+                    Open enquiry
+                </a>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 <div class="card">
     <h2>Bookings</h2>
 
@@ -142,4 +239,125 @@
         <p class="muted">No bookings for this day.</p>
     {% endif %}
 </div>
+
+<div class="card dashboard-floor-card">
+    <div class="dashboard-floor-heading">
+        <div>
+            <h2>Table map</h2>
+            <p class="muted">
+                Each table shows how many bookings it has on this day.
+                Hover over a table to see the booking times and customer names.
+            </p>
+        </div>
+
+        <button type="button"
+                class="button secondary compact-button"
+                id="dashboard-map-fit">
+            Fit whole map
+        </button>
+    </div>
+
+    <div class="dashboard-map-legend">
+        <span class="dashboard-map-key">
+            <span class="dashboard-map-dot no-bookings-dot"></span>
+            No bookings
+        </span>
+        <span class="dashboard-map-key">
+            <span class="dashboard-map-dot has-bookings-dot"></span>
+            Has bookings
+        </span>
+        <span class="dashboard-map-key">
+            <span class="dashboard-map-dot large-party-dot"></span>
+            Large party reserved
+        </span>
+    </div>
+
+    <div class="dashboard-floor-shell"
+         id="dashboard-floor-shell">
+        <div class="dashboard-floor-zoom-surface"
+             id="dashboard-floor-zoom-surface">
+
+            <div class="dashboard-floor-stage"
+                 id="dashboard-floor-stage"
+                 style="
+                    width: {{ floor_settings.canvas_width if floor_settings else 1200 }}px;
+                    height: {{ floor_settings.canvas_height if floor_settings else 760 }}px;
+                 ">
+
+                {% for floor_object in floor_objects %}
+                    <div class="dashboard-floor-object
+                                object-{{ floor_object.object_type }}
+                                shape-{{ floor_object.layout_shape or 'rectangle' }}
+                                {% if floor_object.object_type == "area" and floor_object.area_id and floor_object.area_id in dashboard_large_party_area_ids %}dashboard-large-party-area{% endif %}"
+                         style="
+                            left: {{ floor_object.x_position }}px;
+                            top: {{ floor_object.y_position }}px;
+                            width: {{ floor_object.layout_width }}px;
+                            height: {{ floor_object.layout_height }}px;
+                            transform: rotate({{ floor_object.layout_rotation or 0 }}deg);
+                            z-index: {{ floor_object.z_index or 1 }};
+                         ">
+                        <div class="floor-object-content">
+                            {% if floor_object.object_type == "tv" %}
+                                <span class="floor-icon">TV</span>
+                            {% elif floor_object.object_type == "pillar" %}
+                                <span class="floor-icon">●</span>
+                            {% endif %}
+
+                            <span class="floor-object-label">
+                                {{ floor_object.label }}
+                            </span>
+                        </div>
+                    </div>
+                {% endfor %}
+
+                {% for table in dashboard_tables %}
+                    {% set table_bookings = dashboard_table_bookings.get(table.id|string, []) %}
+                    {% set table_large_parties = dashboard_large_party_tables.get(table.id|string, []) %}
+                    <button type="button"
+                            class="dashboard-map-table
+                                   shape-{{ table.layout_shape or 'rectangle' }}
+                                   {% if table_large_parties %}dashboard-table-large-party{% elif table_bookings %}dashboard-table-has-bookings{% else %}dashboard-table-empty{% endif %}"
+                            data-table-id="{{ table.id }}"
+                            data-table-number="{{ table.number }}"
+                            aria-label="Table {{ table.number }}, {{ table_bookings|length }} bookings"
+                            style="
+                                left: {{ table.x_position or 40 }}px;
+                                top: {{ table.y_position or 40 }}px;
+                                width: {{ table.layout_width or 90 }}px;
+                                height: {{ table.layout_height or 60 }}px;
+                                transform: rotate({{ table.layout_rotation or 0 }}deg);
+                            ">
+                        <span class="dashboard-map-table-number">
+                            T{{ table.number }}
+                        </span>
+
+                        <span class="dashboard-map-booking-count"
+                              title="{{ table_bookings|length }} normal booking{% if table_bookings|length != 1 %}s{% endif %}">
+                            {{ table_bookings|length }}
+                        </span>
+
+                        {% if table_large_parties %}
+                            <span class="dashboard-map-large-party-badge"
+                                  title="Large party reservation">
+                                LP
+                            </span>
+                        {% endif %}
+                    </button>
+                {% endfor %}
+
+                <div class="dashboard-map-tooltip"
+                     id="dashboard-map-tooltip"
+                     hidden>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+window.DASHBOARD_TABLE_BOOKINGS = {{ dashboard_table_bookings | tojson }};
+window.DASHBOARD_LARGE_PARTY_TABLES = {{ dashboard_large_party_tables | tojson }};
+</script>
+
 {% endblock %}

@@ -127,73 +127,105 @@
         <div id="large-deposit-warning" class="deposit-warning" hidden></div>
 
         <div id="large-deposit-payment-field"
-             class="deposit-payment-field"
+             class="deposit-payment-field large-deposit-panel"
              {% if not inquiry or inquiry.party_size <= 10 %}hidden{% endif %}>
-            <div class="nested-grid">
-                <label>
-                    Deposit paid (£)
-                    <input type="number"
-                           name="deposit_paid_amount"
-                           id="large-deposit-paid"
-                           min="0"
-                           step="0.01"
-                           value="{{ '%.2f'|format(inquiry.deposit_paid_amount or 0) if inquiry else '0.00' }}">
-                </label>
 
-                <label>
-                    Deposit expected / promised date
-                    <input type="date"
-                           name="deposit_due_date"
-                           value="{% if inquiry and inquiry.deposit_due_date %}{{ inquiry.deposit_due_date.isoformat() }}{% endif %}">
-                    <span class="field-note">
-                        Optional. Use this when the customer says when they intend to pay.
-                    </span>
-                </label>
+            <div class="deposit-section-grid">
+                <div class="deposit-detail-card">
+                    <div class="deposit-card-heading">
+                        <strong>Expected deposit</strong>
+                        <span class="field-note">
+                            This can be changed or left blank until the customer agrees a date.
+                        </span>
+                    </div>
 
-                <label>
-                    Date deposit paid
-                    <input type="date"
-                           name="deposit_paid_date"
-                           id="deposit-paid-date"
-                           value="{% if inquiry and inquiry.deposit_paid_date %}{{ inquiry.deposit_paid_date.isoformat() }}{% endif %}">
-                    <span class="field-note">
-                        Required once a deposit payment has actually been recorded.
-                    </span>
-                </label>
+                    <label>
+                        Expected / promised date
+                        <input type="date"
+                               name="deposit_due_date"
+                               id="deposit-due-date"
+                               value="{% if inquiry and inquiry.deposit_due_date %}{{ inquiry.deposit_due_date.isoformat() }}{% endif %}">
+                    </label>
 
-                <label>
-                    Payment method
-                    <select name="deposit_payment_method"
-                            id="deposit-payment-method">
-                        <option value="">Choose...</option>
-                        <option value="Cash"
-                            {% if inquiry and inquiry.deposit_payment_method == "Cash" %}selected{% endif %}>
-                            Cash
-                        </option>
-                        <option value="Card"
-                            {% if inquiry and inquiry.deposit_payment_method == "Card" %}selected{% endif %}>
-                            Card
-                        </option>
-                    </select>
-                </label>
+                    <div class="deposit-auto-reminder-note">
+                        Setting a date automatically creates a dashboard reminder
+                        for that day while any deposit remains outstanding.
+                    </div>
 
-                <label>
-                    Deposit taken by
-                    <input name="deposit_taken_by"
-                           id="deposit-taken-by"
-                           value="{{ inquiry.deposit_taken_by if inquiry and inquiry.deposit_taken_by else '' }}"
-                           placeholder="Staff member">
-                </label>
+                    <div class="quote-preview">
+                        <span class="field-note">Deposit required</span>
+                        <strong>
+                            {% if inquiry %}
+                                £{{ "%.2f"|format(inquiry.deposit_required_amount or 0) }}
+                            {% else %}
+                                £0.00
+                            {% endif %}
+                        </strong>
+                    </div>
+                </div>
 
-                <div class="quote-preview">
-                    <span class="field-note">Deposit still due</span>
-                    <strong id="deposit-remainder-preview">
-                        {% if inquiry %}
-                            £{{ "%.2f"|format(inquiry.deposit_balance) }}
-                        {% else %}
-                            £0.00
-                        {% endif %}
-                    </strong>
+                <div class="deposit-detail-card">
+                    <div class="deposit-card-heading">
+                        <strong>Payment received</strong>
+                        <span class="field-note">
+                            Fill these details in when money is actually taken.
+                        </span>
+                    </div>
+
+                    <div class="nested-grid">
+                        <label>
+                            Deposit paid (£)
+                            <input type="number"
+                                   name="deposit_paid_amount"
+                                   id="large-deposit-paid"
+                                   min="0"
+                                   step="0.01"
+                                   value="{{ '%.2f'|format(inquiry.deposit_paid_amount or 0) if inquiry else '0.00' }}">
+                        </label>
+
+                        <label>
+                            Date paid
+                            <input type="date"
+                                   name="deposit_paid_date"
+                                   id="deposit-paid-date"
+                                   value="{% if inquiry and inquiry.deposit_paid_date %}{{ inquiry.deposit_paid_date.isoformat() }}{% endif %}">
+                        </label>
+
+                        <label>
+                            Payment method
+                            <select name="deposit_payment_method"
+                                    id="deposit-payment-method">
+                                <option value="">Choose...</option>
+                                <option value="Cash"
+                                    {% if inquiry and inquiry.deposit_payment_method == "Cash" %}selected{% endif %}>
+                                    Cash
+                                </option>
+                                <option value="Card"
+                                    {% if inquiry and inquiry.deposit_payment_method == "Card" %}selected{% endif %}>
+                                    Card
+                                </option>
+                            </select>
+                        </label>
+
+                        <label>
+                            Taken by
+                            <input name="deposit_taken_by"
+                                   id="deposit-taken-by"
+                                   value="{{ inquiry.deposit_taken_by if inquiry and inquiry.deposit_taken_by else '' }}"
+                                   placeholder="Staff member">
+                        </label>
+                    </div>
+
+                    <div class="quote-preview">
+                        <span class="field-note">Deposit still due</span>
+                        <strong id="deposit-remainder-preview">
+                            {% if inquiry %}
+                                £{{ "%.2f"|format(inquiry.deposit_balance) }}
+                            {% else %}
+                                £0.00
+                            {% endif %}
+                        </strong>
+                    </div>
                 </div>
             </div>
         </div>
@@ -203,10 +235,11 @@
     <section class="form-section full-width">
         <h2>Reserve areas / tables</h2>
         <p class="muted">
-            Reserving an area blocks every table in that area for this
-            enquiry's three-hour event window. You can also reserve individual
-            tables. Existing bookings on those tables will be moved to the next
-            suitable available table automatically.
+            Reserving an area blocks every table in that area for the
+            event's start-to-end reservation window, or for the rest of the day
+            when that option is selected. You can also reserve individual tables.
+            Existing bookings on those tables will be moved to the next suitable
+            available table automatically.
         </p>
 
         <div class="reservation-columns">
@@ -499,7 +532,7 @@
 
         <div id="reminder-rows">
             {% if inquiry %}
-                {% for reminder in inquiry.reminders %}
+                {% for reminder in inquiry.reminders if reminder.reminder_kind == "manual" %}
                     <div class="reminder-row">
                         <label>
                             Date

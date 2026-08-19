@@ -1442,3 +1442,491 @@ textarea {
         flex-direction: column;
     }
 }
+
+
+/* v5.3 dashboard floor map */
+.dashboard-floor-card {
+    margin-top: 20px;
+}
+
+.dashboard-floor-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 18px;
+}
+
+.dashboard-floor-heading h2 {
+    margin-bottom: 4px;
+}
+
+.dashboard-map-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin: 12px 0;
+}
+
+.dashboard-map-key {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+}
+
+.dashboard-map-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    border: 2px solid transparent;
+}
+
+.no-bookings-dot {
+    background: #edf2ed;
+    border-color: #99a399;
+}
+
+.has-bookings-dot {
+    background: #e7f0f7;
+    border-color: #527fa2;
+}
+
+.dashboard-floor-shell {
+    min-height: 300px;
+    height: auto;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    background: #deded7;
+    padding: 10px;
+}
+
+.dashboard-floor-zoom-surface {
+    position: relative;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.dashboard-floor-stage {
+    position: relative;
+    background: #fbfbf7;
+    border: 2px solid #8a8a80;
+    border-radius: 8px;
+    transform-origin: top left;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.dashboard-floor-object {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    pointer-events: none;
+}
+
+.dashboard-map-table {
+    position: absolute;
+    z-index: 10;
+    box-sizing: border-box;
+    border: 3px solid #99a399;
+    border-radius: 8px;
+    background: #edf2ed;
+    color: var(--text);
+    cursor: default;
+    font: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 3px;
+    transition:
+        opacity 100ms ease,
+        box-shadow 100ms ease,
+        filter 100ms ease;
+}
+
+.dashboard-table-has-bookings {
+    border-color: #527fa2;
+    background: #e7f0f7;
+}
+
+.dashboard-map-table-number {
+    font-weight: 800;
+}
+
+.dashboard-map-booking-count {
+    min-width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    padding: 0 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.10);
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.dashboard-table-empty .dashboard-map-booking-count {
+    opacity: 0.45;
+}
+
+.dashboard-map-table-hover {
+    z-index: 30;
+    box-shadow: 0 0 0 5px rgba(31, 111, 178, 0.32);
+    filter: saturate(1.15);
+}
+
+.dashboard-map-table-dimmed {
+    opacity: 0.28;
+}
+
+.dashboard-map-tooltip {
+    position: absolute;
+    z-index: 60;
+    width: 270px;
+    max-width: calc(100% - 16px);
+    border: 1px solid #aaa;
+    border-radius: 9px;
+    background: white;
+    color: #222;
+    padding: 11px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+    pointer-events: none;
+
+    /* Counteract the map zoom enough to keep hover content readable. */
+    transform-origin: top center;
+}
+
+.dashboard-map-tooltip[hidden] {
+    display: none !important;
+}
+
+.dashboard-tooltip-title {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    font-weight: 800;
+    padding-bottom: 7px;
+    margin-bottom: 5px;
+    border-bottom: 1px solid #ddd;
+}
+
+.dashboard-tooltip-title span {
+    font-size: 12px;
+    font-weight: 600;
+    color: #666;
+}
+
+.dashboard-tooltip-booking {
+    padding: 7px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.dashboard-tooltip-booking:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+}
+
+.dashboard-tooltip-booking > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.dashboard-tooltip-booking small,
+.dashboard-tooltip-empty {
+    display: block;
+    margin-top: 3px;
+    color: #666;
+}
+
+@media (max-width: 760px) {
+    .dashboard-floor-heading {
+        flex-direction: column;
+    }
+
+    .dashboard-floor-shell {
+        min-height: 240px;
+        height: auto;
+    }
+}
+
+
+/* v5.4 large-party dashboard integration */
+.large-deposit-panel {
+    margin-top: 14px;
+}
+
+.deposit-section-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    gap: 14px;
+}
+
+.deposit-detail-card {
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    background: #fafaf7;
+    padding: 15px;
+}
+
+.deposit-card-heading {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-bottom: 13px;
+}
+
+.deposit-card-heading strong {
+    font-size: 17px;
+}
+
+.deposit-auto-reminder-note {
+    margin-top: 9px;
+    padding: 9px 10px;
+    border-radius: 8px;
+    background: #eef3f8;
+    border: 1px solid #c8d8e5;
+    font-size: 12px;
+    color: #466171;
+}
+
+.dashboard-reminder-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 3px;
+}
+
+.reminder-type-badge {
+    display: inline-flex;
+    border-radius: 999px;
+    padding: 3px 7px;
+    font-size: 11px;
+    font-weight: 750;
+    background: #eeeeea;
+    border: 1px solid #d2d2cb;
+}
+
+.deposit-reminder-badge {
+    background: #fff3d5;
+    border-color: #d8bc69;
+}
+
+.dashboard-large-parties-card {
+    border-width: 2px;
+    border-color: #b7a4cf;
+}
+
+.dashboard-section-heading h2 {
+    margin-bottom: 3px;
+}
+
+.dashboard-large-party-row {
+    display: grid;
+    grid-template-columns: 105px minmax(220px, 1fr) minmax(180px, auto) auto;
+    gap: 16px;
+    align-items: center;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.dashboard-large-party-row:last-child {
+    border-bottom: 0;
+}
+
+.large-party-time-block {
+    display: flex;
+    flex-direction: column;
+}
+
+.large-party-time-block strong {
+    font-size: 18px;
+}
+
+.large-party-time-block span {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.large-party-reservation-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 7px;
+}
+
+.large-party-badge {
+    background: #eee7f6;
+    border: 1px solid #b7a4cf;
+}
+
+.large-party-finance-summary {
+    display: flex;
+    flex-direction: column;
+    font-size: 13px;
+}
+
+.large-party-finance-summary small {
+    color: var(--muted);
+    margin-top: 2px;
+}
+
+.large-party-dot {
+    background: #eee7f6;
+    border-color: #8d71b1;
+}
+
+.dashboard-map-table.dashboard-table-large-party {
+    border-color: #815fa8;
+    background: #e9def5;
+    color: #4c3568;
+}
+
+.dashboard-map-table.dashboard-table-large-party
+.dashboard-map-booking-count {
+    background: #815fa8;
+    color: white;
+    opacity: 1;
+}
+
+.dashboard-large-party-area {
+    border-color: #815fa8 !important;
+    background: rgba(129, 95, 168, 0.18) !important;
+    color: #5f467c !important;
+}
+
+.dashboard-tooltip-large-party {
+    padding: 8px 0;
+    border-bottom: 1px solid #e1d7ec;
+    background: #f8f4fc;
+    margin: 0 -6px;
+    padding-left: 6px;
+    padding-right: 6px;
+}
+
+.dashboard-tooltip-lp-label {
+    color: #755694;
+    text-transform: uppercase;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+}
+
+.dashboard-tooltip-large-party > div:not(.dashboard-tooltip-lp-label) {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.dashboard-tooltip-large-party small {
+    display: block;
+    color: #666;
+    margin-top: 3px;
+}
+
+@media (max-width: 850px) {
+    .deposit-section-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .dashboard-large-party-row {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+}
+
+
+/* v5.5 spacing, duration and dashboard finance refinements */
+
+/*
+ * The generic normal-booking deposit field is intentionally narrow, but the
+ * large-party deposit panel contains two full information cards and should use
+ * the whole form width.
+ */
+.deposit-payment-field.large-deposit-panel {
+    max-width: none;
+    width: 100%;
+}
+
+.deposit-section-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 22px;
+    width: 100%;
+}
+
+.deposit-detail-card {
+    padding: 20px;
+    min-width: 0;
+}
+
+.deposit-detail-card .nested-grid {
+    gap: 16px 20px;
+}
+
+.deposit-auto-reminder-note {
+    max-width: none;
+    line-height: 1.45;
+}
+
+.large-party-finance-summary {
+    min-width: 190px;
+    gap: 5px;
+}
+
+.large-party-finance-line {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.large-party-finance-line strong {
+    white-space: nowrap;
+}
+
+.outstanding-balance-line {
+    margin-top: 3px;
+    padding-top: 6px;
+    border-top: 1px solid #ddd4e6;
+    color: #5e427b;
+}
+
+.outstanding-balance-line strong {
+    font-size: 15px;
+}
+
+.dashboard-map-large-party-badge {
+    min-width: 24px;
+    height: 22px;
+    border-radius: 999px;
+    padding: 0 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #815fa8;
+    color: white;
+    font-size: 10px;
+    font-weight: 850;
+}
+
+.dashboard-map-table.dashboard-table-large-party
+.dashboard-map-booking-count {
+    background: rgba(0, 0, 0, 0.10);
+    color: inherit;
+}
+
+@media (max-width: 850px) {
+    .deposit-payment-field.large-deposit-panel {
+        width: 100%;
+    }
+
+    .deposit-section-grid {
+        grid-template-columns: 1fr;
+    }
+}

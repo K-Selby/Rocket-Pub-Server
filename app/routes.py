@@ -34,7 +34,7 @@ from app.models import (
 
 main = Blueprint("main", __name__)
 
-STANDARD_BOOKING_DURATION = 180
+STANDARD_BOOKING_DURATION = 150
 EARLIEST_BOOKING = "12:15"
 LATEST_BOOKING = "19:30"
 SUNDAY_LATEST_BOOKING = "19:00"
@@ -733,8 +733,127 @@ def dashboard():
             InquiryReminder.reminder_date == selected_date,
             InquiryReminder.completed.is_(False),
         )
-        .order_by(InquiryReminder.id)
+        .order_by(
+            InquiryReminder.reminder_kind.desc(),
+            InquiryReminder.id,
+        )
     ).all()
+
+    # Large parties taking place on the selected dashboard date.
+    dashboard_large_parties = db.session.scalars(
+        db.select(LargePartyInquiry)
+        .where(
+            LargePartyInquiry.event_date == selected_date,
+            LargePartyInquiry.status != "Cancelled",
+        )
+        .order_by(
+            LargePartyInquiry.event_time.is_(None),
+            LargePartyInquiry.event_time,
+            LargePartyInquiry.customer_name,
+        )
+    ).all()
+
+    # Reuse the saved master floor plan on the dashboard.
+    floor_objects = db.session.scalars(
+        db.select(FloorPlanObject)
+        .order_by(FloorPlanObject.z_index, FloorPlanObject.id)
+    ).all()
+
+    floor_settings = db.session.scalar(
+        db.select(FloorPlanSetting).where(
+            FloorPlanSetting.name == "main"
+        )
+    )
+
+    dashboard_tables = db.session.scalars(
+        db.select(PubTable)
+        .where(PubTable.active.is_(True))
+        .order_by(*table_order_clause())
+    ).all()
+
+    # Build a small JSON-friendly booking summary for every table. A booking
+    # using multiple paired tables appears against each physical table.
+    dashboard_table_bookings = {
+        str(table.id): []
+        for table in dashboard_tables
+    }
+
+    for booking in bookings:
+        start = datetime.combine(
+            booking.booking_date,
+            booking.booking_time
+        )
+        end = start + timedelta(minutes=booking.duration_minutes)
+
+        booking_summary = {
+            "booking_id": booking.id,
+            "customer_name": booking.customer.name,
+            "party_size": booking.party_size,
+            "start_time": booking.booking_time.strftime("%H:%M"),
+            "end_time": end.strftime("%H:%M"),
+            "is_eating_food": bool(booking.is_eating_food),
+        }
+
+        for table in booking.tables:
+            dashboard_table_bookings.setdefault(
+                str(table.id), []
+            ).append(booking_summary)
+
+    # Expand every large-party reservation into physical table IDs for the map.
+    dashboard_large_party_tables = {}
+    dashboard_large_party_area_ids = set()
+
+    for inquiry in dashboard_large_parties:
+        reserved_table_ids = {
+            link.table_id
+            for link in inquiry.reserved_tables
+        }
+
+        area_ids = {
+            link.area_id
+            for link in inquiry.reserved_areas
+        }
+        dashboard_large_party_area_ids.update(area_ids)
+
+        if area_ids:
+            reserved_table_ids.update(
+                db.session.scalars(
+                    db.select(PubTable.id).where(
+                        PubTable.area_id.in_(area_ids),
+                        PubTable.active.is_(True),
+                    )
+                ).all()
+            )
+
+        if inquiry.reserve_for_rest_of_day:
+            time_text = (
+                f"{inquiry.event_time.strftime('%H:%M')} onwards"
+                if inquiry.event_time
+                else "Rest of day"
+            )
+        elif inquiry.event_time and inquiry.expected_end_time:
+            time_text = (
+                f"{inquiry.event_time.strftime('%H:%M')}–"
+                f"{inquiry.expected_end_time.strftime('%H:%M')}"
+            )
+        elif inquiry.event_time:
+            time_text = inquiry.event_time.strftime("%H:%M")
+        else:
+            time_text = "Time not confirmed"
+
+        summary = {
+            "inquiry_id": inquiry.id,
+            "customer_name": inquiry.customer_name,
+            "party_size": inquiry.party_size,
+            "occasion": inquiry.occasion or "Large party",
+            "status": inquiry.status,
+            "time_text": time_text,
+        }
+
+        for table_id in reserved_table_ids:
+            dashboard_large_party_tables.setdefault(
+                str(table_id), []
+            ).append(summary)
 
     return render_template(
         "dashboard.html",
@@ -745,6 +864,13 @@ def dashboard():
         repeat_target_date=repeat_target_date,
         repeat_prompts=repeat_prompts,
         reminders=reminders,
+        floor_objects=floor_objects,
+        floor_settings=floor_settings,
+        dashboard_tables=dashboard_tables,
+        dashboard_table_bookings=dashboard_table_bookings,
+        dashboard_large_parties=dashboard_large_parties,
+        dashboard_large_party_tables=dashboard_large_party_tables,
+        dashboard_large_party_area_ids=list(dashboard_large_party_area_ids),
     )
 
 
@@ -2324,7 +2450,10 @@ def large_party_form_handler(inquiry=None):
             )
 
         # Rebuild callback/follow-up reminders.
-        InquiryReminder.query.filter_by(inquiry_id=inquiry.id).delete()
+        InquiryReminder.query.filter_by(
+            inquiry_id=inquiry.id,
+            reminder_kind="manual",
+        ).delete()
 
         reminder_dates = request.form.getlist("reminder_date")
         reminder_notes = request.form.getlist("reminder_note")
@@ -2353,12 +2482,48 @@ def large_party_form_handler(inquiry=None):
                     inquiry_id=inquiry.id,
                     reminder_date=reminder_date,
                     note=note,
+                    reminder_kind="manual",
                     completed=(
                         index < len(reminder_completed)
                         and reminder_completed[index] == "1"
                     ),
                 )
             )
+
+        # Keep one automatic reminder in sync with the promised deposit date.
+        # If the deposit is already fully paid, or the expected date is cleared,
+        # no automatic deposit reminder is needed.
+        auto_deposit_reminder = db.session.scalar(
+            db.select(InquiryReminder).where(
+                InquiryReminder.inquiry_id == inquiry.id,
+                InquiryReminder.reminder_kind == "deposit_due",
+            )
+        )
+
+        deposit_still_due = (
+            float(inquiry.deposit_required_amount or 0)
+            - float(inquiry.deposit_paid_amount or 0)
+        ) > 0.009
+
+        if inquiry.deposit_due_date and deposit_still_due:
+            reminder_note = (
+                f"Deposit expected today — £{inquiry.deposit_balance:.2f} "
+                f"still due for {inquiry.customer_name}'s large party."
+            )
+
+            if auto_deposit_reminder is None:
+                auto_deposit_reminder = InquiryReminder(
+                    inquiry_id=inquiry.id,
+                    reminder_kind="deposit_due",
+                    completed=False,
+                )
+                db.session.add(auto_deposit_reminder)
+
+            auto_deposit_reminder.reminder_date = inquiry.deposit_due_date
+            auto_deposit_reminder.note = reminder_note
+            auto_deposit_reminder.completed = False
+        elif auto_deposit_reminder is not None:
+            db.session.delete(auto_deposit_reminder)
 
         db.session.commit()
 

@@ -1,4 +1,4 @@
-# Pub Booking System - v5.2.1 Rotated Position Persistence Fix
+# Pub Booking System - v5.5 Dashboard + Booking Duration Refinements
 
 ## Added in v4
 
@@ -222,3 +222,110 @@ right, top or bottom edge of the floor plan.
 - Rotated bookable tables use the same persistence fix.
 - Adding a new floor-plan object now saves the current layout before reloading
   the editor, preventing unsaved position changes from being lost.
+
+
+## v5.3 dashboard floor map
+
+- The dashboard keeps the existing chronological booking list.
+- The complete saved pub floor plan is now shown underneath the list.
+- Every active bookable table displays its booking count for the selected day.
+- Tables with bookings are visually distinguished from tables with none.
+- Hovering a table fades the other bookable tables and opens a tooltip showing:
+  - customer name
+  - booking start/end time
+  - party size
+  - eating/drinks-only status
+- Multi-table bookings appear on every physical table assigned to that booking.
+- Dashboard date navigation automatically updates the floor-plan booking counts.
+- The map uses the same walls, bar, TVs, pillars, labels and other saved
+  non-bookable floor-plan objects as the editor.
+
+
+## v5.3.1 dashboard map placement fix
+
+The dashboard floor-plan markup had accidentally been inserted inside the
+Jinja title block, which meant it was rendered into the page title rather than
+the visible dashboard content. The map is now placed after the booking list
+inside the dashboard content block.
+
+
+## v5.3.2 dashboard map width fix
+
+- Dashboard floor plan now fits to the full available card width.
+- Removed the fixed-height scaling constraint that caused a large blank area
+  on the right of wide floor plans.
+- Dashboard map container now follows the fitted floor-plan height.
+
+
+## v5.3.3 dashboard map edge clipping fix
+
+- Dashboard floor plan now clips all objects exactly to the saved map boundary.
+- Fixed rotated walls/doors visually spilling past the right and bottom border
+  when the dashboard map was scaled to fill the card width.
+- The editable floor-plan screen is unchanged; only the read-only dashboard
+  view uses clipping.
+
+
+## v5.4 large-party dashboard integration
+
+- Setting an expected/promised deposit date automatically creates a dashboard
+  reminder on that date while money remains outstanding.
+- The automatic reminder moves when the expected date changes and is removed
+  when the date is cleared or the deposit is fully paid.
+- Manual callback reminders remain separate and editable.
+- Large-party deposit fields now use separate Expected Deposit and Payment
+  Received cards for clearer day-to-day use.
+- Large parties taking place on the selected dashboard date now have their own
+  dashboard section with times, status, party size, reserved areas/tables and
+  deposit summary.
+- Tables/areas reserved for large parties are purple on the dashboard map.
+- Hovering a purple table shows the large-party customer, time, party size,
+  occasion and status.
+- Whole-area reservations automatically colour every active table in that area;
+  linked area-block floor-plan objects are also shaded purple.
+
+
+## v5.4 large-party dashboard and deposit reminders
+
+- Expected/promised deposit dates automatically create a dashboard reminder.
+- Changing the expected date automatically moves that reminder.
+- Clearing the expected date, or fully paying the required deposit, removes the
+  automatic deposit reminder.
+- Automatic deposit reminders remain separate from manually added callback
+  reminders.
+- Large parties taking place on the selected dashboard date now have their own
+  dashboard list showing:
+  - start/end time or rest-of-day status
+  - customer
+  - party size
+  - occasion/status
+  - reserved areas
+  - specifically reserved tables
+  - deposit paid/required and expected date
+- Large-party-reserved tables are purple on the dashboard map.
+- Reserving an entire area makes every bookable table in that area purple.
+- If a floor-plan Area Block is linked to the same pub area, that whole visual
+  area is also shaded purple.
+- Hovering a purple table shows the large-party customer, reservation time,
+  party size, occasion and status alongside any ordinary bookings.
+- The large-party deposit section has separate Expected Deposit and Payment
+  Received cards, with clear automatic-reminder guidance.
+
+
+## v5.5 dashboard and booking-duration refinements
+
+- Standard normal booking duration changed from 3 hours to 2 hours 30 minutes.
+- Existing saved bookings keep their stored duration; newly created/confirmed
+  normal bookings use 150 minutes.
+- Large-party deposit/payment section now uses the full available form width
+  instead of inheriting the narrow normal-booking deposit-panel limit.
+- Expected Deposit and Payment Received cards are equal-width and less cramped.
+- Large-party dashboard rows now show:
+  - total food/extras amount
+  - deposit paid
+  - outstanding balance = total amount minus deposit paid
+  - expected deposit date when money is still due
+- A table reserved for a large party now keeps its numeric normal-booking count
+  on the dashboard map and shows a separate purple LP badge. This means a table
+  with normal bookings earlier in the day still visibly shows that count before
+  the later large-party reservation.

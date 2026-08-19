@@ -97,6 +97,13 @@ def ensure_starter_schema_updates():
         inspector, "repeat_booking", "high_chairs_required", "INTEGER DEFAULT 0"
     )
 
+    add_column_if_missing(
+        inspector,
+        "inquiry_reminder",
+        "reminder_kind",
+        "VARCHAR(30) DEFAULT 'manual'"
+    )
+
     menu_additions = {
         "option_number": "INTEGER",
         "items_text": "TEXT",

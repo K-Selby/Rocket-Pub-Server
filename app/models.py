@@ -205,7 +205,7 @@ class RepeatBookingOccurrence(db.Model):
 
 
 class Booking(db.Model):
-    """A normal table booking. Standard table time is three hours."""
+    """A normal table booking. Standard table time is two hours 30 minutes."""
 
     id = db.Column(db.Integer, primary_key=True)
     customer_id = db.Column(db.Integer, db.ForeignKey("customer.id"), nullable=False)
@@ -213,7 +213,7 @@ class Booking(db.Model):
 
     booking_date = db.Column(db.Date, nullable=False, index=True)
     booking_time = db.Column(db.Time, nullable=False)
-    duration_minutes = db.Column(db.Integer, nullable=False, default=180)
+    duration_minutes = db.Column(db.Integer, nullable=False, default=150)
 
     party_size = db.Column(db.Integer, nullable=False)
     number_of_children = db.Column(db.Integer, nullable=False, default=0)
@@ -465,6 +465,16 @@ class InquiryReminder(db.Model):
 
     reminder_date = db.Column(db.Date, nullable=False, index=True)
     note = db.Column(db.String(250), nullable=False)
+
+    # "manual" reminders come from the enquiry form. "deposit_due" is kept in
+    # sync automatically with the expected/promised deposit date.
+    reminder_kind = db.Column(
+        db.String(30),
+        nullable=False,
+        default="manual",
+        index=True,
+    )
+
     completed = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
