@@ -555,3 +555,26 @@ The header is less crowded:
 - Allergen Menu
 - More: Customers, Table Map, Archive
 - Management (Manager/Admin): Tables, Table Layout, Users
+
+
+## v6.4.1 tri-state allergens and side choices
+
+Categories are now fixed to:
+- Main Meals
+- Starters
+- Sides
+- Kids Meals
+- Desserts
+
+Each of the four test allergens now has three states:
+- Green: Free
+- Yellow: May contain
+- Red: Contains
+
+Free-from searches are strict: both Red and Yellow are excluded.
+
+Main Meals can be linked to any number of items in the Sides category. When
+staff select allergen-free filters, Rocket Pub Server separately checks every
+linked side and suggests only sides confirmed Green for all selected allergens.
+The full side list can still be expanded so staff can see why another side was
+excluded.

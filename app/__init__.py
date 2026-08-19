@@ -118,6 +118,38 @@ def ensure_starter_schema_updates():
         add_column_if_missing(inspector, "app_user", name, sql_type)
 
 
+    allergen_item_additions = {
+        "milk_status": "VARCHAR(20) DEFAULT 'free'",
+        "nuts_status": "VARCHAR(20) DEFAULT 'free'",
+        "egg_status": "VARCHAR(20) DEFAULT 'free'",
+        "gluten_status": "VARCHAR(20) DEFAULT 'free'",
+    }
+
+    for name, sql_type in allergen_item_additions.items():
+        add_column_if_missing(
+            inspector,
+            "allergen_menu_item",
+            name,
+            sql_type,
+        )
+
+    # Carry existing v6.4 boolean test data into the new tri-state fields.
+    if "allergen_menu_item" in inspector.get_table_names():
+        for status_col, legacy_col in [
+            ("milk_status", "contains_milk"),
+            ("nuts_status", "contains_nuts"),
+            ("egg_status", "contains_egg"),
+            ("gluten_status", "contains_gluten"),
+        ]:
+            db.session.execute(
+                text(
+                    f"UPDATE allergen_menu_item "
+                    f"SET {status_col} = 'contains' "
+                    f"WHERE {legacy_col} = 1 "
+                    f"AND ({status_col} IS NULL OR {status_col} = 'free')"
+                )
+            )
+
     add_column_if_missing(
         inspector,
         "inquiry_reminder",
@@ -346,79 +378,130 @@ def seed_default_admin():
 
 def seed_allergen_test_menu():
     """
-    Small temporary menu for testing allergen search/filter behaviour.
-
-    These are demonstration rows only and should be replaced with verified
-    Rocket menu/ingredient information before allergen data is relied upon.
+    Small temporary menu for testing the allergen search, colour states and
+    side-suggestion workflow. Replace with verified pub data later.
     """
-    from app.models import AllergenMenuItem
+    from app.models import AllergenMealSide, AllergenMenuItem
 
     if db.session.scalar(db.select(AllergenMenuItem.id).limit(1)):
         return
 
     rows = [
-        {
-            "name": "Cheese Burger",
-            "category": "Burgers",
-            "description": "Beef burger with cheese in a bun.",
-            "ingredients": "Beef burger, burger bun, cheddar cheese, lettuce, sauce",
-            "contains_milk": True,
-            "contains_gluten": True,
-        },
-        {
-            "name": "Chicken Burger",
-            "category": "Burgers",
-            "description": "Chicken burger served in a bun.",
-            "ingredients": "Chicken fillet, burger bun, lettuce, mayonnaise",
-            "contains_egg": True,
-            "contains_gluten": True,
-        },
-        {
-            "name": "Vegetable Curry",
-            "category": "Mains",
-            "description": "Mixed vegetable curry served with rice.",
-            "ingredients": "Mixed vegetables, curry sauce, rice",
-            "vegetarian": True,
-        },
-        {
-            "name": "Fish & Chips",
-            "category": "Mains",
-            "description": "Battered fish served with chips.",
-            "ingredients": "Fish fillet, flour batter, chips",
-            "contains_gluten": True,
-        },
-        {
-            "name": "Chicken Caesar Salad",
-            "category": "Salads",
-            "description": "Chicken Caesar salad with dressing.",
-            "ingredients": "Chicken, lettuce, Caesar dressing, croutons, parmesan",
-            "contains_milk": True,
-            "contains_egg": True,
-            "contains_gluten": True,
-            "can_make_vegetarian": True,
-            "vegetarian_changes": "Remove chicken and serve as a vegetarian Caesar salad.",
-        },
-        {
-            "name": "Chocolate Brownie",
-            "category": "Desserts",
-            "description": "Chocolate brownie dessert.",
-            "ingredients": "Chocolate, flour, butter, egg, sugar",
-            "contains_milk": True,
-            "contains_egg": True,
-            "contains_gluten": True,
-        },
-        {
-            "name": "Nut Sundae",
-            "category": "Desserts",
-            "description": "Ice cream sundae topped with nuts.",
-            "ingredients": "Ice cream, mixed nuts, sauce",
-            "contains_milk": True,
-            "contains_nuts": True,
-            "vegetarian": True,
-        },
+        AllergenMenuItem(
+            name="Cheese Burger",
+            category="Main Meals",
+            description="Beef burger with cheese in a bun.",
+            ingredients="Beef burger, burger bun, cheddar cheese, lettuce, sauce",
+            milk_status="contains",
+            nuts_status="free",
+            egg_status="may_contain",
+            gluten_status="contains",
+        ),
+        AllergenMenuItem(
+            name="Chicken Curry",
+            category="Main Meals",
+            description="Chicken curry with a choice of chips or rice.",
+            ingredients="Chicken, curry sauce",
+            milk_status="may_contain",
+            nuts_status="free",
+            egg_status="free",
+            gluten_status="may_contain",
+        ),
+        AllergenMenuItem(
+            name="Vegetable Curry",
+            category="Main Meals",
+            description="Mixed vegetable curry with a choice of chips or rice.",
+            ingredients="Mixed vegetables, curry sauce",
+            milk_status="free",
+            nuts_status="free",
+            egg_status="free",
+            gluten_status="may_contain",
+            vegetarian=True,
+        ),
+        AllergenMenuItem(
+            name="Garlic Mushrooms",
+            category="Starters",
+            description="Breaded garlic mushrooms.",
+            ingredients="Mushrooms, breadcrumb coating, garlic dressing",
+            milk_status="may_contain",
+            nuts_status="free",
+            egg_status="may_contain",
+            gluten_status="contains",
+            vegetarian=True,
+        ),
+        AllergenMenuItem(
+            name="Kids Chicken Nuggets",
+            category="Kids Meals",
+            description="Chicken nuggets with a choice of side.",
+            ingredients="Chicken nuggets",
+            milk_status="free",
+            nuts_status="free",
+            egg_status="may_contain",
+            gluten_status="contains",
+        ),
+        AllergenMenuItem(
+            name="Chocolate Brownie",
+            category="Desserts",
+            description="Chocolate brownie dessert.",
+            ingredients="Chocolate, flour, butter, egg, sugar",
+            milk_status="contains",
+            nuts_status="may_contain",
+            egg_status="contains",
+            gluten_status="contains",
+            vegetarian=True,
+        ),
+        AllergenMenuItem(
+            name="Chips",
+            category="Sides",
+            description="Portion of chips.",
+            ingredients="Potato, cooking oil",
+            milk_status="free",
+            nuts_status="free",
+            egg_status="free",
+            gluten_status="may_contain",
+            vegetarian=True,
+        ),
+        AllergenMenuItem(
+            name="Rice",
+            category="Sides",
+            description="Plain cooked rice.",
+            ingredients="Rice",
+            milk_status="free",
+            nuts_status="free",
+            egg_status="free",
+            gluten_status="free",
+            vegetarian=True,
+        ),
+        AllergenMenuItem(
+            name="Side Salad",
+            category="Sides",
+            description="Mixed side salad.",
+            ingredients="Lettuce, tomato, cucumber",
+            milk_status="free",
+            nuts_status="free",
+            egg_status="free",
+            gluten_status="free",
+            vegetarian=True,
+        ),
     ]
 
-    for row in rows:
-        db.session.add(AllergenMenuItem(**row))
+    db.session.add_all(rows)
+    db.session.flush()
+
+    by_name = {row.name: row for row in rows}
+
+    for meal_name, side_names in {
+        "Cheese Burger": ["Chips", "Side Salad"],
+        "Chicken Curry": ["Chips", "Rice"],
+        "Vegetable Curry": ["Chips", "Rice"],
+        "Kids Chicken Nuggets": ["Chips", "Rice"],
+    }.items():
+        for side_name in side_names:
+            db.session.add(
+                AllergenMealSide(
+                    meal_id=by_name[meal_name].id,
+                    side_id=by_name[side_name].id,
+                )
+            )
 
     db.session.commit()

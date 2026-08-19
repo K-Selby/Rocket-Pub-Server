@@ -59,6 +59,28 @@ class AppUser(db.Model):
 
 
 
+
+class AllergenMealSide(db.Model):
+    """Allowed side option for a Main Meal."""
+    id = db.Column(db.Integer, primary_key=True)
+    meal_id = db.Column(
+        db.Integer,
+        db.ForeignKey("allergen_menu_item.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    side_id = db.Column(
+        db.Integer,
+        db.ForeignKey("allergen_menu_item.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint("meal_id", "side_id", name="uq_allergen_meal_side"),
+    )
+
+
 class AllergenMenuItem(db.Model):
     """
     One food/menu item used by the staff allergen lookup.
@@ -73,6 +95,14 @@ class AllergenMenuItem(db.Model):
     description = db.Column(db.String(300))
     ingredients = db.Column(db.Text)
 
+    # Tri-state values: "free", "contains", "may_contain".
+    milk_status = db.Column(db.String(20), nullable=False, default="free")
+    nuts_status = db.Column(db.String(20), nullable=False, default="free")
+    egg_status = db.Column(db.String(20), nullable=False, default="free")
+    gluten_status = db.Column(db.String(20), nullable=False, default="free")
+
+    # Legacy boolean columns are retained during development so existing test
+    # databases migrate safely. New code uses the *_status fields above.
     contains_milk = db.Column(db.Boolean, nullable=False, default=False)
     contains_nuts = db.Column(db.Boolean, nullable=False, default=False)
     contains_egg = db.Column(db.Boolean, nullable=False, default=False)
@@ -93,15 +123,36 @@ class AllergenMenuItem(db.Model):
     @property
     def allergen_names(self):
         names = []
-        if self.contains_milk:
-            names.append("Milk")
-        if self.contains_nuts:
-            names.append("Nuts")
-        if self.contains_egg:
-            names.append("Egg")
-        if self.contains_gluten:
-            names.append("Gluten")
+        for label, status in [
+            ("Milk", self.milk_status),
+            ("Nuts", self.nuts_status),
+            ("Egg", self.egg_status),
+            ("Gluten", self.gluten_status),
+        ]:
+            if status == "contains":
+                names.append(label)
         return names
+
+    @property
+    def may_contain_names(self):
+        names = []
+        for label, status in [
+            ("Milk", self.milk_status),
+            ("Nuts", self.nuts_status),
+            ("Egg", self.egg_status),
+            ("Gluten", self.gluten_status),
+        ]:
+            if status == "may_contain":
+                names.append(label)
+        return names
+
+    allowed_side_links = db.relationship(
+        "AllergenMealSide",
+        foreign_keys="AllergenMealSide.meal_id",
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
+
 
 
 class Customer(db.Model):

@@ -119,6 +119,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from app import db
 from app.models import (
     AppUser,
+    AllergenMealSide,
     AllergenMenuItem,
     Area,
     Booking,
@@ -2186,12 +2187,6 @@ def change_user_role(user_id):
 
 @main.route("/allergens")
 def allergen_menu():
-    """
-    Staff-facing allergen lookup.
-
-    Filters are exclusion based ("show me meals without X") because that is the
-    quickest workflow when helping a customer choose something they can eat.
-    """
     search = request.args.get("q", "").strip()
     category = request.args.get("category", "").strip()
 
@@ -2219,14 +2214,15 @@ def allergen_menu():
     if category:
         stmt = stmt.where(AllergenMenuItem.category == category)
 
+    # "Free from" filters are strict: yellow / may-contain does NOT qualify.
     if milk_free:
-        stmt = stmt.where(AllergenMenuItem.contains_milk.is_(False))
+        stmt = stmt.where(AllergenMenuItem.milk_status == "free")
     if nut_free:
-        stmt = stmt.where(AllergenMenuItem.contains_nuts.is_(False))
+        stmt = stmt.where(AllergenMenuItem.nuts_status == "free")
     if egg_free:
-        stmt = stmt.where(AllergenMenuItem.contains_egg.is_(False))
+        stmt = stmt.where(AllergenMenuItem.egg_status == "free")
     if gluten_free:
-        stmt = stmt.where(AllergenMenuItem.contains_gluten.is_(False))
+        stmt = stmt.where(AllergenMenuItem.gluten_status == "free")
     if vegetarian:
         stmt = stmt.where(AllergenMenuItem.vegetarian.is_(True))
     if can_make_vegetarian:
@@ -2244,17 +2240,61 @@ def allergen_menu():
         )
     ).all()
 
-    categories = db.session.scalars(
-        db.select(AllergenMenuItem.category)
-        .where(AllergenMenuItem.active.is_(True))
-        .distinct()
-        .order_by(AllergenMenuItem.category)
-    ).all()
+    categories = [
+        "Main Meals",
+        "Starters",
+        "Sides",
+        "Kids Meals",
+        "Desserts",
+    ]
+
+    # Build side choices for each main meal and mark only sides that are
+    # strictly free from every allergen currently selected by staff.
+    selected_allergens = []
+    if milk_free:
+        selected_allergens.append("milk_status")
+    if nut_free:
+        selected_allergens.append("nuts_status")
+    if egg_free:
+        selected_allergens.append("egg_status")
+    if gluten_free:
+        selected_allergens.append("gluten_status")
+
+    side_options = {}
+    safe_side_options = {}
+
+    for item in items:
+        if item.category != "Main Meals":
+            continue
+
+        sides = []
+        for link in item.allowed_side_links:
+            side = db.session.get(AllergenMenuItem, link.side_id)
+            if side and side.active:
+                sides.append(side)
+
+        sides.sort(key=lambda side: side.name.lower())
+        side_options[item.id] = sides
+
+        if selected_allergens:
+            safe_side_options[item.id] = [
+                side
+                for side in sides
+                if all(
+                    getattr(side, field) == "free"
+                    for field in selected_allergens
+                )
+            ]
+        else:
+            safe_side_options[item.id] = sides
 
     return render_template(
         "allergen_menu.html",
         items=items,
         categories=categories,
+        side_options=side_options,
+        safe_side_options=safe_side_options,
+        selected_allergens=selected_allergens,
         search=search,
         selected_category=category,
         filters={
@@ -2269,19 +2309,34 @@ def allergen_menu():
 
 
 def allergen_form_values(item=None):
+    side_items = db.session.scalars(
+        db.select(AllergenMenuItem)
+        .where(
+            AllergenMenuItem.category == "Sides",
+            AllergenMenuItem.active.is_(True),
+        )
+        .order_by(AllergenMenuItem.name)
+    ).all()
+
+    selected_side_ids = set()
+
+    if item is not None:
+        selected_side_ids = {
+            link.side_id
+            for link in item.allowed_side_links
+        }
+
     return {
         "item": item,
         "categories": [
-            "Breakfast",
+            "Main Meals",
             "Starters",
-            "Mains",
-            "Burgers",
-            "Salads",
             "Sides",
+            "Kids Meals",
             "Desserts",
-            "Kids",
-            "Other",
         ],
+        "side_items": side_items,
+        "selected_side_ids": selected_side_ids,
     }
 
 
@@ -2311,7 +2366,19 @@ def allergen_edit(item_id):
 
 def save_allergen_item(item=None):
     name = request.form.get("name", "").strip()
-    category = request.form.get("category", "").strip() or "Other"
+    category = request.form.get("category", "").strip() or "Main Meals"
+
+    valid_categories = {
+        "Main Meals",
+        "Starters",
+        "Sides",
+        "Kids Meals",
+        "Desserts",
+    }
+
+    if category not in valid_categories:
+        flash("Choose a valid menu category.", "error")
+        return redirect(request.url)
 
     if not name:
         flash("Enter a menu item name.", "error")
@@ -2333,30 +2400,68 @@ def save_allergen_item(item=None):
     if item is None:
         item = AllergenMenuItem()
         db.session.add(item)
+        db.session.flush()
 
     item.name = name
     item.category = category
     item.description = request.form.get("description", "").strip() or None
     item.ingredients = request.form.get("ingredients", "").strip() or None
 
-    item.contains_milk = request.form.get("contains_milk") == "1"
-    item.contains_nuts = request.form.get("contains_nuts") == "1"
-    item.contains_egg = request.form.get("contains_egg") == "1"
-    item.contains_gluten = request.form.get("contains_gluten") == "1"
+    valid_statuses = {"free", "contains", "may_contain"}
+
+    for field in [
+        "milk_status",
+        "nuts_status",
+        "egg_status",
+        "gluten_status",
+    ]:
+        value = request.form.get(field, "free")
+        if value not in valid_statuses:
+            value = "free"
+        setattr(item, field, value)
+
+    # Keep legacy booleans coherent during the development migration.
+    item.contains_milk = item.milk_status == "contains"
+    item.contains_nuts = item.nuts_status == "contains"
+    item.contains_egg = item.egg_status == "contains"
+    item.contains_gluten = item.gluten_status == "contains"
 
     item.vegetarian = request.form.get("vegetarian") == "1"
     item.can_make_vegetarian = (
         request.form.get("can_make_vegetarian") == "1"
     )
-
     item.vegetarian_changes = (
         request.form.get("vegetarian_changes", "").strip() or None
     )
+
+    # Only Main Meals hold side options. Rebuild the links whenever saved.
+    AllergenMealSide.query.filter_by(meal_id=item.id).delete()
+
+    if item.category == "Main Meals":
+        selected_side_ids = request.form.getlist("side_ids")
+
+        for side_id_text in selected_side_ids:
+            try:
+                side_id = int(side_id_text)
+            except ValueError:
+                continue
+
+            side = db.session.get(AllergenMenuItem, side_id)
+
+            if side and side.category == "Sides" and side.active:
+                db.session.add(
+                    AllergenMealSide(
+                        meal_id=item.id,
+                        side_id=side.id,
+                    )
+                )
 
     db.session.commit()
 
     flash("Allergen menu item saved.", "success")
     return redirect(url_for("main.allergen_menu"))
+
+
 
 
 @main.route("/allergens/<int:item_id>/delete", methods=["POST"])

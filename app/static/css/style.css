@@ -3356,3 +3356,130 @@ main.container {
         flex-direction: column;
     }
 }
+
+
+/* v6.4.1 tri-state allergens and sides */
+.allergen-key {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 14px;
+}
+
+.allergen-badge.allergen-free {
+    background: #dff1df;
+    border: 1px solid #9fc6a4;
+    color: #315f38;
+}
+
+.allergen-badge.allergen-may {
+    background: #fff0bd;
+    border: 1px solid #d9bd58;
+    color: #6c5508;
+}
+
+.allergen-badge.allergen-contains {
+    background: #f4dddd;
+    border: 1px solid #d29595;
+    color: #7a2f2f;
+}
+
+.allergen-four-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+}
+
+.allergen-four-grid .allergen-badge {
+    justify-content: center;
+    text-align: center;
+}
+
+.allergen-status-editor-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.allergen-status-editor-grid label {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.meal-side-box {
+    margin-top: 15px;
+    padding: 13px;
+    border: 1px solid #cddbcf;
+    border-radius: 10px;
+    background: #f5faf3;
+}
+
+.side-suggestion-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 9px;
+}
+
+.side-suggestion {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 135px;
+    padding: 8px 10px;
+    border: 1px solid #b8d2ba;
+    border-radius: 8px;
+    background: white;
+}
+
+.safe-side-pill {
+    color: #4b7452;
+    font-size: 10px;
+    font-weight: 750;
+}
+
+.no-safe-side {
+    margin-top: 9px;
+    padding: 9px;
+    border-radius: 7px;
+    background: #fff0bd;
+    color: #6c5508;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.side-all-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.compact-allergen-badges {
+    margin-top: 4px;
+}
+
+.compact-allergen-badges .allergen-badge {
+    font-size: 9px;
+    padding: 3px 5px;
+}
+
+.side-option-editor-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 9px;
+}
+
+@media (max-width: 780px) {
+    .allergen-status-editor-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 480px) {
+    .allergen-four-grid,
+    .allergen-status-editor-grid {
+        grid-template-columns: 1fr;
+    }
+}
