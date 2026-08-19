@@ -1,4 +1,5 @@
 from flask import Flask
+import os
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from sqlalchemy import inspect, text
@@ -11,7 +12,7 @@ def create_app():
     """Create and configure the Flask application."""
     app = Flask(__name__, instance_relative_config=True)
 
-    app.config["SECRET_KEY"] = "dev-change-this-later"
+    app.config["SECRET_KEY"] = os.environ.get("ROCKET_SECRET_KEY", "rocket-dev-change-this-later")
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///pub_booking.db"
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
@@ -29,6 +30,7 @@ def create_app():
         seed_buffet_options()
         seed_extra_dishes()
         seed_floor_plan_settings()
+        seed_default_admin()
 
     return app
 
@@ -288,3 +290,36 @@ def seed_floor_plan_settings():
             )
         )
         db.session.commit()
+
+
+
+def seed_default_admin():
+    """
+    Create the first administrator on a new database.
+
+    Initial credentials:
+      username: admin
+      password: Password
+
+    The account is forced through Change Password immediately after first login.
+    """
+    from werkzeug.security import generate_password_hash
+    from app.models import AppUser
+
+    existing_admin = db.session.scalar(
+        db.select(AppUser).where(AppUser.role == "admin")
+    )
+
+    if existing_admin is not None:
+        return
+
+    db.session.add(
+        AppUser(
+            username="admin",
+            password_hash=generate_password_hash("Password"),
+            role="admin",
+            must_change_password=True,
+            active=True,
+        )
+    )
+    db.session.commit()

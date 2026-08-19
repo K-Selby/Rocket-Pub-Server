@@ -58,7 +58,8 @@
 
                     <span class="badge danger-badge">Cancelled</span>
 
-                    <form method="post"
+                    {% if current_user.is_manager %}
+<form method="post"
                           action="{{ url_for('main.delete_cancelled_booking', booking_id=booking.id) }}"
                           onsubmit="return confirm('Permanently delete this cancelled booking? This cannot be undone.');">
                         <button class="button archive-delete-button"
@@ -66,6 +67,7 @@
                             Delete permanently
                         </button>
                     </form>
+{% endif %}
                 </div>
             {% endfor %}
         </div>
@@ -119,7 +121,8 @@
 
                     <span class="badge danger-badge">Cancelled</span>
 
-                    <form method="post"
+                    {% if current_user.is_manager %}
+<form method="post"
                           action="{{ url_for('main.delete_cancelled_large_party', inquiry_id=inquiry.id) }}"
                           onsubmit="return confirm('Permanently delete this cancelled large-party enquiry? This cannot be undone.');">
                         <button class="button archive-delete-button"
@@ -127,6 +130,7 @@
                             Delete permanently
                         </button>
                     </form>
+{% endif %}
                 </div>
             {% endfor %}
         </div>

@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Table Map | Rocket Pub Server{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h1>Table Map</h1>
+        <p>Read-only floor plan and table properties.</p>
+    </div>
+
+    <button class="button secondary"
+            type="button"
+            id="readonly-map-fit">
+        Fit whole map
+    </button>
+</div>
+
+<div class="card readonly-map-card">
+    <div class="readonly-map-shell" id="readonly-map-shell">
+        <div class="readonly-map-zoom-surface" id="readonly-map-zoom-surface">
+            <div class="readonly-map-stage"
+                 id="readonly-map-stage"
+                 style="
+                    width: {{ settings.canvas_width if settings else 1200 }}px;
+                    height: {{ settings.canvas_height if settings else 760 }}px;
+                 ">
+
+                {% for floor_object in floor_objects %}
+                    <div class="readonly-floor-object
+                                object-{{ floor_object.object_type }}
+                                shape-{{ floor_object.layout_shape or 'rectangle' }}"
+                         style="
+                            left: {{ floor_object.x_position }}px;
+                            top: {{ floor_object.y_position }}px;
+                            width: {{ floor_object.layout_width }}px;
+                            height: {{ floor_object.layout_height }}px;
+                            transform: rotate({{ floor_object.layout_rotation or 0 }}deg);
+                            z-index: {{ floor_object.z_index or 1 }};
+                         ">
+                        <div class="floor-object-content">
+                            {% if floor_object.object_type == "tv" %}
+                                <span class="floor-icon">TV</span>
+                            {% elif floor_object.object_type == "pillar" %}
+                                <span class="floor-icon">●</span>
+                            {% endif %}
+                            <span class="floor-object-label">{{ floor_object.label }}</span>
+                        </div>
+                    </div>
+                {% endfor %}
+
+                {% for table in tables %}
+                    <button type="button"
+                            class="readonly-map-table shape-{{ table.layout_shape or 'rectangle' }}"
+                            data-table-id="{{ table.id }}"
+                            data-number="{{ table.number }}"
+                            data-capacity="{{ table.capacity }}"
+                            data-area="{{ table.area.name }}"
+                            data-near-tv="{{ 'Yes' if table.near_tv else 'No' }}"
+                            data-bench="{{ 'Yes' if table.has_bench else 'No' }}"
+                            data-accessible="{{ 'Yes' if table.accessible else 'No' }}"
+                            data-food-last-resort="{{ 'Yes' if table.unsuitable_for_food else 'No' }}"
+                            style="
+                                left: {{ table.x_position or 40 }}px;
+                                top: {{ table.y_position or 40 }}px;
+                                width: {{ table.layout_width or 90 }}px;
+                                height: {{ table.layout_height or 60 }}px;
+                                transform: rotate({{ table.layout_rotation or 0 }}deg);
+                            ">
+                        <strong>T{{ table.number }}</strong>
+                        <small>{{ table.capacity }}</small>
+                    </button>
+                {% endfor %}
+
+                <div id="readonly-map-tooltip"
+                     class="readonly-map-tooltip"
+                     hidden></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Table properties</h2>
+
+    <div class="table-properties-grid">
+        {% for table in tables %}
+            <div class="table-property-card">
+                <div class="table-property-heading">
+                    <strong>T{{ table.number }}</strong>
+                    <span>{{ table.capacity }} seats</span>
+                </div>
+
+                <div class="muted">{{ table.area.name }}</div>
+
+                <div class="table-property-tags">
+                    {% if table.near_tv %}<span class="badge">Near TV</span>{% endif %}
+                    {% if table.has_bench %}<span class="badge">Bench</span>{% endif %}
+                    {% if table.accessible %}<span class="badge">Accessible</span>{% endif %}
+                    {% if table.unsuitable_for_food %}<span class="badge">Food last resort</span>{% endif %}
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

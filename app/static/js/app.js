@@ -2040,6 +2040,98 @@ function setupDashboardFloorMap() {
     fitMap();
 }
 
+
+function setupReadOnlyTableMap() {
+    const stage = document.getElementById("readonly-map-stage");
+    const shell = document.getElementById("readonly-map-shell");
+    const zoomSurface = document.getElementById("readonly-map-zoom-surface");
+    const tooltip = document.getElementById("readonly-map-tooltip");
+    const fitButton = document.getElementById("readonly-map-fit");
+
+    if (!stage || !shell || !zoomSurface || !tooltip) return;
+
+    const tables = Array.from(
+        stage.querySelectorAll(".readonly-map-table")
+    );
+
+    function fitMap() {
+        const availableWidth = Math.max(shell.clientWidth - 20, 100);
+        const availableHeight = Math.max(shell.clientHeight - 20, 100);
+
+        const zoom = Math.max(
+            Math.min(
+                availableWidth / stage.offsetWidth,
+                availableHeight / stage.offsetHeight,
+                1
+            ),
+            0.25
+        );
+
+        stage.style.transform = `scale(${zoom})`;
+        stage.style.transformOrigin = "top left";
+        zoomSurface.style.width = `${stage.offsetWidth * zoom}px`;
+        zoomSurface.style.height = `${stage.offsetHeight * zoom}px`;
+        shell.scrollLeft = 0;
+        shell.scrollTop = 0;
+    }
+
+    function showTooltip(table) {
+        tooltip.innerHTML = `
+            <div class="readonly-tooltip-title">
+                Table ${table.dataset.number}
+                <span>${table.dataset.capacity} seats</span>
+            </div>
+            <div><strong>Area:</strong> ${table.dataset.area}</div>
+            <div><strong>Near TV:</strong> ${table.dataset.nearTv}</div>
+            <div><strong>Bench:</strong> ${table.dataset.bench}</div>
+            <div><strong>Accessible:</strong> ${table.dataset.accessible}</div>
+            <div><strong>Food last resort:</strong> ${table.dataset.foodLastResort}</div>
+        `;
+
+        tooltip.hidden = false;
+
+        let left =
+            table.offsetLeft +
+            table.offsetWidth / 2 -
+            tooltip.offsetWidth / 2;
+
+        left = Math.max(
+            8,
+            Math.min(left, stage.offsetWidth - tooltip.offsetWidth - 8)
+        );
+
+        let top = table.offsetTop - tooltip.offsetHeight - 10;
+
+        if (top < 8) {
+            top = table.offsetTop + table.offsetHeight + 10;
+        }
+
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${top}px`;
+    }
+
+    tables.forEach(table => {
+        table.addEventListener("mouseenter", () => {
+            table.classList.add("readonly-map-table-hover");
+            showTooltip(table);
+        });
+
+        table.addEventListener("mouseleave", () => {
+            table.classList.remove("readonly-map-table-hover");
+            tooltip.hidden = true;
+        });
+
+        table.addEventListener("focus", () => showTooltip(table));
+        table.addEventListener("blur", () => {
+            tooltip.hidden = true;
+        });
+    });
+
+    fitButton?.addEventListener("click", fitMap);
+    window.addEventListener("resize", fitMap);
+    fitMap();
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     setupCustomerLookup();
     setupBookingTimeValidation();
@@ -2055,4 +2147,5 @@ document.addEventListener("DOMContentLoaded", () => {
     setupTableLayoutEditor();
     setupDashboardFloorMap();
     setupDashboardBookingStates();
+    setupReadOnlyTableMap();
 });

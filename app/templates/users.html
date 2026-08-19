@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Users | Rocket Pub Server{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h1>Users</h1>
+        <p>
+            {% if current_user.is_admin %}
+                Manage staff and manager accounts.
+            {% else %}
+                Manage normal staff accounts.
+            {% endif %}
+        </p>
+    </div>
+
+    <a class="button" href="{{ url_for('main.new_user') }}">
+        Add user
+    </a>
+</div>
+
+<div class="card">
+    <div class="user-list">
+        {% for user in users %}
+            <div class="user-row {% if not user.active %}user-disabled{% endif %}">
+                <div>
+                    <strong>{{ user.username }}</strong>
+                    <div class="muted">
+                        {{ user.role|title }}
+                        {% if user.id == current_user.id %} · You{% endif %}
+                        {% if user.must_change_password %} · Password change required{% endif %}
+                    </div>
+                </div>
+
+                <span class="role-badge role-{{ user.role }}">
+                    {{ user.role|title }}
+                </span>
+
+                <span class="badge">
+                    {% if user.active %}Active{% else %}Disabled{% endif %}
+                </span>
+
+                <div class="row-actions">
+                    {% set can_manage =
+                        current_user.is_admin
+                        or (current_user.role == 'manager' and user.role == 'staff')
+                    %}
+
+                    {% if current_user.is_admin and user.id != current_user.id and user.role != 'admin' %}
+                        <form method="post"
+                              action="{{ url_for('main.change_user_role', user_id=user.id) }}"
+                              class="inline-role-form">
+                            <select name="role" onchange="this.form.submit()">
+                                <option value="staff" {% if user.role == 'staff' %}selected{% endif %}>Staff</option>
+                                <option value="manager" {% if user.role == 'manager' %}selected{% endif %}>Manager</option>
+                            </select>
+                        </form>
+                    {% endif %}
+
+                    {% if can_manage and user.id != current_user.id %}
+                        <form method="post"
+                              action="{{ url_for('main.reset_user_password', user_id=user.id) }}"
+                              onsubmit="return confirm('Reset {{ user.username }} to the temporary password Password?');">
+                            <button class="link-button" type="submit">
+                                Reset password
+                            </button>
+                        </form>
+
+                        <form method="post"
+                              action="{{ url_for('main.toggle_user', user_id=user.id) }}"
+                              onsubmit="return confirm('{{ 'Disable' if user.active else 'Enable' }} {{ user.username }}?');">
+                            <button class="link-button {% if user.active %}danger{% endif %}"
+                                    type="submit">
+                                {{ "Disable" if user.active else "Enable" }}
+                            </button>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

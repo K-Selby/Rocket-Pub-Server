@@ -23,42 +23,49 @@
         </span>
     </a>
 
+    {% if current_user %}
     <nav>
         <a class="{% if request.endpoint == 'main.dashboard' %}active{% endif %}"
-           href="{{ url_for('main.dashboard') }}">
-            Dashboard
-        </a>
+           href="{{ url_for('main.dashboard') }}">Dashboard</a>
 
         <a class="{% if request.endpoint in ['main.bookings', 'main.new_booking', 'main.edit_booking'] %}active{% endif %}"
-           href="{{ url_for('main.bookings') }}">
-            Bookings
-        </a>
+           href="{{ url_for('main.bookings') }}">Bookings</a>
 
         <a class="{% if request.endpoint in ['main.large_parties', 'main.new_large_party', 'main.edit_large_party'] %}active{% endif %}"
-           href="{{ url_for('main.large_parties') }}">
-            Large Parties
-        </a>
+           href="{{ url_for('main.large_parties') }}">Large Parties</a>
 
         <a class="{% if request.endpoint == 'main.archive' %}active{% endif %}"
-           href="{{ url_for('main.archive') }}">
-            Archive
-        </a>
+           href="{{ url_for('main.archive') }}">Archive</a>
 
         <a class="{% if request.endpoint in ['main.customers', 'main.edit_customer'] %}active{% endif %}"
-           href="{{ url_for('main.customers') }}">
-            Customers
-        </a>
+           href="{{ url_for('main.customers') }}">Customers</a>
 
-        <a class="{% if request.endpoint in ['main.tables', 'main.new_table', 'main.edit_table'] %}active{% endif %}"
-           href="{{ url_for('main.tables') }}">
-            Tables
-        </a>
+        <a class="{% if request.endpoint == 'main.table_map' %}active{% endif %}"
+           href="{{ url_for('main.table_map') }}">Table Map</a>
 
-        <a class="{% if request.endpoint == 'main.table_layout' %}active{% endif %}"
-           href="{{ url_for('main.table_layout') }}">
-            Table Layout
-        </a>
+        {% if current_user.is_manager %}
+            <a class="{% if request.endpoint in ['main.tables', 'main.new_table', 'main.edit_table'] %}active{% endif %}"
+               href="{{ url_for('main.tables') }}">Tables</a>
+
+            <a class="{% if request.endpoint == 'main.table_layout' %}active{% endif %}"
+               href="{{ url_for('main.table_layout') }}">Table Layout</a>
+
+            <a class="{% if request.endpoint in ['main.users', 'main.new_user'] %}active{% endif %}"
+               href="{{ url_for('main.users') }}">Users</a>
+        {% endif %}
+
+        <div class="account-menu">
+            <span>
+                {{ current_user.username }}
+                <small>{{ current_user.role|title }}</small>
+            </span>
+
+            <form method="post" action="{{ url_for('main.logout') }}">
+                <button type="submit" class="topbar-logout">Log out</button>
+            </form>
+        </div>
     </nav>
+    {% endif %}
 </header>
 
 <main class="container">

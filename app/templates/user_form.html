@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Add User | Rocket Pub Server{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h1>Add user</h1>
+        <p>New accounts start with the temporary password <strong>Password</strong>.</p>
+    </div>
+</div>
+
+<form method="post" class="card user-create-card">
+    <label>
+        Username
+        <input name="username" required autofocus>
+    </label>
+
+    <label>
+        Account type
+        <select name="role">
+            {% for role in allowed_roles %}
+                <option value="{{ role }}">{{ role|title }}</option>
+            {% endfor %}
+        </select>
+    </label>
+
+    <div class="info-strip">
+        On first login, the user must replace <strong>Password</strong> with
+        their own password before they can access the system.
+    </div>
+
+    <button class="button" type="submit">Create user</button>
+</form>
+{% endblock %}

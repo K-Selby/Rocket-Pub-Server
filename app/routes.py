@@ -4,15 +4,19 @@ import re
 from flask import (
     Blueprint,
     flash,
+    g,
     redirect,
     render_template,
     request,
+    session,
     url_for,
 )
 from sqlalchemy import Integer, cast
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from app import db
 from app.models import (
+    AppUser,
     Area,
     Booking,
     BookingTable,
@@ -38,6 +42,192 @@ STANDARD_BOOKING_DURATION = 150
 EARLIEST_BOOKING = "12:15"
 LATEST_BOOKING = "19:30"
 SUNDAY_LATEST_BOOKING = "19:00"
+
+
+ROLE_ORDER = {
+    "staff": 1,
+    "manager": 2,
+    "admin": 3,
+}
+
+MANAGER_ENDPOINTS = {
+    # Table records.
+    "main.tables",
+    "main.new_table",
+    "main.edit_table",
+
+    # Floor-plan editor and all write APIs behind it.
+    "main.table_layout",
+    "main.save_table_layout",
+    "main.update_layout_table",
+    "main.create_layout_pairing",
+    "main.delete_layout_pairing",
+    "main.create_floor_object",
+    "main.update_floor_object",
+    "main.delete_floor_object",
+    "main.duplicate_floor_object",
+
+    # Permanent deletion is intentionally restricted.
+    "main.delete_cancelled_booking",
+    "main.delete_cancelled_large_party",
+}
+
+
+def current_user():
+    return getattr(g, "current_user", None)
+
+
+def user_has_role(minimum_role):
+    user = current_user()
+
+    if user is None:
+        return False
+
+    return ROLE_ORDER.get(user.role, 0) >= ROLE_ORDER.get(minimum_role, 99)
+
+
+@main.before_app_request
+def load_and_protect_user():
+    """
+    Protect the whole local application behind a login.
+
+    Static assets and the login screen remain public. First-login password
+    change is mandatory before any operational screen can be opened.
+    """
+    user_id = session.get("user_id")
+
+    g.current_user = (
+        db.session.get(AppUser, user_id)
+        if user_id is not None
+        else None
+    )
+
+    endpoint = request.endpoint or ""
+
+    if endpoint == "static":
+        return None
+
+    public_endpoints = {
+        "main.login",
+    }
+
+    if endpoint in public_endpoints:
+        return None
+
+    if g.current_user is None or not g.current_user.active:
+        session.clear()
+        return redirect(url_for("main.login", next=request.path))
+
+    if (
+        g.current_user.must_change_password
+        and endpoint not in {
+            "main.change_password",
+            "main.logout",
+        }
+    ):
+        return redirect(url_for("main.change_password"))
+
+    if endpoint in MANAGER_ENDPOINTS and not g.current_user.is_manager:
+        flash("Manager access is required for that screen.", "error")
+        return redirect(url_for("main.dashboard"))
+
+    return None
+
+
+@main.app_context_processor
+def inject_current_user():
+    return {
+        "current_user": current_user(),
+    }
+
+
+@main.route("/login", methods=["GET", "POST"])
+def login():
+    if current_user() is not None and current_user().active:
+        if current_user().must_change_password:
+            return redirect(url_for("main.change_password"))
+        return redirect(url_for("main.dashboard"))
+
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+
+        user = db.session.scalar(
+            db.select(AppUser).where(
+                AppUser.username == username,
+                AppUser.active.is_(True),
+            )
+        )
+
+        if user is None or not check_password_hash(
+            user.password_hash,
+            password,
+        ):
+            flash("Incorrect username or password.", "error")
+            return render_template(
+                "login.html",
+                username=username,
+            )
+
+        session.clear()
+        session["user_id"] = user.id
+        user.last_login_at = datetime.now()
+        db.session.commit()
+
+        if user.must_change_password:
+            return redirect(url_for("main.change_password"))
+
+        return redirect(url_for("main.dashboard"))
+
+    return render_template("login.html")
+
+
+@main.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return redirect(url_for("main.login"))
+
+
+@main.route("/change-password", methods=["GET", "POST"])
+def change_password():
+    user = current_user()
+
+    if request.method == "POST":
+        current_password = request.form.get("current_password", "")
+        new_password = request.form.get("new_password", "")
+        confirm_password = request.form.get("confirm_password", "")
+
+        if not check_password_hash(user.password_hash, current_password):
+            flash("Your current password is incorrect.", "error")
+            return redirect(url_for("main.change_password"))
+
+        if len(new_password) < 8:
+            flash("New passwords must be at least 8 characters.", "error")
+            return redirect(url_for("main.change_password"))
+
+        if new_password == "Password":
+            flash(
+                "Choose a password other than the default Password.",
+                "error",
+            )
+            return redirect(url_for("main.change_password"))
+
+        if new_password != confirm_password:
+            flash("The new passwords do not match.", "error")
+            return redirect(url_for("main.change_password"))
+
+        user.password_hash = generate_password_hash(new_password)
+        user.must_change_password = False
+        db.session.commit()
+
+        flash("Password changed successfully.", "success")
+        return redirect(url_for("main.dashboard"))
+
+    return render_template(
+        "change_password.html",
+        first_login=bool(user.must_change_password),
+    )
+
 
 
 def normalise_phone(phone):
@@ -998,6 +1188,180 @@ def archive():
     )
 
 
+
+# -------------------------
+# Users
+# -------------------------
+
+@main.route("/users")
+def users():
+    if not current_user().is_manager:
+        flash("Manager access is required.", "error")
+        return redirect(url_for("main.dashboard"))
+
+    stmt = db.select(AppUser).order_by(
+        AppUser.role.desc(),
+        AppUser.username,
+    )
+
+    if current_user().role == "manager":
+        # Managers manage staff accounts only. They can see themselves at the
+        # top of the screen but cannot alter manager/admin accounts.
+        stmt = stmt.where(
+            db.or_(
+                AppUser.role == "staff",
+                AppUser.id == current_user().id,
+            )
+        )
+
+    user_list = db.session.scalars(stmt).all()
+
+    return render_template(
+        "users.html",
+        users=user_list,
+    )
+
+
+@main.route("/users/new", methods=["GET", "POST"])
+def new_user():
+    if not current_user().is_manager:
+        flash("Manager access is required.", "error")
+        return redirect(url_for("main.dashboard"))
+
+    allowed_roles = (
+        ["staff", "manager"]
+        if current_user().is_admin
+        else ["staff"]
+    )
+
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        role = request.form.get("role", "staff").strip()
+
+        if not username:
+            flash("Enter a username.", "error")
+            return redirect(request.url)
+
+        if role not in allowed_roles:
+            flash("You cannot create that account type.", "error")
+            return redirect(request.url)
+
+        existing = db.session.scalar(
+            db.select(AppUser).where(
+                db.func.lower(AppUser.username) == username.lower()
+            )
+        )
+
+        if existing:
+            flash("That username is already in use.", "error")
+            return redirect(request.url)
+
+        user = AppUser(
+            username=username,
+            password_hash=generate_password_hash("Password"),
+            role=role,
+            must_change_password=True,
+            active=True,
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        flash(
+            f"{username} created. Their temporary password is Password.",
+            "success",
+        )
+        return redirect(url_for("main.users"))
+
+    return render_template(
+        "user_form.html",
+        allowed_roles=allowed_roles,
+    )
+
+
+@main.route("/users/<int:user_id>/reset-password", methods=["POST"])
+def reset_user_password(user_id):
+    if not current_user().is_manager:
+        flash("Manager access is required.", "error")
+        return redirect(url_for("main.dashboard"))
+
+    target = db.get_or_404(AppUser, user_id)
+
+    if target.is_admin and not current_user().is_admin:
+        flash("Managers cannot change administrator accounts.", "error")
+        return redirect(url_for("main.users"))
+
+    if target.role == "manager" and not current_user().is_admin:
+        flash("Only an administrator can reset a manager.", "error")
+        return redirect(url_for("main.users"))
+
+    target.password_hash = generate_password_hash("Password")
+    target.must_change_password = True
+    db.session.commit()
+
+    flash(
+        f"{target.username}'s password was reset to Password.",
+        "success",
+    )
+    return redirect(url_for("main.users"))
+
+
+@main.route("/users/<int:user_id>/toggle", methods=["POST"])
+def toggle_user(user_id):
+    if not current_user().is_manager:
+        flash("Manager access is required.", "error")
+        return redirect(url_for("main.dashboard"))
+
+    target = db.get_or_404(AppUser, user_id)
+
+    if target.id == current_user().id:
+        flash("You cannot disable your own account.", "error")
+        return redirect(url_for("main.users"))
+
+    if target.is_admin and not current_user().is_admin:
+        flash("Managers cannot change administrator accounts.", "error")
+        return redirect(url_for("main.users"))
+
+    if target.role == "manager" and not current_user().is_admin:
+        flash("Only an administrator can disable a manager.", "error")
+        return redirect(url_for("main.users"))
+
+    target.active = not target.active
+    db.session.commit()
+
+    flash(
+        f"{target.username} is now {'active' if target.active else 'disabled'}.",
+        "success",
+    )
+    return redirect(url_for("main.users"))
+
+
+@main.route("/users/<int:user_id>/role", methods=["POST"])
+def change_user_role(user_id):
+    if not current_user().is_admin:
+        flash("Administrator access is required.", "error")
+        return redirect(url_for("main.users"))
+
+    target = db.get_or_404(AppUser, user_id)
+    role = request.form.get("role", "").strip()
+
+    if target.id == current_user().id:
+        flash("You cannot change your own administrator role.", "error")
+        return redirect(url_for("main.users"))
+
+    if role not in {"staff", "manager"}:
+        flash("Choose Staff or Manager.", "error")
+        return redirect(url_for("main.users"))
+
+    target.role = role
+    db.session.commit()
+
+    flash(
+        f"{target.username} is now a {role}.",
+        "success",
+    )
+    return redirect(url_for("main.users"))
+
+
 # -------------------------
 # Customers
 # -------------------------
@@ -1088,6 +1452,40 @@ def delete_customer(customer_id):
     flash("Customer and their linked booking history were deleted.", "success")
     return redirect(url_for("main.customers"))
 
+
+
+
+@main.route("/table-map")
+def table_map():
+    """
+    Read-only table map for all logged-in staff.
+
+    Normal staff can inspect table locations and properties without seeing any
+    editor controls or table-management actions.
+    """
+    tables = db.session.scalars(
+        db.select(PubTable)
+        .where(PubTable.active.is_(True))
+        .order_by(*table_order_clause())
+    ).all()
+
+    floor_objects = db.session.scalars(
+        db.select(FloorPlanObject)
+        .order_by(FloorPlanObject.z_index, FloorPlanObject.id)
+    ).all()
+
+    settings = db.session.scalar(
+        db.select(FloorPlanSetting).where(
+            FloorPlanSetting.name == "main"
+        )
+    )
+
+    return render_template(
+        "table_map.html",
+        tables=tables,
+        floor_objects=floor_objects,
+        settings=settings,
+    )
 
 
 @main.route("/table-layout")

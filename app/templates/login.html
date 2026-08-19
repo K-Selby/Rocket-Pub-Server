@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Login | Rocket Pub Server{% endblock %}
+
+{% block content %}
+<div class="auth-page">
+    <div class="auth-card">
+        <div class="auth-heading">
+            <h1>Rocket Pub Server</h1>
+            <p>Sign in to continue.</p>
+        </div>
+
+        <form method="post" class="auth-form">
+            <label>
+                Username
+                <input name="username"
+                       autocomplete="username"
+                       value="{{ username or '' }}"
+                       autofocus
+                       required>
+            </label>
+
+            <label>
+                Password
+                <input type="password"
+                       name="password"
+                       autocomplete="current-password"
+                       required>
+            </label>
+
+            <button class="button auth-submit" type="submit">
+                Sign in
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

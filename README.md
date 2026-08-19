@@ -1,4 +1,4 @@
-# Rocket Pub Server - v5.8.3 Active Navigation
+# Rocket Pub Server - v6 User Accounts & Permissions
 
 ## Added in v4
 
@@ -404,3 +404,35 @@ bookings remain white/upcoming.
   - Customer edit highlights Customers
   - Table create/edit highlights Tables
 - The active state uses the light sage Rocket Pub branding rather than a generic colour.
+
+
+## v6 user accounts and permissions
+
+Roles:
+- Staff
+  - dashboard/bookings/large parties/customers/archive
+  - read-only Table Map with table properties
+  - cannot edit table records or floor plan
+  - cannot permanently delete archived bookings/enquiries
+  - cannot manage users
+- Manager
+  - all Staff access
+  - Tables and Table Layout editing
+  - permanent deletion of cancelled archived records
+  - can create, disable and reset Staff accounts
+- Admin
+  - full access
+  - can additionally create/manage Manager accounts and change Staff/Manager roles
+
+Initial administrator on a new database:
+- username: admin
+- temporary password: Password
+
+All newly created users receive the temporary password `Password`. The system
+forces them to choose a new password on first login before any operational page
+is accessible. Passwords are stored using Werkzeug password hashing rather than
+plain text.
+
+Forgotten-password self-service is intentionally deferred. Managers/Admin can
+currently reset accounts back to the temporary password `Password`, after which
+the user is again forced to change it.
