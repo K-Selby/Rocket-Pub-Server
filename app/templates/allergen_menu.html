@@ -65,7 +65,7 @@
             ("milk_free", "Milk", filters.milk_free),
             ("nut_free", "Nuts", filters.nut_free),
             ("egg_free", "Egg", filters.egg_free),
-            ("gluten_free", "Gluten", filters.gluten_free)
+            ("gluten_free", "Gluten / can be made gluten free", filters.gluten_free)
         ] %}
         <label class="filter-toggle">
             <input type="checkbox" name="{{ field }}" value="1"
@@ -134,6 +134,9 @@
             {{ allergen_badge("Nuts", item.nuts_status) }}
             {{ allergen_badge("Egg", item.egg_status) }}
             {{ allergen_badge("Gluten", item.gluten_status) }}
+            {% if item.can_make_gluten_free and item.gluten_status != "free" %}
+                <span class="allergen-badge allergen-made-free">Gluten free*</span>
+            {% endif %}
         </div>
 
         <div class="vegetarian-status">
@@ -148,6 +151,15 @@
                 <span class="muted">Not marked vegetarian</span>
             {% endif %}
         </div>
+
+        {% if item.can_make_gluten_free %}
+            <div class="gluten-free-prep-note">
+                <strong>*Can be made gluten free when ordered as such.</strong>
+                {% if item.gluten_free_changes %}
+                    <span>{{ item.gluten_free_changes }}</span>
+                {% endif %}
+            </div>
+        {% endif %}
 
         {% if item.category == "Main Meals" and side_options.get(item.id) %}
             <div class="meal-side-box">
@@ -190,6 +202,9 @@
                                         {{ allergen_badge("Nuts", side.nuts_status) }}
                                         {{ allergen_badge("Egg", side.egg_status) }}
                                         {{ allergen_badge("Gluten", side.gluten_status) }}
+                                        {% if side.can_make_gluten_free and side.gluten_status != "free" %}
+                                            <span class="allergen-badge allergen-made-free">Gluten free*</span>
+                                        {% endif %}
                                     </div>
                                 </div>
                             {% endfor %}

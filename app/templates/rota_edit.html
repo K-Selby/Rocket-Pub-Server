@@ -20,22 +20,31 @@
                     Clear rota
                 </button>
             </form>
+        {% endif %}
 
-            <form method="post"
-                  action="{{ url_for('main.rota_publish', rota_id=week.id) }}"
-                  onsubmit="return confirm('Issue this rota to all staff?');">
-                <button class="button" type="submit">
-                    Issue rota
-                </button>
-            </form>
-        {% else %}
-            <a class="button"
-               href="{{ url_for('main.rota_home', week=week.week_start.isoformat()) }}">
-                Save changes
-            </a>
+        <button class="button secondary"
+                type="submit"
+                form="rota-save-form">
+            {{ "Save draft" if week.status == "draft" else "Save changes" }}
+        </button>
+
+        {% if week.status == "draft" %}
+            <button class="button"
+                    type="button"
+                    id="issue-rota-button">
+                Issue rota
+            </button>
         {% endif %}
     </div>
 </div>
+
+<form method="post"
+      action="{{ url_for('main.rota_save_draft', rota_id=week.id) }}"
+      id="rota-save-form"
+      hidden>
+    <input type="hidden" name="rota_state" id="rota-state-input">
+    <input type="hidden" name="issue" id="rota-issue-input" value="0">
+</form>
 
 <div class="card rota-table-card">
     <div class="rota-scroll">
@@ -83,7 +92,9 @@
 
                         <td class="rota-edit-cell
                                    {% if diary.get('unavailable') %}rota-cell-unavailable{% endif %}"
-                            data-rota-cell>
+                            data-rota-cell
+                            data-staff-id="{{ profile.id }}"
+                            data-shift-date="{{ day.isoformat() }}">
 
                             {% if diary.get('unavailable') %}
                                 <div class="rota-unavailable-mark"
@@ -111,6 +122,8 @@
 
                                                 {% if not shifts %}
                                                     <form method="post"
+                                                          class="rota-use-availability-form"
+                                                          data-availability-shift="{{ availability.text }}"
                                                           action="{{ url_for('main.rota_use_availability', rota_id=week.id, entry_id=availability.id) }}">
                                                         <button type="submit"
                                                                 class="rota-use-availability"
@@ -298,17 +311,22 @@
 
 <script>
 (function () {
+    const saveForm = document.getElementById("rota-save-form");
+    const stateInput = document.getElementById("rota-state-input");
+    const issueInput = document.getElementById("rota-issue-input");
+    const issueButton = document.getElementById("issue-rota-button");
+
     function closeEditors(except) {
         document.querySelectorAll("[data-add-editor], [data-shift-editor]")
             .forEach(function (editor) {
-                if (editor !== except) {
-                    editor.hidden = true;
-                }
+                if (editor !== except) editor.hidden = true;
             });
 
         document.querySelectorAll("[data-add-shift]")
             .forEach(function (button) {
-                button.hidden = false;
+                const cell = button.closest("[data-rota-cell]");
+                const hasShift = cell.querySelector(".rota-shift-display");
+                button.hidden = Boolean(hasShift);
             });
 
         document.querySelectorAll("[data-edit-shift]")
@@ -316,6 +334,70 @@
                 button.hidden = false;
             });
     }
+
+    function ensureShiftDisplay(cell, text) {
+        let wrapper = cell.querySelector(".rota-existing-shift");
+
+        if (!wrapper) {
+            wrapper = document.createElement("div");
+            wrapper.className = "rota-existing-shift rota-local-shift";
+
+            const display = document.createElement("button");
+            display.type = "button";
+            display.className = "rota-shift-display";
+            display.setAttribute("data-edit-shift", "");
+            wrapper.appendChild(display);
+
+            const addEditor = cell.querySelector("[data-add-editor]");
+            cell.insertBefore(wrapper, addEditor || null);
+            bindEditButton(display);
+        }
+
+        const display = wrapper.querySelector(".rota-shift-display");
+        display.textContent = text;
+        display.hidden = false;
+
+        const editInput = wrapper.querySelector(
+            '[data-shift-editor] input[name="shift_text"]'
+        );
+        if (editInput) editInput.value = text;
+
+        const blank = cell.querySelector("[data-add-shift]");
+        if (blank) blank.hidden = true;
+
+        return wrapper;
+    }
+
+    function bindEditButton(button) {
+        if (button.dataset.boundEdit === "1") return;
+        button.dataset.boundEdit = "1";
+
+        button.addEventListener("click", function (event) {
+            event.stopPropagation();
+
+            const wrapper = button.closest(".rota-existing-shift");
+            let editor = wrapper.querySelector("[data-shift-editor]");
+
+            // Newly-created local shifts reuse the cell's add editor.
+            if (!editor) {
+                editor = button.closest("[data-rota-cell]")
+                    .querySelector("[data-add-editor]");
+            }
+
+            closeEditors(editor);
+            button.hidden = true;
+            editor.hidden = false;
+
+            const input = editor.querySelector('input[name="shift_text"]');
+            if (input) {
+                input.value = button.textContent.trim();
+                input.focus();
+                input.select();
+            }
+        });
+    }
+
+    document.querySelectorAll("[data-edit-shift]").forEach(bindEditButton);
 
     document.querySelectorAll("[data-add-shift]").forEach(function (button) {
         button.addEventListener("click", function (event) {
@@ -330,34 +412,109 @@
 
             const input = editor.querySelector('input[name="shift_text"]');
             if (input) {
+                input.value = "";
                 input.focus();
             }
         });
     });
 
-    document.querySelectorAll("[data-edit-shift]").forEach(function (button) {
-        button.addEventListener("click", function (event) {
-            event.stopPropagation();
+    // Confirming a cell edit changes only the browser draft.
+    document.querySelectorAll(".rota-inline-shift-form").forEach(function (form) {
+        form.addEventListener("submit", function (event) {
+            event.preventDefault();
 
-            const wrapper = button.closest(".rota-existing-shift");
-            const editor = wrapper.querySelector("[data-shift-editor]");
+            const cell = form.closest("[data-rota-cell]");
+            const input = form.querySelector('input[name="shift_text"]');
+            const text = (input?.value || "").trim().toUpperCase();
 
-            closeEditors(editor);
-            button.hidden = true;
-            editor.hidden = false;
+            if (!text) return;
 
-            const input = editor.querySelector('input[name="shift_text"]');
-            if (input) {
-                input.focus();
-                input.select();
+            const existingWrapper = form.closest(".rota-existing-shift");
+
+            if (existingWrapper) {
+                const display = existingWrapper.querySelector(
+                    ".rota-shift-display"
+                );
+                display.textContent = text;
+                display.hidden = false;
+            } else {
+                ensureShiftDisplay(cell, text);
             }
+
+            closeEditors(null);
         });
     });
+
+    // Removing a shift changes only the browser draft.
+    document.querySelectorAll(".rota-remove-shift-form").forEach(function (form) {
+        form.removeAttribute("onsubmit");
+
+        form.addEventListener("submit", function (event) {
+            event.preventDefault();
+
+            const wrapper = form.closest(".rota-existing-shift");
+            const cell = form.closest("[data-rota-cell]");
+            wrapper?.remove();
+
+            const blank = cell.querySelector("[data-add-shift]");
+            if (blank) blank.hidden = false;
+
+            closeEditors(null);
+        });
+    });
+
+    // "+" beside a requested shift also changes only the browser draft.
+    document.querySelectorAll(".rota-use-availability-form")
+        .forEach(function (form) {
+            form.addEventListener("submit", function (event) {
+                event.preventDefault();
+
+                const cell = form.closest("[data-rota-cell]");
+                const text = (form.dataset.availabilityShift || "")
+                    .trim()
+                    .toUpperCase();
+
+                if (text) {
+                    ensureShiftDisplay(cell, text);
+                }
+
+                closeEditors(null);
+            });
+        });
 
     document.querySelectorAll("[data-cancel-shift]").forEach(function (button) {
         button.addEventListener("click", function () {
             closeEditors(null);
         });
+    });
+
+    function collectRotaState() {
+        return Array.from(
+            document.querySelectorAll("[data-rota-cell]")
+        ).map(function (cell) {
+            return {
+                staff_id: Number(cell.dataset.staffId),
+                date: cell.dataset.shiftDate,
+                shifts: Array.from(
+                    cell.querySelectorAll(".rota-shift-display")
+                )
+                    .filter(button => !button.hidden)
+                    .map(button => button.textContent.trim().toUpperCase())
+                    .filter(Boolean)
+            };
+        });
+    }
+
+    saveForm.addEventListener("submit", function () {
+        stateInput.value = JSON.stringify(collectRotaState());
+    });
+
+    issueButton?.addEventListener("click", function () {
+        if (!confirm("Issue this rota to all staff?")) return;
+
+        issueInput.value = "1";
+        stateInput.value = JSON.stringify(collectRotaState());
+        saveForm.submit();
     });
 })();
 </script>

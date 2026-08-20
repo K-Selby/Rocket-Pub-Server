@@ -1,6 +1,7 @@
 from datetime import date, datetime, time, timedelta
 
 import calendar
+import json
 import uuid
 
 import msal
@@ -195,6 +196,7 @@ MANAGER_ENDPOINTS = {
     "main.rota_profile_restore",
     "main.rota_create",
     "main.rota_edit",
+    "main.rota_save_draft",
     "main.rota_add_shift",
     "main.rota_use_availability",
     "main.rota_edit_shift",
@@ -498,9 +500,21 @@ def inject_current_user():
             for entry in pending
         })
 
+    incoming_swap_count = 0
+    profile = current_staff_profile()
+
+    if user and profile:
+        incoming_swap_count = db.session.scalar(
+            db.select(db.func.count(ShiftSwapRequest.id)).where(
+                ShiftSwapRequest.target_staff_id == profile.id,
+                ShiftSwapRequest.status == "pending_target",
+            )
+        ) or 0
+
     return {
         "current_user": user,
         "manager_request_count": request_count,
+        "incoming_swap_count": incoming_swap_count,
     }
 
 
@@ -1050,7 +1064,11 @@ def suggest_tables(
 ):
     tables = db.session.scalars(
         db.select(PubTable)
-        .where(PubTable.active.is_(True))
+        .join(Area)
+        .where(
+            PubTable.active.is_(True),
+            db.func.lower(Area.name) != "bar",
+        )
         .order_by(*table_order_clause())
     ).all()
 
@@ -1183,15 +1201,22 @@ def available_pairing_groups(
     exclude_booking_id=None,
 ):
     """
-    Return useful configured table combinations that can hold the party.
+    Return useful table combinations.
 
-    We build connected groups from pairing relationships, then keep the smallest
-    groups that meet the required capacity.
+    First use configured physical pairings. If none can accommodate the party,
+    fall back to nearby available tables based on floor-plan coordinates.
+    Pool Room and Snug / Cubby are preferred for these larger fallback groups.
+    Bar-area tables are excluded from normal booking allocation.
     """
     tables = {
         table.id: table
         for table in db.session.scalars(
-            db.select(PubTable).where(PubTable.active.is_(True))
+            db.select(PubTable)
+            .join(Area)
+            .where(
+                PubTable.active.is_(True),
+                db.func.lower(Area.name) != "bar",
+            )
         ).all()
     }
 
@@ -1203,19 +1228,8 @@ def available_pairing_groups(
             adjacency[pairing.table_a_id].add(pairing.table_b_id)
             adjacency[pairing.table_b_id].add(pairing.table_a_id)
 
-    results = []
-    seen = set()
-
-    def dfs(group):
-        key = tuple(sorted(group))
-        if key in seen:
-            return
-        seen.add(key)
-
-        group_tables = [tables[table_id] for table_id in key]
-        capacity = sum(table.capacity for table in group_tables)
-
-        all_available = all(
+    def available_table(table):
+        return (
             table_is_available(
                 table.id,
                 date_value,
@@ -1223,32 +1237,85 @@ def available_pairing_groups(
                 duration_minutes,
                 exclude_booking_id,
             )
+            and table.id not in large_party_blocked_table_ids(
+                date_value,
+                time_value,
+                duration_minutes,
+            )
+            and not (avoids_bench and table.has_bench)
+        )
+
+    results = []
+    seen = set()
+
+    def add_result(group_ids, fallback=False):
+        key = tuple(sorted(group_ids))
+        if key in seen:
+            return
+        seen.add(key)
+
+        group_tables = [tables[table_id] for table_id in key]
+        if not all(available_table(table) for table in group_tables):
+            return
+
+        capacity = sum(table.capacity for table in group_tables)
+        shortage = max(party_size - capacity, 0)
+
+        # Normal configured pairings must fit. Fallback nearby groups may be
+        # up to two seats short, but are explicitly warned in the UI.
+        if (not fallback and shortage > 0) or (fallback and shortage > 2):
+            return
+
+        score = score_candidate(
+            group_tables,
+            party_size,
+            preferred_area_id,
+            None,
+            wants_near_tv,
+            avoids_bench,
+            is_eating_food,
+        )
+        score = score if score is not None else 0
+
+        area_names = {
+            (table.area.name or "").strip().lower()
             for table in group_tables
+        }
+
+        # Prefer keeping fallback groups within Pool Room or Snug/Cubby.
+        priority_bonus = 0
+        if len(area_names) == 1:
+            only_area = next(iter(area_names))
+            if "pool" in only_area:
+                priority_bonus = 60
+            elif "snug" in only_area or "cubby" in only_area:
+                priority_bonus = 50
+
+        results.append(
+            {
+                "table_ids": list(key),
+                "numbers": [table.number for table in group_tables],
+                "capacity": capacity,
+                "shortage": shortage,
+                "score": score + priority_bonus,
+                "fallback": fallback,
+            }
         )
 
-        passes_preferences = not (
-            avoids_bench and any(table.has_bench for table in group_tables)
-        )
+    # Configured connected pairings first.
+    def dfs(group):
+        key = tuple(sorted(group))
+        if key in seen:
+            return
 
-        if capacity >= party_size and all_available and passes_preferences:
-            score = score_candidate(
-                group_tables,
-                party_size,
-                preferred_area_id,
-                None,
-                wants_near_tv,
-                avoids_bench,
-                is_eating_food,
-            )
-            results.append(
-                {
-                    "table_ids": list(key),
-                    "numbers": [table.number for table in group_tables],
-                    "capacity": capacity,
-                    "score": score if score is not None else 0,
-                }
-            )
-            # Once a group fits, don't keep expanding it unless necessary.
+        group_tables = [tables[table_id] for table_id in key]
+        capacity = sum(table.capacity for table in group_tables)
+
+        if (
+            capacity >= party_size
+            and all(available_table(table) for table in group_tables)
+        ):
+            add_result(group, fallback=False)
             return
 
         neighbours = set()
@@ -1261,7 +1328,85 @@ def available_pairing_groups(
     for table_id in tables:
         dfs({table_id})
 
-    results.sort(key=lambda item: (-item["score"], item["capacity"], len(item["table_ids"])))
+    fitting_configured = [
+        item for item in results
+        if not item["fallback"] and item["capacity"] >= party_size
+    ]
+
+    # If configured pairings cannot solve it, choose physically close tables.
+    if not fitting_configured and party_size > 0:
+        candidates = [
+            table for table in tables.values()
+            if available_table(table)
+        ]
+
+        def centre(table):
+            return (
+                float(table.x_position or 0) + float(table.layout_width or 90) / 2,
+                float(table.y_position or 0) + float(table.layout_height or 60) / 2,
+            )
+
+        def distance(a, b):
+            ax, ay = centre(a)
+            bx, by = centre(b)
+            return ((ax - bx) ** 2 + (ay - by) ** 2) ** 0.5
+
+        # Try groups beginning with tables in preferred large-group areas.
+        candidates.sort(
+            key=lambda table: (
+                0 if "pool" in (table.area.name or "").lower() else
+                1 if (
+                    "snug" in (table.area.name or "").lower()
+                    or "cubby" in (table.area.name or "").lower()
+                ) else 2,
+                table.number,
+            )
+        )
+
+        for anchor in candidates:
+            same_area = [
+                table for table in candidates
+                if table.id != anchor.id
+                and table.area_id == anchor.area_id
+            ]
+            other_area = [
+                table for table in candidates
+                if table.id != anchor.id
+                and table.area_id != anchor.area_id
+            ]
+
+            ordered = (
+                [anchor]
+                + sorted(same_area, key=lambda t: distance(anchor, t))
+                + sorted(other_area, key=lambda t: distance(anchor, t))
+            )
+
+            group = []
+            capacity = 0
+
+            for table in ordered:
+                group.append(table.id)
+                capacity += table.capacity
+
+                if capacity >= party_size - 2:
+                    add_result(group, fallback=True)
+
+                    if capacity >= party_size:
+                        break
+
+                # Avoid ridiculous spread of tiny tables.
+                if len(group) >= 5:
+                    break
+
+    results.sort(
+        key=lambda item: (
+            item["fallback"],
+            item["shortage"] > 0,
+            -item["score"],
+            abs(item["capacity"] - party_size),
+            len(item["table_ids"]),
+        )
+    )
     return results[:12]
 
 
@@ -2750,10 +2895,29 @@ def preferred_shift_match_bonus(profile, start, end, end_is_finish):
 
 
 def rota_context(week):
+    # Active staff always appear. Archived staff appear only when they actually
+    # hold a shift in this rota week (for example after accepting a cover
+    # request). This keeps the normal rota tidy while still showing the real
+    # post-swap assignment.
+    week_staff_ids = {
+        shift.staff_id
+        for shift in week.shifts
+        if shift.staff_id is not None
+    }
+
     profiles = db.session.scalars(
         db.select(StaffProfile)
-        .where(StaffProfile.active.is_(True))
-        .order_by(StaffProfile.sort_order, StaffProfile.display_name)
+        .where(
+            db.or_(
+                StaffProfile.active.is_(True),
+                StaffProfile.id.in_(week_staff_ids) if week_staff_ids else False,
+            )
+        )
+        .order_by(
+            StaffProfile.active.desc(),
+            StaffProfile.sort_order,
+            StaffProfile.display_name,
+        )
     ).all()
 
     days = [week.week_start + timedelta(days=i) for i in range(7)]
@@ -2765,8 +2929,6 @@ def rota_context(week):
     }
 
     for shift in week.shifts:
-        # Historical shifts for archived staff remain in the database, but
-        # archived staff are not shown on current/future rota views.
         if (shift.staff_id, shift.shift_date) in shift_map:
             shift_map[(shift.staff_id, shift.shift_date)].append(shift)
 
@@ -2828,6 +2990,50 @@ def rota_home():
             .order_by(ShiftSwapRequest.created_at.desc())
         ).all()
 
+    pending_swaps = db.session.scalars(
+        db.select(ShiftSwapRequest).where(
+            ShiftSwapRequest.status == "pending_target",
+            ShiftSwapRequest.requester_shift.has(
+                RotaShift.rota_week_id == week.id
+            ) if week else False,
+        )
+    ).all() if week else []
+
+    pending_shift_ids = set()
+    pending_staff_ids = set()
+
+    for pending_swap in pending_swaps:
+        if pending_swap.requester_shift_id:
+            pending_shift_ids.add(pending_swap.requester_shift_id)
+        if pending_swap.target_shift_id:
+            pending_shift_ids.add(pending_swap.target_shift_id)
+
+        if pending_swap.requester_staff_id:
+            pending_staff_ids.add(pending_swap.requester_staff_id)
+        if pending_swap.target_staff_id:
+            pending_staff_ids.add(pending_swap.target_staff_id)
+
+    swap_profiles = db.session.scalars(
+        db.select(StaffProfile)
+        .order_by(
+            StaffProfile.active.desc(),
+            StaffProfile.sort_order,
+            StaffProfile.display_name,
+        )
+    ).all()
+
+    # `rota_name` is a Python property because linked profiles display the
+    # current username. It cannot be used in SQL ORDER BY. Sort once the rows
+    # are loaded so the picker still displays alphabetically by the actual
+    # rota name inside active/archived groups.
+    swap_profiles = sorted(
+        swap_profiles,
+        key=lambda profile: (
+            0 if profile.active else 1,
+            (profile.rota_name or "").lower(),
+        ),
+    )
+
     return render_template(
         "rota.html",
         week=week,
@@ -2841,6 +3047,9 @@ def rota_home():
         my_shifts=my_shifts,
         swaps=swaps,
         shift_label=shift_label,
+        pending_shift_ids=pending_shift_ids,
+        pending_staff_ids=pending_staff_ids,
+        swap_profiles=swap_profiles,
     )
 
 
@@ -3090,6 +3299,133 @@ def rota_use_availability(rota_id, entry_id):
         "success",
     )
     return redirect(url_for("main.rota_edit", rota_id=week.id))
+
+
+@main.route("/rota/<int:rota_id>/save", methods=["POST"])
+def rota_save_draft(rota_id):
+    """
+    Save the whole on-screen rota in one transaction.
+
+    Cell editors are intentionally client-side until this button is pressed,
+    avoiding a page refresh for every individual time entry.
+    """
+    week = db.get_or_404(RotaWeek, rota_id)
+    state_text = request.form.get("rota_state", "[]")
+
+    try:
+        rows = json.loads(state_text)
+    except json.JSONDecodeError:
+        flash("The rota draft could not be read.", "error")
+        return redirect(url_for("main.rota_edit", rota_id=week.id))
+
+    if not isinstance(rows, list):
+        flash("The rota draft is invalid.", "error")
+        return redirect(url_for("main.rota_edit", rota_id=week.id))
+
+    profiles = {
+        p.id: p
+        for p in db.session.scalars(
+            db.select(StaffProfile).where(StaffProfile.active.is_(True))
+        ).all()
+    }
+
+    parsed = []
+
+    try:
+        for row in rows:
+            staff_id = int(row["staff_id"])
+            shift_date = datetime.strptime(
+                row["date"],
+                "%Y-%m-%d",
+            ).date()
+
+            if staff_id not in profiles:
+                continue
+
+            if not (
+                week.week_start
+                <= shift_date
+                <= week.week_start + timedelta(days=6)
+            ):
+                raise ValueError("A shift is outside this rota week.")
+
+            shift_values = row.get("shifts", [])
+            if not isinstance(shift_values, list):
+                raise ValueError("Invalid shift data.")
+
+            for shift_text in shift_values:
+                shift_text = str(shift_text or "").strip().upper()
+                if not shift_text:
+                    continue
+
+                start, end, is_finish = parse_rota_shift_text(shift_text)
+
+                available, _, _, reason = availability_for(
+                    profiles[staff_id],
+                    shift_date,
+                )
+
+                if not available:
+                    raise ValueError(
+                        f"{profiles[staff_id].rota_name} is unavailable "
+                        f"on {shift_date.strftime('%a %d %b')}: "
+                        f"{reason or 'Unavailable'}."
+                    )
+
+                parsed.append(
+                    (
+                        staff_id,
+                        shift_date,
+                        shift_text,
+                        start,
+                        end,
+                        is_finish,
+                    )
+                )
+    except (KeyError, TypeError, ValueError) as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("main.rota_edit", rota_id=week.id))
+
+    # The browser state is authoritative for this week.
+    db.session.query(RotaShift).filter(
+        RotaShift.rota_week_id == week.id
+    ).delete(synchronize_session=False)
+
+    for staff_id, shift_date, shift_text, start, end, is_finish in parsed:
+        db.session.add(
+            RotaShift(
+                rota_week_id=week.id,
+                staff_id=staff_id,
+                shift_date=shift_date,
+                start_time=start,
+                end_time=end,
+                end_is_finish=is_finish,
+                shift_role="front_of_house",
+                note="__ROTA_K__" if shift_text == "K" else None,
+                auto_suggested=False,
+            )
+        )
+
+    if request.form.get("issue") == "1":
+        week.status = "published"
+        week.published_at = datetime.now()
+        week.published_by_user_id = current_user().id
+        message = "Rota saved and issued to staff."
+        destination = url_for(
+            "main.rota_home",
+            week=week.week_start.isoformat(),
+        )
+    else:
+        message = (
+            "Rota draft saved."
+            if week.status == "draft"
+            else "Rota changes saved."
+        )
+        destination = url_for("main.rota_edit", rota_id=week.id)
+
+    db.session.commit()
+    flash(message, "success")
+    return redirect(destination)
 
 
 @main.route("/rota/<int:rota_id>/shift/add", methods=["POST"])
@@ -4325,6 +4661,84 @@ def diary_manager_update(group_key):
 # Shift swaps
 # -------------------------
 
+@main.route("/shift-requests")
+def shift_request_inbox():
+    my_profile = current_staff_profile()
+
+    if not my_profile:
+        return render_template(
+            "shift_requests.html",
+            my_profile=None,
+            incoming=[],
+            outgoing=[],
+            shift_label=shift_label,
+        )
+
+    incoming = db.session.scalars(
+        db.select(ShiftSwapRequest)
+        .where(
+            ShiftSwapRequest.target_staff_id == my_profile.id,
+            ShiftSwapRequest.status == "pending_target",
+        )
+        .order_by(ShiftSwapRequest.created_at.desc())
+    ).all()
+
+    outgoing = db.session.scalars(
+        db.select(ShiftSwapRequest)
+        .where(
+            ShiftSwapRequest.requester_staff_id == my_profile.id,
+        )
+        .order_by(ShiftSwapRequest.created_at.desc())
+        .limit(30)
+    ).all()
+
+    return render_template(
+        "shift_requests.html",
+        my_profile=my_profile,
+        incoming=incoming,
+        outgoing=outgoing,
+        shift_label=shift_label,
+    )
+
+
+@main.route("/rota/swap/<int:swap_id>/cancel", methods=["POST"])
+def cancel_shift_request(swap_id):
+    swap = db.get_or_404(ShiftSwapRequest, swap_id)
+    my_profile = current_staff_profile()
+
+    if (
+        not my_profile
+        or swap.requester_staff_id != my_profile.id
+    ):
+        flash("You can only cancel a shift request that you sent.", "error")
+        return redirect(url_for("main.shift_request_inbox"))
+
+    if swap.status != "pending_target":
+        flash("That shift request can no longer be cancelled.", "error")
+        return redirect(url_for("main.shift_request_inbox"))
+
+    week_start = (
+        swap.requester_shift.rota_week.week_start
+        if swap.requester_shift and swap.requester_shift.rota_week
+        else None
+    )
+
+    db.session.delete(swap)
+    db.session.commit()
+
+    flash("Shift request cancelled.", "success")
+
+    if request.form.get("return_to") == "rota" and week_start:
+        return redirect(
+            url_for(
+                "main.rota_home",
+                week=week_start.isoformat(),
+            )
+        )
+
+    return redirect(url_for("main.shift_request_inbox"))
+
+
 @main.route("/rota/shift/<int:shift_id>/swap", methods=["GET", "POST"])
 def request_shift_swap(shift_id):
     shift = db.get_or_404(RotaShift, shift_id)
@@ -4350,6 +4764,43 @@ def request_shift_swap(shift_id):
         target_shift_text = request.form.get("target_shift_id", "")
         target_shift_id = int(target_shift_text) if target_shift_text else None
 
+
+        target_profile = db.session.get(StaffProfile, target_id)
+        if not target_profile:
+            flash("Choose a valid staff member.", "error")
+            return redirect(request.url)
+
+        if target_shift_id:
+            target_shift = db.session.get(RotaShift, target_shift_id)
+
+            if (
+                not target_shift
+                or target_shift.staff_id != target_id
+                or target_shift.rota_week_id != shift.rota_week_id
+                or target_shift.shift_date != shift.shift_date
+            ):
+                flash(
+                    "Shift swaps can only be made with another shift on the same day.",
+                    "error",
+                )
+                return redirect(
+                    url_for("main.rota_home", week=week.week_start.isoformat())
+                )
+
+        duplicate = db.session.scalar(
+            db.select(ShiftSwapRequest).where(
+                ShiftSwapRequest.requester_shift_id == shift.id,
+                ShiftSwapRequest.target_staff_id == target_id,
+                ShiftSwapRequest.status == "pending_target",
+            )
+        )
+
+        if duplicate:
+            flash("That swap request is already waiting for a response.", "error")
+            return redirect(
+                url_for("main.shift_request_inbox")
+            )
+
         request_row = ShiftSwapRequest(
             requester_shift_id=shift.id,
             requester_staff_id=my_profile.id,
@@ -4362,9 +4813,12 @@ def request_shift_swap(shift_id):
         db.session.add(request_row)
         db.session.commit()
 
-        flash("Swap request sent.", "success")
+        flash("Shift change request sent.", "success")
         return redirect(
-            url_for("main.rota_home", week=week.week_start.isoformat())
+            url_for(
+                "main.rota_home",
+                week=week.week_start.isoformat(),
+            )
         )
 
     target_shifts = {
@@ -4398,8 +4852,28 @@ def swap_target_response(swap_id):
 
     action = request.form.get("action")
 
+    if swap.status != "pending_target":
+        flash("That swap request is no longer waiting for you.", "error")
+        return redirect(url_for("main.shift_request_inbox"))
+
     if action == "accept":
-        swap.status = "pending_manager"
+        requester_shift = swap.requester_shift
+        target_shift = swap.target_shift
+
+        if target_shift:
+            if target_shift.shift_date != requester_shift.shift_date:
+                flash("That shift swap is no longer valid.", "error")
+                return redirect(url_for("main.shift_request_inbox"))
+
+            requester_staff_id = requester_shift.staff_id
+            requester_shift.staff_id = target_shift.staff_id
+            target_shift.staff_id = requester_staff_id
+        else:
+            # The selected person was not working that day (or the requester
+            # chose "take my shift"), so approval transfers the shift to them.
+            requester_shift.staff_id = swap.target_staff_id
+
+        swap.status = "approved"
     else:
         swap.status = "rejected"
 
@@ -4410,13 +4884,13 @@ def swap_target_response(swap_id):
     db.session.commit()
 
     flash(
-        "Swap accepted and sent to a manager."
+        "Shift switch approved and the rota has been updated."
         if action == "accept"
-        else "Swap declined.",
+        else "Shift switch declined.",
         "success",
     )
 
-    return redirect(url_for("main.rota_home"))
+    return redirect(url_for("main.shift_request_inbox"))
 
 
 @main.route("/rota/swap/<int:swap_id>/manager", methods=["POST"])
@@ -4646,7 +5120,12 @@ def allergen_menu_context():
     if egg_free:
         stmt = stmt.where(AllergenMenuItem.egg_status == "free")
     if gluten_free:
-        stmt = stmt.where(AllergenMenuItem.gluten_status == "free")
+        stmt = stmt.where(
+            db.or_(
+                AllergenMenuItem.gluten_status == "free",
+                AllergenMenuItem.can_make_gluten_free.is_(True),
+            )
+        )
     if vegetarian:
         stmt = stmt.where(AllergenMenuItem.vegetarian.is_(True))
     if can_make_vegetarian:
@@ -4699,11 +5178,19 @@ def allergen_menu_context():
         side_options[item.id] = sides
 
         if selected_allergens:
+            def side_matches(field):
+                if field == "gluten_status":
+                    return (
+                        side.gluten_status == "free"
+                        or side.can_make_gluten_free
+                    )
+                return getattr(side, field) == "free"
+
             safe_side_options[item.id] = [
                 side
                 for side in sides
                 if all(
-                    getattr(side, field) == "free"
+                    side_matches(field)
                     for field in selected_allergens
                 )
             ]
@@ -4862,6 +5349,13 @@ def save_allergen_item(item=None):
     )
     item.vegetarian_changes = (
         request.form.get("vegetarian_changes", "").strip() or None
+    )
+
+    item.can_make_gluten_free = (
+        request.form.get("can_make_gluten_free") == "1"
+    )
+    item.gluten_free_changes = (
+        request.form.get("gluten_free_changes", "").strip() or None
     )
 
     # Only Main Meals hold side options. Rebuild the links whenever saved.
@@ -5716,10 +6210,19 @@ def edit_booking(booking_id):
 
 
 def booking_form_handler(booking=None):
-    areas = db.session.scalars(db.select(Area).order_by(Area.name)).all()
+    areas = db.session.scalars(
+        db.select(Area)
+        .where(db.func.lower(Area.name) != "bar")
+        .order_by(Area.name)
+    ).all()
+
     tables = db.session.scalars(
         db.select(PubTable)
-        .where(PubTable.active.is_(True))
+        .join(Area)
+        .where(
+            PubTable.active.is_(True),
+            db.func.lower(Area.name) != "bar",
+        )
         .order_by(*table_order_clause())
     ).all()
 

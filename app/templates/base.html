@@ -33,7 +33,12 @@
         <details class="nav-menu"
                  data-exclusive-nav
                  {% if request.endpoint and (request.endpoint.startswith('main.rota') or request.endpoint == 'main.staff_diary') %}data-current="true"{% endif %}>
-            <summary>Staff</summary>
+            <summary>
+                Staff
+                {% if incoming_swap_count %}
+                    <span class="nav-summary-badge">{{ incoming_swap_count }}</span>
+                {% endif %}
+            </summary>
             <div class="nav-menu-panel">
                 <a class="{% if request.endpoint and request.endpoint.startswith('main.rota') %}active{% endif %}"
                    href="{{ url_for('main.rota_home') }}">
@@ -43,6 +48,14 @@
                 <a class="{% if request.endpoint == 'main.staff_diary' %}active{% endif %}"
                    href="{{ url_for('main.staff_diary') }}">
                     Staff Diary
+                </a>
+
+                <a class="{% if request.endpoint in ['main.shift_request_inbox','main.request_shift_swap'] %}active{% endif %}"
+                   href="{{ url_for('main.shift_request_inbox') }}">
+                    Shift Requests
+                    {% if incoming_swap_count %}
+                        <span class="nav-count-badge">{{ incoming_swap_count }}</span>
+                    {% endif %}
                 </a>
             </div>
         </details>

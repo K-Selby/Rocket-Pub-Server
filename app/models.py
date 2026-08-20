@@ -112,6 +112,11 @@ class AllergenMenuItem(db.Model):
     can_make_vegetarian = db.Column(db.Boolean, nullable=False, default=False)
     vegetarian_changes = db.Column(db.String(300))
 
+    # A dish may contain gluten as standard but have a verified preparation /
+    # substitution that makes the served dish gluten free.
+    can_make_gluten_free = db.Column(db.Boolean, nullable=False, default=False)
+    gluten_free_changes = db.Column(db.String(300))
+
     active = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(

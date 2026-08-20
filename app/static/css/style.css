@@ -5719,3 +5719,609 @@ main.container {
         margin-top: 24px;
     }
 }
+
+
+/* v9.7 allergen GF preparation, mobile customer polish, rota draft + swaps */
+.allergen-made-free {
+    background: #dcebf7;
+    color: #2d5975;
+    border: 1px solid #9fc0d5;
+}
+
+.gluten-free-prep-note {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-top: 10px;
+    padding: 9px 10px;
+    border-radius: 8px;
+    background: #edf5fb;
+    color: #315a72;
+    font-size: 12px;
+}
+
+.gluten-free-prep-note span {
+    color: #527083;
+}
+
+.swap-inbox-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.swap-inbox-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    align-items: center;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.swap-inbox-row:last-child {
+    border-bottom: 0;
+}
+
+.swap-inbox-row > div {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.swap-inbox-row small {
+    color: var(--muted);
+}
+
+@media (max-width: 760px) {
+    .customer-topbar {
+        min-height: auto;
+        padding: 9px 12px;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .customer-brand .brand-logo-frame {
+        width: 44px;
+        height: 44px;
+        flex-basis: 44px;
+        border-radius: 9px;
+    }
+
+    .customer-brand .brand-copy strong {
+        font-size: 15px;
+    }
+
+    .customer-brand .brand-copy small {
+        display: none;
+    }
+
+    .customer-nav {
+        width: auto;
+        gap: 1px;
+        overflow: visible;
+    }
+
+    .customer-nav a {
+        padding: 7px 7px;
+        font-size: 11px;
+        white-space: nowrap;
+    }
+
+    .customer-container {
+        width: min(100% - 20px, 1040px);
+        margin: 18px auto 30px;
+    }
+
+    .customer-hero {
+        margin: 16px auto 22px;
+    }
+
+    .customer-hero h1,
+    .customer-allergen-heading h1 {
+        font-size: 30px;
+    }
+
+    .customer-hero p,
+    .customer-allergen-heading p {
+        font-size: 14px;
+    }
+
+    .customer-choice-card {
+        min-height: 118px;
+        padding: 16px;
+        grid-template-columns: 42px 1fr auto;
+        border-radius: 12px;
+    }
+
+    .customer-choice-icon {
+        width: 42px;
+        height: 42px;
+    }
+
+    .customer-choice-card h2 {
+        font-size: 18px;
+    }
+
+    .customer-choice-card p {
+        font-size: 12px;
+    }
+
+    .customer-body .allergen-search-panel {
+        padding: 14px;
+    }
+
+    .customer-body .allergen-search-top {
+        grid-template-columns: 1fr;
+    }
+
+    .customer-body .allergen-filter-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 7px;
+    }
+
+    .customer-body .filter-toggle {
+        min-height: 44px;
+        padding: 8px;
+        font-size: 11px;
+    }
+
+    .customer-body .allergen-menu-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .customer-body .allergen-item-card {
+        padding: 14px;
+        margin-bottom: 0;
+    }
+
+    .customer-body .allergen-item-card h2 {
+        font-size: 19px;
+    }
+
+    .customer-body .allergen-four-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .customer-body .allergen-search-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .customer-body .allergen-search-actions .button {
+        text-align: center;
+    }
+
+    .swap-inbox-row {
+        grid-template-columns: 1fr;
+    }
+
+    .swap-response-form {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+
+/* v9.7.1 request shift changes directly from the rota */
+.rota-shift-changeable {
+    position: relative;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    text-decoration: none;
+    cursor: pointer;
+    transition: transform .12s ease, box-shadow .12s ease;
+}
+
+.rota-shift-changeable:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(20, 67, 49, .16);
+}
+
+.rota-shift-change-action {
+    display: none;
+    font-size: 8px;
+    line-height: 1.15;
+    font-weight: 800;
+    white-space: nowrap;
+    text-transform: none;
+}
+
+.rota-shift-changeable:hover .rota-shift-change-action,
+.rota-shift-changeable:focus-visible .rota-shift-change-action {
+    display: block;
+}
+
+@media (max-width: 760px) {
+    /* Phones do not have hover, so make the action permanently visible
+       underneath the logged-in person's own shift. */
+    .rota-shift-changeable {
+        min-width: 78px;
+        padding-top: 6px;
+        padding-bottom: 6px;
+    }
+
+    .rota-shift-change-action {
+        display: block;
+        font-size: 7px;
+        white-space: normal;
+    }
+}
+
+
+/* v9.7.2 inline rota shift requests + larger booking fallback */
+.rota-shift-chip.swap-pending {
+    background: #f3d86d !important;
+    color: #5a4700 !important;
+    border-color: #d3b336 !important;
+}
+
+.rota-inline-swap-panel {
+    margin-top: 14px;
+    border: 2px solid #cddbcf;
+}
+
+.rota-inline-swap-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.rota-inline-swap-heading h2 {
+    margin-bottom: 4px;
+}
+
+.rota-inline-swap-heading p {
+    margin: 0;
+    color: var(--muted);
+}
+
+.rota-inline-swap-close {
+    width: 34px;
+    height: 34px;
+    border: 0;
+    border-radius: 50%;
+    background: #edf1ed;
+    color: #42534a;
+    cursor: pointer;
+    font-size: 20px;
+}
+
+.rota-swap-name-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 8px;
+    margin: 14px 0;
+}
+
+.rota-swap-person {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    background: white;
+    color: var(--text);
+    cursor: pointer;
+    font: inherit;
+    font-weight: 700;
+}
+
+.rota-swap-person:hover,
+.rota-swap-person.selected {
+    border-color: #6f9479;
+    background: #e6f0e4;
+}
+
+.rota-swap-choice {
+    display: grid;
+    gap: 10px;
+    max-width: 520px;
+    padding: 14px;
+    border-radius: 10px;
+    background: #f7faf5;
+}
+
+.rota-swap-choice[hidden] {
+    display: none !important;
+}
+
+.rota-swap-choice label {
+    display: grid;
+    gap: 5px;
+}
+
+.rota-swap-day-highlight {
+    background: #eef4ff !important;
+    box-shadow: inset 0 0 0 1px #b9c9e8;
+}
+
+.table-capacity-warning {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: 1px solid #d7aa42;
+    border-radius: 8px;
+    background: #fff2c9;
+    color: #6a5007;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.table-capacity-warning[hidden] {
+    display: none !important;
+}
+
+.pairing-option {
+    white-space: normal;
+}
+
+@media (max-width: 760px) {
+    .rota-swap-name-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .rota-inline-swap-panel {
+        padding: 14px;
+    }
+}
+
+
+/* v9.7.3 same-day shift-swap overlay */
+body.rota-modal-open { overflow: hidden; }
+
+.rota-swap-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 4000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+    background: rgba(8, 22, 15, .48);
+    backdrop-filter: blur(2px);
+}
+.rota-swap-overlay[hidden] { display: none !important; }
+
+.rota-swap-modal {
+    width: min(620px, 100%);
+    max-height: calc(100vh - 36px);
+    overflow: auto;
+    padding: 18px;
+    border: 1px solid #cad8cd;
+    border-radius: 14px;
+    background: white;
+    box-shadow: 0 24px 70px rgba(5, 30, 18, .30);
+}
+
+.rota-swap-modal-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+}
+.rota-swap-modal-header h2 { margin: 2px 0 4px; }
+.rota-swap-modal-header p { margin: 0; color: var(--muted); }
+
+.rota-swap-modal-kicker {
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--accent);
+}
+
+.rota-swap-modal-close {
+    width: 34px;
+    height: 34px;
+    border: 0;
+    border-radius: 8px;
+    background: #edf1ed;
+    font-size: 22px;
+    cursor: pointer;
+}
+
+.rota-swap-step {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin: 14px 0 10px;
+}
+
+.rota-swap-day-board {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.rota-swap-day-person {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+    min-height: 62px;
+    padding: 10px 11px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: white;
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+}
+.rota-swap-day-person:hover:not(:disabled),
+.rota-swap-day-person.selected {
+    border-color: #698f73;
+    background: #e8f1e6;
+    box-shadow: inset 0 0 0 1px #698f73;
+}
+.rota-swap-day-person:disabled {
+    background: #fff0bd;
+    color: #66500b;
+    cursor: not-allowed;
+}
+.rota-swap-day-person span { font-size: 12px; }
+.rota-swap-day-person small { font-size: 9px; font-weight: 800; }
+
+.rota-swap-day-empty {
+    grid-column: 1 / -1;
+    padding: 16px;
+    border-radius: 9px;
+    background: #f1f4f1;
+    color: var(--muted);
+    text-align: center;
+}
+
+.rota-swap-modal-selection {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 14px;
+    align-items: center;
+    margin-top: 14px;
+    padding: 13px;
+    border: 1px solid #d4e1d5;
+    border-radius: 10px;
+    background: #f4f8f3;
+}
+.rota-swap-modal-selection[hidden] { display: none !important; }
+.rota-swap-modal-selection > div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.rota-swap-modal-selection span:last-child {
+    color: var(--muted);
+    font-size: 11px;
+}
+
+@media (max-width: 600px) {
+    .rota-swap-overlay {
+        align-items: flex-end;
+        padding: 0;
+    }
+    .rota-swap-modal {
+        width: 100%;
+        max-height: 85vh;
+        border-radius: 16px 16px 0 0;
+        padding: 15px;
+    }
+    .rota-swap-day-board { grid-template-columns: 1fr; }
+    .rota-swap-modal-selection { grid-template-columns: 1fr; }
+    .rota-swap-modal-selection .button { width: 100%; }
+}
+
+
+/* v9.7.4 any-staff shift request targets */
+.rota-swap-person-list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+    max-height: 250px;
+    overflow: auto;
+    padding-right: 2px;
+}
+
+.rota-swap-any-person {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 7px;
+    min-height: 43px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 9px;
+    background: white;
+    color: var(--text);
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+}
+
+.rota-swap-any-person:hover,
+.rota-swap-any-person.selected {
+    border-color: #6b9275;
+    background: #e9f2e7;
+}
+
+.rota-swap-any-person small {
+    padding: 3px 5px;
+    border-radius: 999px;
+    background: #eceeed;
+    color: #737a76;
+    font-size: 8px;
+    font-weight: 800;
+}
+
+.rota-swap-same-day-options {
+    margin-top: 13px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+
+.rota-swap-same-day-options[hidden] {
+    display: none !important;
+}
+
+#rota-swap-target-options {
+    display: grid;
+    gap: 7px;
+    margin-top: 8px;
+}
+
+.rota-swap-target-option {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 10px;
+    background: #f8faf7;
+    color: var(--text);
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+}
+
+.rota-swap-target-option:hover:not(:disabled) {
+    border-color: #6b9275;
+    background: #e9f2e7;
+}
+
+.rota-swap-target-option:disabled {
+    background: #fff0bd;
+    color: #6b570d;
+    cursor: not-allowed;
+}
+
+.rota-swap-target-option span {
+    color: var(--muted);
+    font-size: 11px;
+}
+
+@media (max-width: 600px) {
+    .rota-swap-person-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        max-height: 230px;
+    }
+}
+
+
+/* v9.7.5 shift request cancellation + post-approval rota visibility */
+.shift-request-status-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.shift-request-status-actions form {
+    margin: 0;
+}
+
+.shift-request-status-actions .button {
+    padding: 7px 10px;
+    font-size: 11px;
+}

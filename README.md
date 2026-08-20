@@ -1022,3 +1022,118 @@ Manager rota tools are accessible from the Rota screen.
   `app/static/menus/the-rocket-pub-food-menu.pdf`
 - Until that PDF exists, `/customer/food-menu` shows a clean "coming soon"
   screen rather than an error page.
+
+
+## v9.7 allergen preparation, mobile customer portal, rota drafts and shift switches
+
+- Allergen items can now be marked `Can be made gluten free`, with optional
+  preparation/substitution instructions.
+- Such items show `Gluten free*` and the note `*Can be made gluten free when
+  ordered as such`, rather than pretending the standard dish is gluten free.
+- The gluten-free filter includes verified dishes that can be made gluten free.
+- Added a favicon/tab icon using the Rocket logo on staff and customer pages.
+- Customer pages have a tighter mobile header, single-column cards/menu results,
+  two-column allergen toggles and touch-friendly controls.
+- Rota Builder cell edits no longer POST/reload on every tick. Managers edit the
+  week in the browser and press one `Save draft` button.
+- `Issue rota` saves the current browser draft first and issues that exact state.
+- Published rota editing uses the same single `Save changes` workflow.
+- Added `Shift Requests` to Staff with an incoming-request badge.
+- Staff and managers linked to a rota profile can request a cover or two-way
+  shift switch.
+- The requested person approves/declines it in their own Shift Requests inbox.
+- Approval immediately updates the rota; a second manager-approval step is no
+  longer required for new requests.
+
+
+## v9.7.1 rota shift-change interaction
+
+- Removed the separate `My shifts` section from the rota screen.
+- On an issued rota, the logged-in staff member's own shift chips are now
+  directly actionable in the main rota table.
+- Desktop: hovering over your own shift reveals `Request shift change`; clicking
+  the shift opens the existing cover/two-way switch request screen.
+- Mobile: because touch screens do not have hover, `Request shift change` is
+  shown directly beneath the time on your own shift.
+- Other people's shifts remain normal non-clickable rota entries.
+
+
+## v9.7.2 inline shift requests and large-booking table fallback
+
+- Clicking your own issued shift now expands the shift-change workflow on the
+  same Rota page rather than navigating away.
+- The selected shift's day is highlighted in the existing rota while choosing a
+  colleague.
+- Select a name, optionally choose one of their shifts for a true exchange, then
+  press `Confirm swap request`.
+- Shifts involved in an open pending request are highlighted yellow on the live
+  rota. The saved rota image remains unchanged because no assignments are
+  changed until the recipient approves.
+- Normal booking allocation no longer includes the `Bar` area.
+- If no single table or configured connected pairing fits a large normal
+  booking, the allocator builds a fallback group from physically nearby
+  available tables using floor-plan positions.
+- Pool Room is preferred first, then Snug / Cubby, before other areas.
+- Fallback groups may be one or two seats short; those options carry an explicit
+  warning to the person taking the booking.
+
+
+## v9.7.2.1 rota template fix
+
+- Fixed `/rota` crashing with `No filter named 'isoformat'`.
+- The day-highlighting JavaScript now receives ISO dates using normal Jinja
+  method calls instead of trying to use a non-existent `isoformat` filter.
+
+
+## v9.7.3 same-day shift-swap overlay
+
+- Clicking your own issued shift now opens a modal overlay on top of the rota.
+- Only colleagues who also have a shift on that exact date are selectable.
+- Selecting a colleague selects their same-day shift for a true two-way swap.
+- Same-day swapping is enforced on the server as well as in the interface.
+- Open-request shifts remain yellow and cannot be entered into another swap.
+- The rota itself and saved rota image are unchanged until the recipient approves.
+
+
+## v9.7.3.1 rota title/script placement fix
+
+- Fixed the shift-swap JavaScript being injected inside the Jinja `title`
+  block, which caused the browser tab title to contain JavaScript/code.
+- The swap overlay script now sits at the bottom of the Rota content block,
+  after the rota/modal markup has rendered.
+
+
+## v9.7.4 any-staff shift targets and Staff badge
+
+- Shift-change overlay now lists every staff profile, including archived staff.
+- Selecting a person always offers `Take my shift`.
+- If that person also has a shift on the exact same day, the overlay additionally
+  offers a true same-day `Swap shifts` option.
+- Cross-day two-way swaps remain blocked by the backend.
+- Archived/inactive profiles are labelled `Archived` in the picker.
+- The top-level `Staff` navigation now shows the same incoming shift-request count
+  badge as `Shift Requests`, so a waiting request is visible without opening the menu.
+
+
+## v9.7.4.1 rota archived-staff picker fix
+
+- Fixed `/rota` crashing because `StaffProfile.rota_name` is a Python property,
+  not a SQL column, and therefore cannot be used directly in `ORDER BY`.
+- The swap picker now loads profiles using real database columns and then sorts
+  by the displayed rota name in Python.
+- Active staff remain listed first, followed by archived staff.
+
+
+## v9.7.5 shift request cancellation and rota update fix
+
+- The person who sent a pending shift request can now cancel it from
+  `Staff -> Shift Requests`.
+- Pending requests can also be cancelled from the `My shift swaps` section on
+  the rota.
+- Cancelling removes the pending request immediately, so yellow open-request
+  highlighting disappears.
+- Fixed approved cover/swap assignments not being visible when the recipient was
+  archived. Active staff always appear on the rota; archived staff now appear
+  when they actually hold a shift in that displayed week.
+- Approval continues to change the underlying `RotaShift.staff_id` assignments,
+  so refreshing/opening the rota shows the approved swap immediately.

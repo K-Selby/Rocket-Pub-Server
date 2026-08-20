@@ -97,6 +97,24 @@
     </section>
 
     <section class="form-section full-width">
+        <h2>Gluten free preparation</h2>
+
+        <label class="allergen-edit-check">
+            <input type="checkbox"
+                   name="can_make_gluten_free"
+                   value="1"
+                   {% if item and item.can_make_gluten_free %}checked{% endif %}>
+            <span>Can be made gluten free</span>
+        </label>
+
+        <label class="vegetarian-change-field">
+            Changes required
+            <textarea name="gluten_free_changes"
+                      rows="3">{{ item.gluten_free_changes if item and item.gluten_free_changes else '' }}</textarea>
+        </label>
+    </section>
+
+    <section class="form-section full-width">
         <h2>Vegetarian</h2>
         <div class="allergen-edit-grid">
             <label class="allergen-edit-check">

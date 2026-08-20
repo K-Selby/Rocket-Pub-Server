@@ -514,6 +514,7 @@ function setupNormalTableAvailability() {
     const mapFit = document.getElementById("booking-map-fit");
     const mapTables = Array.from(document.querySelectorAll(".booking-map-table"));
     const pairingList = document.getElementById("pairing-suggestion-list");
+    const capacityWarning = document.getElementById("table-capacity-warning");
 
     if (!form || !dateInput || !timeInput || !partyInput || !slider ||
         !cards.length || !mapStage || !mapShell || !zoomSurface || !pairingList) {
@@ -654,6 +655,10 @@ function setupNormalTableAvailability() {
 
     function updatePairingSuggestions(groups) {
         pairingList.innerHTML = "";
+        if (capacityWarning) {
+            capacityWarning.hidden = true;
+            capacityWarning.textContent = "";
+        }
 
         groups.forEach(group => {
             if (group.table_ids.length <= 1) return;
@@ -661,7 +666,16 @@ function setupNormalTableAvailability() {
             const button = document.createElement("button");
             button.type = "button";
             button.className = "pairing-option";
-            button.textContent = `T${group.numbers.join(" + T")} · ${group.capacity} seats`;
+
+            const fallbackLabel = group.fallback ? " · nearby tables" : "";
+            const shortageLabel = group.shortage > 0
+                ? ` · ${group.shortage} seat${group.shortage === 1 ? "" : "s"} short`
+                : "";
+
+            button.textContent =
+                `T${group.numbers.join(" + T")} · ${group.capacity} seats` +
+                fallbackLabel +
+                shortageLabel;
 
             button.addEventListener("mouseenter", () => {
                 clearHoverHighlight();
@@ -690,6 +704,19 @@ function setupNormalTableAvailability() {
                 });
 
                 syncSelectedVisuals();
+
+                if (capacityWarning) {
+                    if (group.shortage > 0) {
+                        capacityWarning.textContent =
+                            `Warning: these tables provide ${group.capacity} seats for a party of ` +
+                            `${partyInput.value}. They are ${group.shortage} seat` +
+                            `${group.shortage === 1 ? "" : "s"} short. Confirm this with the person booking.`;
+                        capacityWarning.hidden = false;
+                    } else {
+                        capacityWarning.hidden = true;
+                        capacityWarning.textContent = "";
+                    }
+                }
             });
 
             pairingList.appendChild(button);

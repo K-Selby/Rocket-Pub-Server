@@ -5,7 +5,7 @@
 <div class="auth-page">
     <div class="auth-card auth-card-wide">
         <div class="auth-heading">
-            <h1>Request shift swap</h1>
+            <h1>Switch shift</h1>
             <p>
                 {{ shift.shift_date.strftime("%A %d %B") }}
                 · {{ shift_label(shift) }}
@@ -24,7 +24,7 @@
             <label>
                 Swap with one of their shifts (optional)
                 <select name="target_shift_id" id="target-shift-select">
-                    <option value="">They just take/cover my shift</option>
+                    <option value="">They take / cover my shift</option>
                     {% for profile in other_profiles %}
                         {% for target_shift in target_shifts.get(profile.id, []) %}
                             <option value="{{ target_shift.id }}"
@@ -43,7 +43,7 @@
                           placeholder="Optional message"></textarea>
             </label>
 
-            <button class="button auth-submit" type="submit">Send swap request</button>
+            <button class="button auth-submit" type="submit">Send shift request</button>
             <a class="auth-secondary-link" href="{{ url_for('main.rota_home') }}">Cancel</a>
         </form>
     </div>

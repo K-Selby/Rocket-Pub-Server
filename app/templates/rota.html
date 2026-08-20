@@ -8,6 +8,12 @@
         <p>Week from Sunday {{ week_start.strftime("%d %B %Y") }}</p>
     </div>
 
+    {% if my_profile %}
+        <a class="button secondary"
+           href="{{ url_for('main.shift_request_inbox') }}">
+            Shift requests{% if incoming_swap_count %} ({{ incoming_swap_count }}){% endif %}
+        </a>
+    {% endif %}
 </div>
 
 <div class="week-switcher card">
@@ -52,27 +58,6 @@
         {% endif %}
     </div>
 
-    {% if my_profile and my_shifts %}
-        <section class="my-rota-mobile card">
-            <h2>My shifts</h2>
-            {% for shift in my_shifts %}
-                <div class="my-shift-card">
-                    <div>
-                        <strong>{{ shift.shift_date.strftime("%A %d %B") }}</strong>
-                        <span>{{ shift_label(shift) }}</span>
-                    </div>
-
-                    {% if week.status == "published" %}
-                        <a class="small-link"
-                           href="{{ url_for('main.request_shift_swap', shift_id=shift.id) }}">
-                            Request swap
-                        </a>
-                    {% endif %}
-                </div>
-            {% endfor %}
-        </section>
-    {% endif %}
-
     <div class="card rota-table-card">
         <div class="rota-scroll">
             <table class="rota-table">
@@ -89,7 +74,9 @@
                 </thead>
                 <tbody>
                     {% for profile in profiles %}
-                    <tr>
+                    <tr data-rota-profile-row
+                        data-profile-id="{{ profile.id }}"
+                        data-profile-name="{{ profile.rota_name }}">
                         <th>
                             {{ profile.rota_name }}
                             
@@ -97,11 +84,43 @@
                         {% for day in days %}
                         <td>
                             {% for shift in shift_map.get((profile.id, day), []) %}
-                                <span class="rota-shift-chip
-                                    {% if shift.shift_role == 'kitchen' %}kitchen{% endif %}
-                                    {% if shift.auto_suggested %}suggested{% endif %}">
-                                    {{ shift_label(shift) }}
-                                </span>
+                                {% if my_profile
+                                      and profile.id == my_profile.id
+                                      and week.status == "published" %}
+                                    <button type="button"
+                                            class="rota-shift-chip rota-shift-changeable
+                                            {% if shift.id in pending_shift_ids %}swap-pending{% endif %}
+                                            {% if shift.shift_role == 'kitchen' %}kitchen{% endif %}
+                                            {% if shift.auto_suggested %}suggested{% endif %}"
+                                            data-open-shift-request
+                                            data-rota-shift
+                                            data-profile-id="{{ profile.id }}"
+                                            data-profile-name="{{ profile.rota_name }}"
+                                            data-shift-id="{{ shift.id }}"
+                                            data-shift-date="{{ shift.shift_date.isoformat() }}"
+                                            data-shift-label="{{ shift_label(shift) }}"
+                                            aria-label="Request shift change for {{ day.strftime('%A %d %B') }} {{ shift_label(shift) }}">
+                                        <span>{{ shift_label(shift) }}</span>
+                                        {% if shift.id in pending_shift_ids %}
+                                            <span class="rota-shift-change-action">Request pending</span>
+                                        {% else %}
+                                            <span class="rota-shift-change-action">Request shift change</span>
+                                        {% endif %}
+                                    </button>
+                                {% else %}
+                                    <span class="rota-shift-chip
+                                        {% if shift.id in pending_shift_ids %}swap-pending{% endif %}
+                                        {% if shift.shift_role == 'kitchen' %}kitchen{% endif %}
+                                        {% if shift.auto_suggested %}suggested{% endif %}"
+                                          data-rota-shift
+                                          data-profile-id="{{ profile.id }}"
+                                          data-profile-name="{{ profile.rota_name }}"
+                                          data-shift-id="{{ shift.id }}"
+                                          data-shift-date="{{ shift.shift_date.isoformat() }}"
+                                          data-shift-label="{{ shift_label(shift) }}">
+                                        {{ shift_label(shift) }}
+                                    </span>
+                                {% endif %}
                             {% endfor %}
                         </td>
                         {% endfor %}
@@ -111,6 +130,90 @@
             </table>
         </div>
     </div>
+
+    {% if my_profile and week.status == "published" %}
+    <div class="rota-swap-overlay" id="rota-swap-overlay" hidden>
+        <div class="rota-swap-modal" role="dialog" aria-modal="true">
+            <div class="rota-swap-modal-header">
+                <div>
+                    <span class="rota-swap-modal-kicker">Shift change</span>
+                    <h2>Switch shift</h2>
+                    <p id="rota-swap-modal-summary"></p>
+                </div>
+                <button type="button"
+                        class="rota-swap-modal-close"
+                        id="rota-swap-modal-close">×</button>
+            </div>
+
+            <div class="rota-swap-step">
+                <strong>Who do you want to ask?</strong>
+                <span class="muted">
+                    You can ask any staff member, including archived staff.
+                    If they already work this day, you can swap only with that same-day shift.
+                </span>
+            </div>
+
+            <div class="rota-swap-person-list" id="rota-swap-person-list">
+                {% for target_profile in swap_profiles %}
+                    {% if target_profile.id != my_profile.id %}
+                        <button type="button"
+                                class="rota-swap-any-person"
+                                data-swap-person
+                                data-profile-id="{{ target_profile.id }}"
+                                data-profile-name="{{ target_profile.rota_name }}"
+                                data-profile-active="{{ '1' if target_profile.active else '0' }}">
+                            <span>{{ target_profile.rota_name }}</span>
+                            {% if not target_profile.active %}
+                                <small>Archived</small>
+                            {% endif %}
+                        </button>
+                    {% endif %}
+                {% endfor %}
+            </div>
+
+            <div class="rota-swap-same-day-options"
+                 id="rota-swap-same-day-options"
+                 hidden>
+                <strong id="rota-swap-person-heading"></strong>
+                <div id="rota-swap-target-options"></div>
+            </div>
+
+            <form method="post" id="rota-swap-modal-form">
+                <input type="hidden" name="target_staff_id" id="rota-swap-target-staff">
+                <input type="hidden" name="target_shift_id" id="rota-swap-target-shift">
+
+                <div class="rota-swap-modal-selection"
+                     id="rota-swap-modal-selection"
+                     hidden>
+                    <div>
+                        <span class="muted">Request</span>
+                        <strong id="rota-swap-selection-title"></strong>
+                        <span id="rota-swap-selection-detail"></span>
+                    </div>
+                    <button class="button" type="submit">
+                        Confirm swap request
+                    </button>
+                </div>
+            </form>
+
+            <div id="rota-swap-shift-data" hidden>
+                {% for target_profile in swap_profiles %}
+                    {% for target_day in days %}
+                        {% for target_shift in shift_map.get((target_profile.id, target_day), []) %}
+                            <span data-target-shift
+                                  data-profile-id="{{ target_profile.id }}"
+                                  data-shift-id="{{ target_shift.id }}"
+                                  data-shift-date="{{ target_shift.shift_date.isoformat() }}"
+                                  data-shift-label="{{ shift_label(target_shift) }}"
+                                  data-pending="{{ '1' if target_shift.id in pending_shift_ids else '0' }}">
+                            </span>
+                        {% endfor %}
+                    {% endfor %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     {% if swaps %}
     <section class="card">
@@ -126,7 +229,21 @@
                     {{ swap.target_staff.display_name if swap.target_staff else "Open" }}
                 </div>
 
-                <span class="badge">{{ swap.status.replace("_", " ")|title }}</span>
+                <div class="shift-request-status-actions">
+                    <span class="badge">{{ swap.status.replace("_", " ")|title }}</span>
+
+                    {% if my_profile
+                          and swap.requester_staff_id == my_profile.id
+                          and swap.status == "pending_target" %}
+                        <form method="post"
+                              action="{{ url_for('main.cancel_shift_request', swap_id=swap.id) }}">
+                            <input type="hidden" name="return_to" value="rota">
+                            <button class="link-button danger" type="submit">
+                                Cancel request
+                            </button>
+                        </form>
+                    {% endif %}
+                </div>
 
                 {% if my_profile and swap.target_staff_id == my_profile.id and swap.status == "pending_target" %}
                     <form method="post"
@@ -137,18 +254,185 @@
                     </form>
                 {% endif %}
 
-                {% if current_user.is_manager and swap.status == "pending_manager" %}
-                    <form method="post"
-                          action="{{ url_for('main.swap_manager_decision', swap_id=swap.id) }}"
-                          class="swap-response-form">
-                        <button class="button" name="action" value="approve" type="submit">Approve</button>
-                        <button class="button secondary" name="action" value="reject" type="submit">Reject</button>
-                    </form>
-                {% endif %}
             </div>
         {% endfor %}
         </div>
     </section>
     {% endif %}
+{% endif %}
+
+{% if my_profile and week and week.status == "published" %}
+<script>
+(function () {
+    const overlay = document.getElementById("rota-swap-overlay");
+    const closeButton = document.getElementById("rota-swap-modal-close");
+    const summary = document.getElementById("rota-swap-modal-summary");
+    const form = document.getElementById("rota-swap-modal-form");
+    const targetStaff = document.getElementById("rota-swap-target-staff");
+    const targetShift = document.getElementById("rota-swap-target-shift");
+    const optionsWrap = document.getElementById("rota-swap-same-day-options");
+    const options = document.getElementById("rota-swap-target-options");
+    const personHeading = document.getElementById("rota-swap-person-heading");
+    const selection = document.getElementById("rota-swap-modal-selection");
+    const selectionTitle = document.getElementById("rota-swap-selection-title");
+    const selectionDetail = document.getElementById("rota-swap-selection-detail");
+
+    if (!overlay || !form) return;
+
+    let activeShift = null;
+    let selectedPerson = null;
+
+    function prettyDate(value) {
+        return new Date(value + "T12:00:00").toLocaleDateString(
+            "en-GB",
+            { weekday: "long", day: "numeric", month: "long" }
+        );
+    }
+
+    function resetPeople() {
+        document.querySelectorAll("[data-swap-person]")
+            .forEach(button => button.classList.remove("selected"));
+    }
+
+    function closeModal() {
+        overlay.hidden = true;
+        document.body.classList.remove("rota-modal-open");
+        resetPeople();
+        optionsWrap.hidden = true;
+        options.innerHTML = "";
+        selection.hidden = true;
+        targetStaff.value = "";
+        targetShift.value = "";
+        activeShift = null;
+        selectedPerson = null;
+    }
+
+    function chooseRequest(targetShiftData) {
+        targetStaff.value = selectedPerson.id;
+        targetShift.value = targetShiftData ? targetShiftData.shiftId : "";
+
+        if (targetShiftData) {
+            selectionTitle.textContent =
+                `${activeShift.label} ↔ ${targetShiftData.label}`;
+            selectionDetail.textContent =
+                `Ask ${selectedPerson.name} to swap these shifts on ` +
+                `${prettyDate(activeShift.date)}.`;
+        } else {
+            selectionTitle.textContent =
+                `${selectedPerson.name} takes ${activeShift.label}`;
+            selectionDetail.textContent =
+                `Ask ${selectedPerson.name} to take your shift on ` +
+                `${prettyDate(activeShift.date)}.`;
+        }
+
+        selection.hidden = false;
+    }
+
+    function buildOptions() {
+        const sameDay = Array.from(
+            document.querySelectorAll("[data-target-shift]")
+        )
+            .filter(item =>
+                item.dataset.profileId === selectedPerson.id &&
+                item.dataset.shiftDate === activeShift.date
+            )
+            .map(item => ({
+                shiftId: item.dataset.shiftId,
+                label: item.dataset.shiftLabel,
+                pending: item.dataset.pending === "1"
+            }));
+
+        options.innerHTML = "";
+        optionsWrap.hidden = false;
+        personHeading.textContent = selectedPerson.name;
+
+        const takeButton = document.createElement("button");
+        takeButton.type = "button";
+        takeButton.className = "rota-swap-target-option";
+        takeButton.innerHTML =
+            `<strong>Take my shift</strong>` +
+            `<span>${activeShift.label} · ${prettyDate(activeShift.date)}</span>`;
+        takeButton.addEventListener("click", () => chooseRequest(null));
+        options.appendChild(takeButton);
+
+        sameDay.forEach(shift => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "rota-swap-target-option";
+            button.disabled = shift.pending;
+
+            button.innerHTML =
+                `<strong>Swap shifts</strong>` +
+                `<span>${activeShift.label} ↔ ${shift.label}</span>` +
+                (shift.pending ? `<small>Open request</small>` : "");
+
+            if (!shift.pending) {
+                button.addEventListener("click", () => chooseRequest(shift));
+            }
+
+            options.appendChild(button);
+        });
+    }
+
+    document.querySelectorAll("[data-open-shift-request]").forEach(button => {
+        button.addEventListener("click", event => {
+            event.preventDefault();
+            event.stopPropagation();
+
+            if (button.classList.contains("swap-pending")) return;
+
+            activeShift = {
+                shiftId: button.dataset.shiftId,
+                date: button.dataset.shiftDate,
+                label: button.dataset.shiftLabel
+            };
+
+            form.action = `/rota/shift/${activeShift.shiftId}/swap`;
+            summary.textContent =
+                `${activeShift.label} · ${prettyDate(activeShift.date)}`;
+
+            resetPeople();
+            optionsWrap.hidden = true;
+            options.innerHTML = "";
+            selection.hidden = true;
+            targetStaff.value = "";
+            targetShift.value = "";
+
+            overlay.hidden = false;
+            document.body.classList.add("rota-modal-open");
+        });
+    });
+
+    document.querySelectorAll("[data-swap-person]").forEach(button => {
+        button.addEventListener("click", () => {
+            resetPeople();
+            button.classList.add("selected");
+
+            selectedPerson = {
+                id: button.dataset.profileId,
+                name: button.dataset.profileName,
+                active: button.dataset.profileActive === "1"
+            };
+
+            selection.hidden = true;
+            targetStaff.value = "";
+            targetShift.value = "";
+            buildOptions();
+        });
+    });
+
+    closeButton.addEventListener("click", closeModal);
+    overlay.addEventListener("click", event => {
+        if (event.target === overlay) closeModal();
+    });
+    document.addEventListener("keydown", event => {
+        if (event.key === "Escape" && !overlay.hidden) closeModal();
+    });
+
+    form.addEventListener("submit", event => {
+        if (!targetStaff.value) event.preventDefault();
+    });
+})();
+</script>
 {% endif %}
 {% endblock %}

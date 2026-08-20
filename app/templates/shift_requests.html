@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Shift Requests | Rocket Pub Server{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h1>Shift Requests</h1>
+        <p>Approve shift switches sent to you and track requests you've sent.</p>
+    </div>
+
+    <a class="button secondary" href="{{ url_for('main.rota_home') }}">
+        Back to rota
+    </a>
+</div>
+
+{% if not my_profile %}
+    <div class="card empty-state">
+        <strong>Your account is not linked to a rota profile.</strong>
+    </div>
+{% else %}
+    <section class="card">
+        <h2>Waiting for me</h2>
+
+        {% if incoming %}
+            <div class="swap-inbox-list">
+                {% for swap in incoming %}
+                    <div class="swap-inbox-row">
+                        <div>
+                            <strong>{{ swap.requester_staff.rota_name }}</strong>
+                            <span>
+                                wants you to
+                                {% if swap.target_shift %}
+                                    swap
+                                    <strong>
+                                        {{ swap.requester_shift.shift_date.strftime("%a %d %b") }}
+                                        {{ shift_label(swap.requester_shift) }}
+                                    </strong>
+                                    for your
+                                    <strong>
+                                        {{ swap.target_shift.shift_date.strftime("%a %d %b") }}
+                                        {{ shift_label(swap.target_shift) }}
+                                    </strong>
+                                {% else %}
+                                    take
+                                    <strong>
+                                        {{ swap.requester_shift.shift_date.strftime("%a %d %b") }}
+                                        {{ shift_label(swap.requester_shift) }}
+                                    </strong>
+                                {% endif %}
+                            </span>
+
+                            {% if swap.requester_note %}
+                                <small>{{ swap.requester_note }}</small>
+                            {% endif %}
+                        </div>
+
+                        <form method="post"
+                              action="{{ url_for('main.swap_target_response', swap_id=swap.id) }}"
+                              class="swap-response-form">
+                            <button class="button"
+                                    name="action"
+                                    value="accept"
+                                    type="submit">
+                                Approve
+                            </button>
+                            <button class="button secondary"
+                                    name="action"
+                                    value="decline"
+                                    type="submit">
+                                Decline
+                            </button>
+                        </form>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="muted">No shift requests are waiting for you.</p>
+        {% endif %}
+    </section>
+
+    <section class="card">
+        <h2>Requests I've sent</h2>
+
+        {% if outgoing %}
+            <div class="swap-inbox-list">
+                {% for swap in outgoing %}
+                    <div class="swap-inbox-row">
+                        <div>
+                            <strong>
+                                {{ swap.requester_shift.shift_date.strftime("%a %d %b") }}
+                                {{ shift_label(swap.requester_shift) }}
+                            </strong>
+                            <span>
+                                → {{ swap.target_staff.rota_name }}
+                                {% if swap.target_shift %}
+                                    · for
+                                    {{ swap.target_shift.shift_date.strftime("%a %d %b") }}
+                                    {{ shift_label(swap.target_shift) }}
+                                {% endif %}
+                            </span>
+                        </div>
+
+                        <div class="shift-request-status-actions">
+                            <span class="badge">{{ swap.status.replace("_", " ")|title }}</span>
+
+                            {% if swap.status == "pending_target" %}
+                                <form method="post"
+                                      action="{{ url_for('main.cancel_shift_request', swap_id=swap.id) }}">
+                                    <button class="button secondary danger-outline"
+                                            type="submit">
+                                        Cancel request
+                                    </button>
+                                </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="muted">You haven't sent any shift requests.</p>
+        {% endif %}
+    </section>
+{% endif %}
+{% endblock %}

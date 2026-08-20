@@ -146,6 +146,8 @@ def ensure_starter_schema_updates():
         "nuts_status": "VARCHAR(20) DEFAULT 'free'",
         "egg_status": "VARCHAR(20) DEFAULT 'free'",
         "gluten_status": "VARCHAR(20) DEFAULT 'free'",
+        "can_make_gluten_free": "BOOLEAN DEFAULT 0",
+        "gluten_free_changes": "VARCHAR(300)",
     }
 
     for name, sql_type in allergen_item_additions.items():
