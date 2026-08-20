@@ -30,8 +30,24 @@
                         {% endif %}
 
                         <div class="staff-request-dates">
-                            {% for request_date in item.dates %}
-                                <span>{{ request_date.strftime("%a %d %b") }}</span>
+                            {% for detail in item.date_details %}
+                                <span class="
+                                    {% if detail.no_one_off %}request-date-no-off{% endif %}
+                                    {% if detail.position and not detail.position.good_chance %}request-date-low{% endif %}">
+                                    {{ detail.date.strftime("%a %d %b") }}
+
+                                    {% if detail.position %}
+                                        · {{ detail.position.position_label }}
+
+                                        {% if detail.no_one_off %}
+                                            · NO ONE OFF · Low chance
+                                        {% elif detail.position.good_chance %}
+                                            · Good chance
+                                        {% else %}
+                                            · Lower chance
+                                        {% endif %}
+                                    {% endif %}
+                                </span>
                             {% endfor %}
                         </div>
                     </div>
@@ -39,11 +55,17 @@
                     <form method="post"
                           action="{{ url_for('main.diary_manager_update', group_key=item.key) }}"
                           class="staff-request-actions">
-                        <button class="button" name="action" value="approved" type="submit">
+                        <button class="button"
+                                name="action"
+                                value="approved"
+                                type="submit">
                             Approve
                         </button>
+
                         <button class="button secondary danger-outline"
-                                name="action" value="rejected" type="submit">
+                                name="action"
+                                value="rejected"
+                                type="submit">
                             Decline
                         </button>
                     </form>

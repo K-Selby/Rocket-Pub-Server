@@ -149,6 +149,7 @@ from app.models import (
     LargePartyReservedArea,
     LargePartyReservedTable,
     PubTable,
+    PubCalendarEvent,
     RepeatBooking,
     RepeatBookingOccurrence,
     TablePairing,
@@ -204,6 +205,8 @@ MANAGER_ENDPOINTS = {
     "main.rota_template_delete",
     "main.diary_manager_update",
     "main.staff_request_inbox",
+    "main.calendar_event_add",
+    "main.calendar_event_delete",
     "main.swap_manager_decision",
 }
 
@@ -3514,6 +3517,72 @@ def rota_profile_restore(profile_id):
 # Staff diary
 # -------------------------
 
+def day_off_limit_for_date(day):
+    """Mon-Thu: first 3 are favourable. Fri-Sun: first 2."""
+    return 3 if day.weekday() <= 3 else 2
+
+
+def ordinal(value):
+    if 10 <= value % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(value % 10, "th")
+    return f"{value}{suffix}"
+
+
+def day_off_request_positions(start_date, end_date):
+    """
+    Rank all non-rejected day-off requests by submission time for each date.
+
+    Approved requests keep their original place in the queue. Rejected
+    requests no longer consume a place.
+    """
+    requests = db.session.scalars(
+        db.select(StaffDiaryEntry)
+        .where(
+            StaffDiaryEntry.entry_type == "day_off_request",
+            StaffDiaryEntry.status.in_(["requested", "approved"]),
+            StaffDiaryEntry.entry_date >= start_date,
+            StaffDiaryEntry.entry_date <= end_date,
+        )
+        .order_by(
+            StaffDiaryEntry.entry_date,
+            StaffDiaryEntry.created_at,
+            StaffDiaryEntry.id,
+        )
+    ).all()
+
+    positions = {}
+    counters = {}
+
+    for entry in requests:
+        counters[entry.entry_date] = counters.get(entry.entry_date, 0) + 1
+        position = counters[entry.entry_date]
+        limit = day_off_limit_for_date(entry.entry_date)
+
+        positions[entry.id] = {
+            "position": position,
+            "position_label": ordinal(position),
+            "limit": limit,
+            "good_chance": position <= limit,
+        }
+
+    return positions
+
+
+def no_one_off_dates(start_date, end_date):
+    return set(
+        db.session.scalars(
+            db.select(StaffDiaryEntry.entry_date).where(
+                StaffDiaryEntry.entry_type == "no_one_off",
+                StaffDiaryEntry.status.in_(["info", "approved"]),
+                StaffDiaryEntry.entry_date >= start_date,
+                StaffDiaryEntry.entry_date <= end_date,
+            )
+        ).all()
+    )
+
+
 @main.route("/staff-diary", methods=["GET", "POST"])
 def staff_diary():
     profile = current_staff_profile()
@@ -3623,6 +3692,11 @@ def staff_diary():
 
         request_group_id = str(uuid.uuid4())
 
+        selected_no_one_off = no_one_off_dates(
+            min(selected_dates),
+            max(selected_dates),
+        ).intersection(selected_dates)
+
         for entry_date in selected_dates:
             if action == "no_one_off":
                 entry = StaffDiaryEntry(
@@ -3663,12 +3737,16 @@ def staff_diary():
 
         db.session.commit()
 
-        flash(
-            "NO ONE OFF added."
-            if action == "no_one_off"
-            else "Request sent to managers.",
-            "success",
-        )
+        if action == "no_one_off":
+            flash("NO ONE OFF added.", "success")
+        elif action == "day_off" and selected_no_one_off:
+            flash(
+                "Request sent. One or more selected dates are marked "
+                "NO ONE OFF, so the chance of approval is low.",
+                "success",
+            )
+        else:
+            flash("Request sent to managers.", "success")
 
         return redirect(
             url_for(
@@ -3699,6 +3777,55 @@ def staff_diary():
         if visible:
             entries_by_date.setdefault(entry.entry_date, []).append(entry)
 
+    day_off_positions = day_off_request_positions(
+        visible_start,
+        visible_end,
+    )
+    no_off_dates = no_one_off_dates(
+        visible_start,
+        visible_end,
+    )
+
+    large_parties = db.session.scalars(
+        db.select(LargePartyInquiry)
+        .where(
+            LargePartyInquiry.event_date >= visible_start,
+            LargePartyInquiry.event_date <= visible_end,
+            LargePartyInquiry.status != "Cancelled",
+        )
+        .order_by(
+            LargePartyInquiry.event_date,
+            LargePartyInquiry.event_time,
+        )
+    ).all()
+
+    large_parties_by_date = {d: [] for d in visible_dates}
+    for inquiry in large_parties:
+        large_parties_by_date.setdefault(
+            inquiry.event_date,
+            [],
+        ).append(inquiry)
+
+    pub_events = db.session.scalars(
+        db.select(PubCalendarEvent)
+        .where(
+            PubCalendarEvent.event_date >= visible_start,
+            PubCalendarEvent.event_date <= visible_end,
+        )
+        .order_by(
+            PubCalendarEvent.event_date,
+            PubCalendarEvent.event_time,
+            PubCalendarEvent.id,
+        )
+    ).all()
+
+    events_by_date = {d: [] for d in visible_dates}
+    for event in pub_events:
+        events_by_date.setdefault(
+            event.event_date,
+            [],
+        ).append(event)
+
     return render_template(
         "staff_diary.html",
         month_date=month_date,
@@ -3706,8 +3833,72 @@ def staff_diary():
         next_month=next_month,
         calendar_weeks=calendar_weeks,
         entries_by_date=entries_by_date,
+        large_parties_by_date=large_parties_by_date,
+        events_by_date=events_by_date,
+        day_off_positions=day_off_positions,
+        no_off_dates=no_off_dates,
         my_profile=profile,
     )
+
+
+@main.route("/staff-diary/event/add", methods=["POST"])
+def calendar_event_add():
+    date_text = request.form.get("event_date", "").strip()
+    title = request.form.get("title", "").strip()
+    event_type = request.form.get("event_type", "event").strip()
+
+    try:
+        event_date = datetime.strptime(date_text, "%Y-%m-%d").date()
+    except ValueError:
+        flash("Choose a valid event date.", "error")
+        return redirect(url_for("main.staff_diary"))
+
+    if not title:
+        flash("Enter an event name.", "error")
+        return redirect(
+            url_for("main.staff_diary", month=event_date.strftime("%Y-%m"))
+        )
+
+    if event_type not in {"football", "event"}:
+        event_type = "event"
+
+    event_time = None
+    time_text = request.form.get("event_time", "").strip()
+    if time_text:
+        try:
+            event_time = datetime.strptime(time_text, "%H:%M").time()
+        except ValueError:
+            flash("Enter a valid event time.", "error")
+            return redirect(
+                url_for("main.staff_diary", month=event_date.strftime("%Y-%m"))
+            )
+
+    db.session.add(
+        PubCalendarEvent(
+            event_date=event_date,
+            title=title,
+            event_type=event_type,
+            event_time=event_time,
+            created_by_user_id=current_user().id,
+        )
+    )
+    db.session.commit()
+
+    flash("Event added to the Staff Diary.", "success")
+    return redirect(
+        url_for("main.staff_diary", month=event_date.strftime("%Y-%m"))
+    )
+
+
+@main.route("/staff-diary/event/<int:event_id>/delete", methods=["POST"])
+def calendar_event_delete(event_id):
+    event = db.get_or_404(PubCalendarEvent, event_id)
+    month = event.event_date.strftime("%Y-%m")
+    db.session.delete(event)
+    db.session.commit()
+
+    flash("Event removed.", "success")
+    return redirect(url_for("main.staff_diary", month=month))
 
 
 @main.route("/staff-requests")
@@ -3749,6 +3940,33 @@ def staff_request_inbox():
     for group in requests:
         group["entries"].sort(key=lambda e: e.entry_date)
         group["dates"] = [e.entry_date for e in group["entries"]]
+
+    if requests:
+        all_request_dates = [
+            entry.entry_date
+            for item in requests
+            for entry in item["entries"]
+        ]
+        range_start = min(all_request_dates)
+        range_end = max(all_request_dates)
+        positions = day_off_request_positions(range_start, range_end)
+        blocked_dates = no_one_off_dates(range_start, range_end)
+    else:
+        positions = {}
+        blocked_dates = set()
+
+    for item in requests:
+        item["date_details"] = []
+
+        for entry in item["entries"]:
+            rank = positions.get(entry.id)
+            item["date_details"].append(
+                {
+                    "date": entry.entry_date,
+                    "position": rank,
+                    "no_one_off": entry.entry_date in blocked_dates,
+                }
+            )
 
     return render_template(
         "staff_requests.html",

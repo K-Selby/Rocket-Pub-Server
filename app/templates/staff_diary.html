@@ -4,6 +4,16 @@
 {% block content %}
 <div class="page-heading">
     <div><h1>Staff Diary</h1></div>
+
+    {% if current_user.is_manager %}
+        <a class="button secondary"
+           href="{{ url_for('main.staff_request_inbox') }}">
+            Requests
+            {% if manager_request_count %}
+                ({{ manager_request_count }})
+            {% endif %}
+        </a>
+    {% endif %}
 </div>
 
 <div class="calendar-toolbar card">
@@ -29,22 +39,67 @@
             {% for week in calendar_weeks %}
                 {% for day in week %}
                     {% set entries = entries_by_date.get(day, []) %}
+                    {% set large_parties = large_parties_by_date.get(day, []) %}
+                    {% set pub_events = events_by_date.get(day, []) %}
+
                     <button type="button"
-                            class="staff-calendar-day {% if day.month != month_date.month %}other-month{% endif %}"
-                            data-date="{{ day.isoformat() }}">
+                            class="staff-calendar-day
+                                   {% if day.month != month_date.month %}other-month{% endif %}
+                                   {% if day in no_off_dates %}no-off-date{% endif %}"
+                            data-date="{{ day.isoformat() }}"
+                            data-no-one-off="{{ '1' if day in no_off_dates else '0' }}">
                         <span class="calendar-day-number">{{ day.day }}</span>
 
                         <span class="calendar-day-events">
+                            {% if day in no_off_dates %}
+                                <span class="calendar-event no-one-off">
+                                    NO ONE OFF
+                                </span>
+                            {% endif %}
+
+                            {% for event in pub_events %}
+                                <span class="calendar-event pub-event {{ event.event_type }}">
+                                    {% if event.event_type == "football" %}⚽ {% endif %}
+                                    {{ event.title }}
+                                    {% if event.event_time %}
+                                        · {{ event.event_time.strftime("%H:%M") }}
+                                    {% endif %}
+                                </span>
+                            {% endfor %}
+
+                            {% for inquiry in large_parties %}
+                                <span class="calendar-event large-party">
+                                    Large party · {{ inquiry.party_size }}
+                                    {% if inquiry.event_time %}
+                                        · {{ inquiry.event_time.strftime("%H:%M") }}
+                                    {% endif %}
+                                </span>
+                            {% endfor %}
+
                             {% for entry in entries %}
-                                {% if entry.entry_type == "no_one_off" %}
-                                    <span class="calendar-event no-one-off">NO ONE OFF</span>
-                                {% elif entry.entry_type == "day_off_request" %}
-                                    <span class="calendar-event day-off {% if entry.status == 'requested' %}pending{% endif %}">
-                                        {{ entry.staff.rota_name }} · Off{% if entry.status == "requested" %} · Pending{% endif %}
+                                {% if entry.entry_type == "day_off_request" %}
+                                    {% set rank = day_off_positions.get(entry.id) %}
+                                    <span class="calendar-event day-off
+                                        {% if entry.status == 'requested' %}pending{% endif %}">
+                                        {{ entry.staff.rota_name }} · Off
+                                        {% if entry.status == "requested" %} · Pending{% endif %}
+                                        {% if rank %}
+                                            · {{ rank.position_label }}
+                                            {% if day in no_off_dates %}
+                                                · Low chance
+                                            {% elif rank.good_chance %}
+                                                · Good chance
+                                            {% else %}
+                                                · Lower chance
+                                            {% endif %}
+                                        {% endif %}
                                     </span>
+
                                 {% elif entry.entry_type == "available_window" %}
-                                    <span class="calendar-event shift-request {% if entry.status == 'requested' %}pending{% endif %}">
-                                        {{ entry.staff.rota_name }} · {{ entry.note }}{% if entry.status == "requested" %} · Pending{% endif %}
+                                    <span class="calendar-event shift-request
+                                        {% if entry.status == 'requested' %}pending{% endif %}">
+                                        {{ entry.staff.rota_name }} · {{ entry.note }}
+                                        {% if entry.status == "requested" %} · Pending{% endif %}
                                     </span>
                                 {% endif %}
                             {% endfor %}
@@ -62,6 +117,13 @@
             <span class="muted">Select one or more days.</span>
         </div>
 
+        <div id="selection-warning"
+             class="calendar-selection-warning"
+             hidden>
+            One or more selected dates are marked <strong>NO ONE OFF</strong>.
+            You can still request the day off, but approval is unlikely.
+        </div>
+
         <div class="calendar-request-buttons" id="calendar-request-buttons" hidden>
             <button type="button" class="button" data-request-type="day_off">
                 Request day off
@@ -76,6 +138,12 @@
                         class="button secondary no-one-off-button"
                         data-request-type="no_one_off">
                     NO ONE OFF
+                </button>
+
+                <button type="button"
+                        class="button secondary"
+                        id="show-event-form">
+                    Add event
                 </button>
             {% endif %}
         </div>
@@ -98,8 +166,62 @@
                 </button>
             </div>
         </div>
+
+        {% if current_user.is_manager %}
+            <div class="calendar-event-form" id="calendar-event-form" hidden>
+                <p class="muted">
+                    Events are added to the first selected date.
+                </p>
+
+                <label>
+                    Type
+                    <select id="event-type">
+                        <option value="football">Football match</option>
+                        <option value="event">Other event</option>
+                    </select>
+                </label>
+
+                <label>
+                    Event
+                    <input type="text" id="event-title">
+                </label>
+
+                <label>
+                    Time
+                    <input type="time" id="event-time">
+                </label>
+
+                <div class="calendar-confirm-row">
+                    <button type="button" class="button" id="save-event">
+                        Add event
+                    </button>
+                    <button type="button" class="button secondary" id="cancel-event">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        {% endif %}
     </aside>
 </form>
+
+{% if current_user.is_manager %}
+<form method="post"
+      action="{{ url_for('main.calendar_event_add') }}"
+      id="calendar-event-submit-form"
+      hidden>
+    <input type="hidden" name="event_date" id="event-submit-date">
+    <input type="hidden" name="event_type" id="event-submit-type">
+    <input type="hidden" name="title" id="event-submit-title">
+    <input type="hidden" name="event_time" id="event-submit-time">
+</form>
+{% endif %}
+
+<div class="card calendar-key">
+    <strong>Day-off guide</strong>
+    <span>Mon–Thu: first 3 requests have a good chance.</span>
+    <span>Fri–Sun: first 2 requests have a good chance.</span>
+    <span>Requests are ordered first come, first served.</span>
+</div>
 
 <script>
 (function () {
@@ -109,6 +231,7 @@
     const actionInput = document.getElementById("request-action");
     const selectedList = document.getElementById("selected-date-list");
     const buttons = document.getElementById("calendar-request-buttons");
+    const warning = document.getElementById("selection-warning");
     const shiftPanel = document.getElementById("calendar-shift-request");
     const shiftInput = document.getElementById("availability-shift");
 
@@ -121,6 +244,15 @@
         });
     }
 
+    function selectedHasNoOneOff() {
+        return Array.from(selected).some(value => {
+            const cell = document.querySelector(
+                `.staff-calendar-day[data-date="${value}"]`
+            );
+            return cell && cell.dataset.noOneOff === "1";
+        });
+    }
+
     function updateSelection() {
         const values = Array.from(selected).sort();
         hiddenDates.value = values.join(",");
@@ -129,6 +261,7 @@
             selectedList.innerHTML =
                 '<span class="muted">Select one or more days.</span>';
             buttons.hidden = true;
+            warning.hidden = true;
             shiftPanel.hidden = true;
             return;
         }
@@ -138,6 +271,7 @@
             .join("");
 
         buttons.hidden = false;
+        warning.hidden = !selectedHasNoOneOff();
     }
 
     document.querySelectorAll(".staff-calendar-day").forEach(day => {
@@ -186,6 +320,35 @@
     document.getElementById("cancel-shift-request")?.addEventListener("click", () => {
         shiftPanel.hidden = true;
         shiftInput.value = "";
+    });
+
+    const eventPanel = document.getElementById("calendar-event-form");
+    document.getElementById("show-event-form")?.addEventListener("click", () => {
+        if (!selected.size) return;
+        eventPanel.hidden = false;
+    });
+
+    document.getElementById("cancel-event")?.addEventListener("click", () => {
+        eventPanel.hidden = true;
+    });
+
+    document.getElementById("save-event")?.addEventListener("click", () => {
+        const dates = Array.from(selected).sort();
+        const title = document.getElementById("event-title")?.value.trim();
+
+        if (!dates.length || !title) {
+            document.getElementById("event-title")?.focus();
+            return;
+        }
+
+        document.getElementById("event-submit-date").value = dates[0];
+        document.getElementById("event-submit-type").value =
+            document.getElementById("event-type").value;
+        document.getElementById("event-submit-title").value = title;
+        document.getElementById("event-submit-time").value =
+            document.getElementById("event-time").value;
+
+        document.getElementById("calendar-event-submit-form").submit();
     });
 
     updateSelection();

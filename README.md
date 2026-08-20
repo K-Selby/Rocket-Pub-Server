@@ -905,3 +905,24 @@ Manager rota tools are accessible from the Rota screen.
 - Multi-day submissions are grouped and count as one open request.
 - The Management menu shows a live open-request badge.
 - Large parties have a direct Cancel action that moves them to Archive.
+
+
+## v9.5.1 diary staffing guidance and events
+
+- Managers see the same monthly Staff Diary calendar, including who is off,
+  pending requests, large parties and pub events.
+- Large parties are shown automatically on their event date with party size
+  and time.
+- Managers can add football matches or other pub events directly to the diary.
+- `NO ONE OFF` no longer blocks a request. Staff can still submit it, but the
+  calendar gives a clear low-chance warning and the manager inbox highlights
+  the restriction.
+- Day-off requests are ordered first come, first served on every date.
+- Monday-Thursday: positions 1-3 are marked `Good chance`; later requests are
+  `Lower chance`.
+- Friday-Sunday: positions 1-2 are marked `Good chance`; later requests are
+  `Lower chance`.
+- A `NO ONE OFF` date is always shown as low chance regardless of queue
+  position.
+- The request inbox shows the position/chance separately for every selected
+  date, so a multi-day request can have different positions on different days.

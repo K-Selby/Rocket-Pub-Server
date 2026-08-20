@@ -5066,3 +5066,92 @@ main.container {
     .staff-request-row { grid-template-columns: 1fr; }
     .staff-request-actions { justify-content: flex-start; }
 }
+
+
+/* v9.5.1 diary staffing guidance + events */
+.calendar-event.large-party {
+    background: #eee4f5;
+    color: #593d6b;
+}
+
+.calendar-event.pub-event {
+    background: #e8edf4;
+    color: #38546f;
+}
+
+.calendar-event.pub-event.football {
+    background: #dcebdc;
+    color: #2f6038;
+}
+
+.staff-calendar-day.no-off-date {
+    background-image: linear-gradient(
+        135deg,
+        rgba(185, 61, 52, .035) 25%,
+        transparent 25%,
+        transparent 50%,
+        rgba(185, 61, 52, .035) 50%,
+        rgba(185, 61, 52, .035) 75%,
+        transparent 75%,
+        transparent
+    );
+    background-size: 16px 16px;
+}
+
+.calendar-selection-warning {
+    margin: 0 0 12px;
+    padding: 9px 10px;
+    border: 1px solid #d9a29d;
+    border-radius: 7px;
+    background: #fae9e7;
+    color: #742d27;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.calendar-selection-warning[hidden] {
+    display: none !important;
+}
+
+.calendar-key {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 9px 15px;
+    margin-top: 14px;
+    font-size: 12px;
+}
+
+.calendar-key span {
+    color: var(--muted);
+}
+
+.calendar-event-form {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+
+.calendar-event-form[hidden] {
+    display: none !important;
+}
+
+.calendar-event-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.request-date-no-off {
+    background: #f5d8d5 !important;
+    color: #782e28 !important;
+    font-weight: 800;
+}
+
+.request-date-low {
+    border: 1px solid #dfc97b;
+}
+

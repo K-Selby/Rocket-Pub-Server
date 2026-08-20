@@ -781,6 +781,29 @@ class StaffAvailabilityRule(db.Model):
     )
 
 
+class PubCalendarEvent(db.Model):
+    """Manager-created pub event shown on the Staff Diary calendar."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    event_date = db.Column(db.Date, nullable=False, index=True)
+    title = db.Column(db.String(160), nullable=False)
+    event_type = db.Column(
+        db.String(30),
+        nullable=False,
+        default="event",
+        index=True,
+    )  # football / event
+    event_time = db.Column(db.Time)
+
+    created_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("app_user.id"),
+    )
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    created_by = db.relationship("AppUser")
+
+
 class StaffDiaryEntry(db.Model):
     """
     Date-specific availability / time-off / manager diary entry.
