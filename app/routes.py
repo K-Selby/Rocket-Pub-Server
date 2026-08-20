@@ -5514,11 +5514,13 @@ def save_allergen_item(item=None):
         flash("A menu item with that name already exists.", "error")
         return redirect(request.url)
 
-    if item is None:
+    is_new_item = item is None
+
+    if is_new_item:
         item = AllergenMenuItem()
         db.session.add(item)
-        db.session.flush()
 
+    # Required fields must be assigned before the first INSERT/flush.
     item.name = name
     item.category = category
     # Description is no longer used by the allergen menu.
@@ -5560,16 +5562,17 @@ def save_allergen_item(item=None):
     item.can_make_vegetarian = (
         request.form.get("can_make_vegetarian") == "1"
     )
-    item.vegetarian_changes = (
-        request.form.get("vegetarian_changes", "").strip() or None
-    )
+    item.vegetarian_changes = None
 
     item.can_make_gluten_free = (
         request.form.get("can_make_gluten_free") == "1"
     )
-    item.gluten_free_changes = (
-        request.form.get("gluten_free_changes", "").strip() or None
-    )
+    item.gluten_free_changes = None
+
+    # New rows need an ID before their side links can be rebuilt. At this point
+    # all required fields have been populated, so flushing is safe.
+    if is_new_item:
+        db.session.flush()
 
     # Only Main Meals hold side options. Rebuild the links whenever saved.
     AllergenMealSide.query.filter_by(meal_id=item.id).delete()

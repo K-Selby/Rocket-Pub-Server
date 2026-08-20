@@ -106,12 +106,6 @@
                    {% if item and item.can_make_gluten_free %}checked{% endif %}>
             <span>Can be made gluten free</span>
         </label>
-
-        <label class="vegetarian-change-field">
-            Changes required
-            <textarea name="gluten_free_changes"
-                      rows="3">{{ item.gluten_free_changes if item and item.gluten_free_changes else '' }}</textarea>
-        </label>
     </section>
 
     <section class="form-section full-width">
@@ -129,11 +123,6 @@
                 <span>Can be made vegetarian</span>
             </label>
         </div>
-
-        <label class="vegetarian-change-field">
-            Changes required
-            <textarea name="vegetarian_changes" rows="3">{{ item.vegetarian_changes if item and item.vegetarian_changes else '' }}</textarea>
-        </label>
     </section>
 
     <div class="full-width form-actions">

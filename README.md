@@ -1246,3 +1246,11 @@ Manager rota tools are accessible from the Rota screen.
   `instance/pub_booking.db` while the application code is updated.
 - Missing allergen status / gluten-free preparation columns are added
   automatically without deleting or replacing existing menu data.
+
+
+## v9.8.6.2 allergen Add Item fix
+
+- Fixed `NOT NULL constraint failed: allergen_menu_item.name` when creating a new allergen item.
+- New allergen rows are now populated with required values before the first database flush.
+- Removed both `Changes required` text areas from the allergen editor.
+- Existing legacy change-note columns remain only for database compatibility and are no longer displayed.

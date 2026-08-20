@@ -122,9 +122,6 @@
                 <span class="veg-pill">Vegetarian</span>
             {% elif item.can_make_vegetarian %}
                 <span class="veg-pill adaptable">Can be made vegetarian</span>
-                {% if item.vegetarian_changes %}
-                    <p>{{ item.vegetarian_changes }}</p>
-                {% endif %}
             {% else %}
                 <span class="muted">Not marked vegetarian</span>
             {% endif %}
@@ -133,9 +130,6 @@
         {% if item.can_make_gluten_free %}
             <div class="gluten-free-prep-note">
                 <strong>*Can be made gluten free when ordered as such.</strong>
-                {% if item.gluten_free_changes %}
-                    <span>{{ item.gluten_free_changes }}</span>
-                {% endif %}
             </div>
         {% endif %}
 
