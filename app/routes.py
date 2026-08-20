@@ -5473,8 +5473,21 @@ def save_allergen_item(item=None):
 
     item.name = name
     item.category = category
-    item.description = request.form.get("description", "").strip() or None
-    item.ingredients = request.form.get("ingredients", "").strip() or None
+    # Description is no longer used by the allergen menu.
+    item.description = None
+
+    raw_ingredients = request.form.get("ingredients", "")
+    ingredient_lines = []
+
+    for line in raw_ingredients.replace("\r", "").split("\n"):
+        # Accept pasted bullet lists too, but store clean one-item-per-line text.
+        cleaned = line.strip()
+        cleaned = cleaned.lstrip("•*-").strip()
+
+        if cleaned:
+            ingredient_lines.append(cleaned)
+
+    item.ingredients = "\n".join(ingredient_lines) or None
 
     valid_statuses = {"free", "contains", "may_contain"}
 

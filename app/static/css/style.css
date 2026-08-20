@@ -6941,3 +6941,32 @@ button {
         min-width: 98px;
     }
 }
+
+
+/* v9.8.5 allergen ingredient list */
+.ingredient-bullet-list {
+    margin: 10px 0 2px;
+    padding-left: 22px;
+}
+
+.ingredient-bullet-list li {
+    margin: 4px 0;
+    line-height: 1.35;
+}
+
+@media (max-width: 760px) {
+    .ingredient-bullet-list {
+        padding-left: 20px;
+    }
+}
+
+
+/* v9.8.6 main ingredient inline display */
+.main-ingredients-inline {
+    margin: 9px 0 2px;
+    line-height: 1.45;
+}
+
+.ingredient-details > summary {
+    font-weight: 800;
+}

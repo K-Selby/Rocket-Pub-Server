@@ -1215,3 +1215,24 @@ Manager rota tools are accessible from the Rota screen.
   whole page.
 - Staff navigation is a compact horizontal scroller on small screens.
 - Static CSS/JS/favicon cache version bumped to 9.8.4.
+
+
+## v9.8.5 allergen menu tidy-up
+
+- Removed the Description field from the allergen item editor and cards.
+- Ingredients are now entered one ingredient per line.
+- Pasted lines beginning with common bullets (`•`, `-`, `*`) are cleaned on save.
+- Ingredients are displayed as a proper bullet-point list on both the staff and
+  customer allergen menus.
+- Search wording now refers only to meal names and ingredients.
+
+
+## v9.8.6 main ingredient display
+
+- Renamed `Ingredients` to `Main ingredients`.
+- The editor still accepts one main ingredient per line because it is quick to
+  enter and keeps the saved data clean.
+- Staff and customer allergen menus now render those lines as a normal sentence,
+  e.g. `Chicken breast, tomato, mozzarella, garlic, and basil`.
+- The editor clarifies that this list does not need to describe every cooking
+  ingredient such as oil, salt or flour unless staff want it shown.

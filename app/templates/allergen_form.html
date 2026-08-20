@@ -42,14 +42,14 @@
             </label>
 
             <label class="full-width">
-                Description
-                <input name="description"
-                       value="{{ item.description if item and item.description else '' }}">
-            </label>
-
-            <label class="full-width">
-                Ingredients
-                <textarea name="ingredients" rows="5">{{ item.ingredients if item and item.ingredients else '' }}</textarea>
+                Main ingredients
+                <textarea name="ingredients"
+                          rows="7"
+                          placeholder="Enter one main ingredient per line">{{ item.ingredients if item and item.ingredients else '' }}</textarea>
+                <span class="field-note">
+                    Enter the main ingredients only, one per line. This does not need to include
+                    every cooking ingredient such as oil, salt or flour unless it is useful to show.
+                </span>
             </label>
         </div>
     </section>

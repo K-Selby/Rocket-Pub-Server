@@ -33,7 +33,7 @@
         <label>
             Search menu
             <input type="search" name="q" value="{{ search }}"
-                   placeholder="Search meal, ingredient or description…">
+                   placeholder="Search meal or ingredient…">
         </label>
 
         <label>
@@ -106,10 +106,6 @@
                 <h2>{{ item.name }}</h2>
             </div>
         </div>
-
-        {% if item.description %}
-            <p class="allergen-description">{{ item.description }}</p>
-        {% endif %}
 
         <div class="allergen-badges allergen-four-grid">
             {{ allergen_badge("Milk", item.milk_status) }}
@@ -199,9 +195,23 @@
         {% endif %}
 
         {% if item.ingredients %}
+            {% set ingredient_list = item.ingredients.splitlines() | select | list %}
             <details class="ingredient-details">
-                <summary>Ingredients</summary>
-                <p>{{ item.ingredients }}</p>
+                <summary>Main ingredients</summary>
+                <p class="main-ingredients-inline">
+                    {% for ingredient in ingredient_list %}
+                        {% set clean_ingredient = ingredient.strip() %}
+                        {% if clean_ingredient %}
+                            {% if loop.first %}
+                                {{ clean_ingredient }}
+                            {% elif loop.last %}
+                                {% if loop.length == 2 %} and {% else %}, and {% endif %}{{ clean_ingredient }}
+                            {% else %}
+                                , {{ clean_ingredient }}
+                            {% endif %}
+                        {% endif %}
+                    {% endfor %}
+                </p>
             </details>
         {% endif %}
     </article>
