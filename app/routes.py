@@ -2077,14 +2077,9 @@ def users():
     )
 
     if current_user().role == "manager":
-        # Managers manage staff accounts only. They can see themselves at the
-        # top of the screen but cannot alter manager/admin accounts.
-        stmt = stmt.where(
-            db.or_(
-                AppUser.role == "staff",
-                AppUser.id == current_user().id,
-            )
-        )
+        # Managers can see staff and other managers, but not administrators.
+        # Existing edit permissions still prevent managers changing each other.
+        stmt = stmt.where(AppUser.role != "admin")
 
     user_list = db.session.scalars(stmt).all()
 
@@ -3587,7 +3582,7 @@ def no_one_off_dates(start_date, end_date):
 def staff_diary():
     profile = current_staff_profile()
 
-    if profile is None:
+    if profile is None and not current_user().is_manager:
         flash(
             "Your login is not linked to a rota staff profile yet.",
             "error",
@@ -3655,6 +3650,15 @@ def staff_diary():
 
         if action not in {"day_off", "shift_request", "no_one_off"}:
             flash("Choose a request type.", "error")
+            return redirect(
+                url_for("main.staff_diary", month=month_date.strftime("%Y-%m"))
+            )
+
+        if action in {"day_off", "shift_request"} and profile is None:
+            flash(
+                "You do not have a rota profile for personal requests.",
+                "error",
+            )
             return redirect(
                 url_for("main.staff_diary", month=month_date.strftime("%Y-%m"))
             )
@@ -3760,7 +3764,6 @@ def staff_diary():
         .where(
             StaffDiaryEntry.entry_date >= visible_start,
             StaffDiaryEntry.entry_date <= visible_end,
-            StaffDiaryEntry.status != "rejected",
         )
         .order_by(StaffDiaryEntry.entry_date, StaffDiaryEntry.created_at)
     ).all()
@@ -3771,7 +3774,10 @@ def staff_diary():
         visible = (
             current_user().is_manager
             or entry.status in {"approved", "info"}
-            or entry.staff_id == profile.id
+            or (
+                profile is not None
+                and entry.staff_id == profile.id
+            )
         )
 
         if visible:
@@ -3903,6 +3909,36 @@ def calendar_event_delete(event_id):
 
 @main.route("/staff-requests")
 def staff_request_inbox():
+    month_text = request.args.get("month", "").strip()
+
+    try:
+        month_date = (
+            datetime.strptime(month_text, "%Y-%m").date().replace(day=1)
+            if month_text
+            else date.today().replace(day=1)
+        )
+    except ValueError:
+        month_date = date.today().replace(day=1)
+
+    previous_month = (
+        month_date.replace(day=1) - timedelta(days=1)
+    ).replace(day=1)
+
+    next_month = (
+        date(month_date.year + 1, 1, 1)
+        if month_date.month == 12
+        else date(month_date.year, month_date.month + 1, 1)
+    )
+
+    cal = calendar.Calendar(firstweekday=0)
+    calendar_weeks = cal.monthdatescalendar(
+        month_date.year,
+        month_date.month,
+    )
+    visible_dates = [d for week in calendar_weeks for d in week]
+    visible_start = min(visible_dates)
+    visible_end = max(visible_dates)
+
     pending = db.session.scalars(
         db.select(StaffDiaryEntry)
         .where(
@@ -3968,9 +4004,84 @@ def staff_request_inbox():
                 }
             )
 
+    calendar_entries = db.session.scalars(
+        db.select(StaffDiaryEntry)
+        .where(
+            StaffDiaryEntry.entry_date >= visible_start,
+            StaffDiaryEntry.entry_date <= visible_end,
+        )
+        .order_by(
+            StaffDiaryEntry.entry_date,
+            StaffDiaryEntry.created_at,
+            StaffDiaryEntry.id,
+        )
+    ).all()
+
+    calendar_entries_by_date = {d: [] for d in visible_dates}
+    for entry in calendar_entries:
+        calendar_entries_by_date.setdefault(entry.entry_date, []).append(entry)
+
+    calendar_positions = day_off_request_positions(
+        visible_start,
+        visible_end,
+    )
+    calendar_no_off_dates = no_one_off_dates(
+        visible_start,
+        visible_end,
+    )
+
+    calendar_large_parties = db.session.scalars(
+        db.select(LargePartyInquiry)
+        .where(
+            LargePartyInquiry.event_date >= visible_start,
+            LargePartyInquiry.event_date <= visible_end,
+            LargePartyInquiry.status != "Cancelled",
+        )
+        .order_by(
+            LargePartyInquiry.event_date,
+            LargePartyInquiry.event_time,
+        )
+    ).all()
+
+    calendar_large_parties_by_date = {d: [] for d in visible_dates}
+    for inquiry in calendar_large_parties:
+        calendar_large_parties_by_date.setdefault(
+            inquiry.event_date,
+            [],
+        ).append(inquiry)
+
+    calendar_events = db.session.scalars(
+        db.select(PubCalendarEvent)
+        .where(
+            PubCalendarEvent.event_date >= visible_start,
+            PubCalendarEvent.event_date <= visible_end,
+        )
+        .order_by(
+            PubCalendarEvent.event_date,
+            PubCalendarEvent.event_time,
+            PubCalendarEvent.id,
+        )
+    ).all()
+
+    calendar_events_by_date = {d: [] for d in visible_dates}
+    for event in calendar_events:
+        calendar_events_by_date.setdefault(
+            event.event_date,
+            [],
+        ).append(event)
+
     return render_template(
         "staff_requests.html",
         requests=requests,
+        month_date=month_date,
+        previous_month=previous_month,
+        next_month=next_month,
+        calendar_weeks=calendar_weeks,
+        entries_by_date=calendar_entries_by_date,
+        large_parties_by_date=calendar_large_parties_by_date,
+        events_by_date=calendar_events_by_date,
+        day_off_positions=calendar_positions,
+        no_off_dates=calendar_no_off_dates,
     )
 
 
@@ -4640,35 +4751,7 @@ def delete_customer(customer_id):
 
 @main.route("/table-map")
 def table_map():
-    """
-    Read-only table map for all logged-in staff.
-
-    Normal staff can inspect table locations and properties without seeing any
-    editor controls or table-management actions.
-    """
-    tables = db.session.scalars(
-        db.select(PubTable)
-        .where(PubTable.active.is_(True))
-        .order_by(*table_order_clause())
-    ).all()
-
-    floor_objects = db.session.scalars(
-        db.select(FloorPlanObject)
-        .order_by(FloorPlanObject.z_index, FloorPlanObject.id)
-    ).all()
-
-    settings = db.session.scalar(
-        db.select(FloorPlanSetting).where(
-            FloorPlanSetting.name == "main"
-        )
-    )
-
-    return render_template(
-        "table_map.html",
-        tables=tables,
-        floor_objects=floor_objects,
-        settings=settings,
-    )
+    return redirect(url_for("main.dashboard"))
 
 
 @main.route("/table-layout")

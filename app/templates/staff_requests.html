@@ -5,24 +5,98 @@
 <div class="page-heading">
     <div>
         <h1>Staff Requests</h1>
-        <p>Open day-off and shift requests.</p>
+        <p>Open requests and the staffing calendar.</p>
     </div>
 </div>
 
-<div class="card">
+<div class="calendar-toolbar card">
+    <a class="button secondary"
+       href="{{ url_for('main.staff_request_inbox', month=previous_month.strftime('%Y-%m')) }}">←</a>
+    <h2>{{ month_date.strftime("%B %Y") }}</h2>
+    <a class="button secondary"
+       href="{{ url_for('main.staff_request_inbox', month=next_month.strftime('%Y-%m')) }}">→</a>
+</div>
+
+<section class="card staff-calendar-card staff-request-calendar">
+    <div class="staff-calendar-weekdays">
+        {% for day_name in ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"] %}
+            <div>{{ day_name }}</div>
+        {% endfor %}
+    </div>
+
+    <div class="staff-calendar-grid">
+        {% for week in calendar_weeks %}
+            {% for day in week %}
+                {% set entries = entries_by_date.get(day, []) %}
+                {% set parties = large_parties_by_date.get(day, []) %}
+                {% set events = events_by_date.get(day, []) %}
+
+                <div class="staff-calendar-day manager-calendar-day
+                            {% if day.month != month_date.month %}other-month{% endif %}
+                            {% if day in no_off_dates %}no-off-date{% endif %}">
+                    <span class="calendar-day-number">{{ day.day }}</span>
+
+                    <span class="calendar-day-events">
+                        {% if day in no_off_dates %}
+                            <span class="calendar-event no-one-off">NO ONE OFF</span>
+                        {% endif %}
+
+                        {% for event in events %}
+                            <span class="calendar-event pub-event">
+                                {% if event.event_type == "football" %}⚽ {% endif %}
+                                {{ event.title }}
+                                {% if event.event_time %} · {{ event.event_time.strftime("%H:%M") }}{% endif %}
+                            </span>
+                        {% endfor %}
+
+                        {% for inquiry in parties %}
+                            <span class="calendar-event large-party">
+                                Large party · {{ inquiry.party_size }}
+                                {% if inquiry.event_time %} · {{ inquiry.event_time.strftime("%H:%M") }}{% endif %}
+                            </span>
+                        {% endfor %}
+
+                        {% for entry in entries %}
+                            {% if entry.entry_type == "day_off_request" %}
+                                {% set rank = day_off_positions.get(entry.id) %}
+                                <span class="calendar-event day-off status-{{ entry.status }}">
+                                    <span class="calendar-event-person">
+                                        {% if rank %}
+                                            <span class="request-position-circle status-{{ entry.status }}">
+                                                {{ rank.position }}
+                                            </span>
+                                        {% endif %}
+                                        <span>{{ entry.staff.rota_name }}</span>
+                                    </span>
+                                    <span class="calendar-event-label">
+                                        Off{% if entry.status == "requested" %} · Pending{% elif entry.status == "rejected" %} · Declined{% endif %}
+                                    </span>
+                                </span>
+                            {% elif entry.entry_type == "available_window" %}
+                                <span class="calendar-event shift-request status-{{ entry.status }}">
+                                    {{ entry.staff.rota_name }} · {{ entry.note }}
+                                    {% if entry.status == "requested" %} · Pending{% elif entry.status == "rejected" %} · Declined{% endif %}
+                                </span>
+                            {% endif %}
+                        {% endfor %}
+                    </span>
+                </div>
+            {% endfor %}
+        {% endfor %}
+    </div>
+</section>
+
+<div class="card staff-requests-card">
+    <h2>Open requests</h2>
+
     {% if requests %}
         <div class="staff-request-list">
             {% for item in requests %}
                 <div class="staff-request-row">
                     <div class="staff-request-main">
                         <strong>{{ item.staff.rota_name }}</strong>
-
                         <span class="staff-request-type">
-                            {% if item.entry_type == "day_off_request" %}
-                                Day off
-                            {% else %}
-                                Shift request
-                            {% endif %}
+                            {% if item.entry_type == "day_off_request" %}Day off{% else %}Shift request{% endif %}
                         </span>
 
                         {% if item.shift_text %}
@@ -31,22 +105,10 @@
 
                         <div class="staff-request-dates">
                             {% for detail in item.date_details %}
-                                <span class="
-                                    {% if detail.no_one_off %}request-date-no-off{% endif %}
-                                    {% if detail.position and not detail.position.good_chance %}request-date-low{% endif %}">
+                                <span class="{% if detail.no_one_off %}request-date-no-off{% endif %}">
                                     {{ detail.date.strftime("%a %d %b") }}
-
-                                    {% if detail.position %}
-                                        · {{ detail.position.position_label }}
-
-                                        {% if detail.no_one_off %}
-                                            · NO ONE OFF · Low chance
-                                        {% elif detail.position.good_chance %}
-                                            · Good chance
-                                        {% else %}
-                                            · Lower chance
-                                        {% endif %}
-                                    {% endif %}
+                                    {% if detail.position %} · #{{ detail.position.position }}{% endif %}
+                                    {% if detail.no_one_off %} · NO ONE OFF{% endif %}
                                 </span>
                             {% endfor %}
                         </div>
@@ -55,17 +117,11 @@
                     <form method="post"
                           action="{{ url_for('main.diary_manager_update', group_key=item.key) }}"
                           class="staff-request-actions">
-                        <button class="button"
-                                name="action"
-                                value="approved"
-                                type="submit">
+                        <button class="button" name="action" value="approved" type="submit">
                             Approve
                         </button>
-
                         <button class="button secondary danger-outline"
-                                name="action"
-                                value="rejected"
-                                type="submit">
+                                name="action" value="rejected" type="submit">
                             Decline
                         </button>
                     </form>
@@ -73,9 +129,7 @@
             {% endfor %}
         </div>
     {% else %}
-        <div class="empty-state">
-            <strong>No open requests</strong>
-        </div>
+        <div class="empty-state"><strong>No open requests</strong></div>
     {% endif %}
 </div>
 {% endblock %}

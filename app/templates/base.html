@@ -48,11 +48,7 @@
 
                 <a class="{% if request.endpoint in ['main.customers', 'main.edit_customer'] %}active{% endif %}"
                    href="{{ url_for('main.customers') }}">Customers</a>
-
-                <a class="{% if request.endpoint == 'main.table_map' %}active{% endif %}"
-                   href="{{ url_for('main.table_map') }}">Table Map</a>
-
-                <a class="{% if request.endpoint == 'main.archive' %}active{% endif %}"
+<a class="{% if request.endpoint == 'main.archive' %}active{% endif %}"
                    href="{{ url_for('main.archive') }}">Archive</a>
 
                 <a class="{% if request.endpoint in ['main.email_setup', 'main.verify_email'] %}active{% endif %}"

@@ -5155,3 +5155,110 @@ main.container {
     border: 1px solid #dfc97b;
 }
 
+
+
+/* v9.5.2 calendar status + nav cleanup */
+.calendar-event-person {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.calendar-event-label {
+    display: block;
+    margin-top: 2px;
+    padding-left: 24px;
+    font-size: 8px;
+    opacity: .82;
+}
+.request-position-circle {
+    display: inline-flex;
+    width: 19px;
+    height: 19px;
+    flex: 0 0 19px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #e0b748;
+    color: #493a08;
+    font-size: 10px;
+    font-weight: 900;
+}
+.request-position-circle.status-approved {
+    background: #5d9a67;
+    color: white;
+}
+.request-position-circle.status-rejected {
+    background: #a9ada9;
+    color: white;
+}
+.calendar-event.day-off.status-requested {
+    background: #fff0bd;
+    color: #67520d;
+}
+.calendar-event.day-off.status-approved {
+    background: #dcefdc;
+    color: #285b31;
+}
+.calendar-event.day-off.status-rejected {
+    background: #e6e7e6;
+    color: #666c68;
+}
+.calendar-event.shift-request,
+.calendar-event.shift-request.status-requested,
+.calendar-event.shift-request.status-approved {
+    background: #dcebf7 !important;
+    color: #2f5874 !important;
+}
+.calendar-event.shift-request.status-rejected {
+    background: #dcebf7 !important;
+    color: #2f5874 !important;
+    opacity: .58;
+}
+.calendar-event.large-party,
+.calendar-event.pub-event,
+.calendar-event.pub-event.football {
+    background: #eadff2 !important;
+    color: #583f69 !important;
+}
+.staff-calendar-day.no-off-date,
+.manager-calendar-day.no-off-date {
+    background: #f8dddd !important;
+}
+.calendar-event.no-one-off {
+    background: #c94f46 !important;
+    color: white !important;
+}
+.manager-calendar-day {
+    cursor: default;
+}
+.staff-request-calendar {
+    margin-bottom: 16px;
+}
+.staff-requests-card h2 {
+    margin-top: 0;
+}
+.main-nav {
+    gap: 3px;
+}
+.main-nav > a,
+.nav-menu > summary {
+    border-radius: 7px;
+    padding: 8px 10px;
+}
+.nav-menu-panel {
+    min-width: 170px;
+    padding: 7px;
+    border-radius: 10px;
+}
+.nav-menu-panel a {
+    border-radius: 6px;
+    padding: 8px 9px;
+}
+.account-menu {
+    margin-left: 6px;
+    padding-left: 10px;
+    border-left: 1px solid rgba(255,255,255,.22);
+}
+.dashboard-floor-shell {
+    padding-right: 14px;
+}

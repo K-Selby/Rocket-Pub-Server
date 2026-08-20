@@ -1853,7 +1853,6 @@ function setupDashboardFloorMap() {
     const zoomSurface = document.getElementById(
         "dashboard-floor-zoom-surface"
     );
-    const fitButton = document.getElementById("dashboard-map-fit");
     const tooltip = document.getElementById("dashboard-map-tooltip");
 
     if (!stage || !shell || !zoomSurface || !tooltip) return;
@@ -1872,7 +1871,8 @@ function setupDashboardFloorMap() {
          * was also limited by the viewer height, which made a wide floor plan
          * shrink unnecessarily and left a large empty strip on the right.
          */
-        const availableWidth = Math.max(shell.clientWidth - 20, 100);
+        // Leave room for the stage border/right wall so it is not clipped.
+        const availableWidth = Math.max(shell.clientWidth - 32, 100);
 
         const zoom = Math.max(
             Math.min(
@@ -1888,8 +1888,8 @@ function setupDashboardFloorMap() {
         stage.style.transform = `scale(${zoom})`;
         stage.style.transformOrigin = "top left";
 
-        zoomSurface.style.width = `${scaledWidth}px`;
-        zoomSurface.style.height = `${scaledHeight}px`;
+        zoomSurface.style.width = `${scaledWidth + 6}px`;
+        zoomSurface.style.height = `${scaledHeight + 6}px`;
 
         /*
          * Let the dashboard viewer follow the fitted map height instead of
@@ -2034,7 +2034,6 @@ function setupDashboardFloorMap() {
         button.addEventListener("blur", hideTooltip);
     });
 
-    fitButton?.addEventListener("click", fitMap);
     window.addEventListener("resize", fitMap);
 
     fitMap();

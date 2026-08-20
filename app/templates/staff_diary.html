@@ -7,11 +7,8 @@
 
     {% if current_user.is_manager %}
         <a class="button secondary"
-           href="{{ url_for('main.staff_request_inbox') }}">
-            Requests
-            {% if manager_request_count %}
-                ({{ manager_request_count }})
-            {% endif %}
+           href="{{ url_for('main.staff_request_inbox', month=month_date.strftime('%Y-%m')) }}">
+            Requests{% if manager_request_count %} ({{ manager_request_count }}){% endif %}
         </a>
     {% endif %}
 </div>
@@ -52,54 +49,45 @@
 
                         <span class="calendar-day-events">
                             {% if day in no_off_dates %}
-                                <span class="calendar-event no-one-off">
-                                    NO ONE OFF
-                                </span>
+                                <span class="calendar-event no-one-off">NO ONE OFF</span>
                             {% endif %}
 
                             {% for event in pub_events %}
-                                <span class="calendar-event pub-event {{ event.event_type }}">
+                                <span class="calendar-event pub-event">
                                     {% if event.event_type == "football" %}⚽ {% endif %}
                                     {{ event.title }}
-                                    {% if event.event_time %}
-                                        · {{ event.event_time.strftime("%H:%M") }}
-                                    {% endif %}
+                                    {% if event.event_time %} · {{ event.event_time.strftime("%H:%M") }}{% endif %}
                                 </span>
                             {% endfor %}
 
                             {% for inquiry in large_parties %}
                                 <span class="calendar-event large-party">
                                     Large party · {{ inquiry.party_size }}
-                                    {% if inquiry.event_time %}
-                                        · {{ inquiry.event_time.strftime("%H:%M") }}
-                                    {% endif %}
+                                    {% if inquiry.event_time %} · {{ inquiry.event_time.strftime("%H:%M") }}{% endif %}
                                 </span>
                             {% endfor %}
 
                             {% for entry in entries %}
                                 {% if entry.entry_type == "day_off_request" %}
                                     {% set rank = day_off_positions.get(entry.id) %}
-                                    <span class="calendar-event day-off
-                                        {% if entry.status == 'requested' %}pending{% endif %}">
-                                        {{ entry.staff.rota_name }} · Off
-                                        {% if entry.status == "requested" %} · Pending{% endif %}
-                                        {% if rank %}
-                                            · {{ rank.position_label }}
-                                            {% if day in no_off_dates %}
-                                                · Low chance
-                                            {% elif rank.good_chance %}
-                                                · Good chance
-                                            {% else %}
-                                                · Lower chance
+                                    <span class="calendar-event day-off status-{{ entry.status }}">
+                                        <span class="calendar-event-person">
+                                            {% if rank %}
+                                                <span class="request-position-circle status-{{ entry.status }}">
+                                                    {{ rank.position }}
+                                                </span>
                                             {% endif %}
-                                        {% endif %}
+                                            <span>{{ entry.staff.rota_name }}</span>
+                                        </span>
+                                        <span class="calendar-event-label">
+                                            Off
+                                            {% if entry.status == "requested" %} · Pending{% elif entry.status == "rejected" %} · Declined{% endif %}
+                                        </span>
                                     </span>
-
                                 {% elif entry.entry_type == "available_window" %}
-                                    <span class="calendar-event shift-request
-                                        {% if entry.status == 'requested' %}pending{% endif %}">
+                                    <span class="calendar-event shift-request status-{{ entry.status }}">
                                         {{ entry.staff.rota_name }} · {{ entry.note }}
-                                        {% if entry.status == "requested" %} · Pending{% endif %}
+                                        {% if entry.status == "requested" %} · Pending{% elif entry.status == "rejected" %} · Declined{% endif %}
                                     </span>
                                 {% endif %}
                             {% endfor %}
@@ -117,21 +105,21 @@
             <span class="muted">Select one or more days.</span>
         </div>
 
-        <div id="selection-warning"
-             class="calendar-selection-warning"
-             hidden>
+        <div id="selection-warning" class="calendar-selection-warning" hidden>
             One or more selected dates are marked <strong>NO ONE OFF</strong>.
             You can still request the day off, but approval is unlikely.
         </div>
 
         <div class="calendar-request-buttons" id="calendar-request-buttons" hidden>
-            <button type="button" class="button" data-request-type="day_off">
-                Request day off
-            </button>
+            {% if my_profile %}
+                <button type="button" class="button" data-request-type="day_off">
+                    Request day off
+                </button>
 
-            <button type="button" class="button secondary" data-request-type="shift_request">
-                Request a shift
-            </button>
+                <button type="button" class="button secondary" data-request-type="shift_request">
+                    Request a shift
+                </button>
+            {% endif %}
 
             {% if current_user.is_manager %}
                 <button type="button"
@@ -169,10 +157,6 @@
 
         {% if current_user.is_manager %}
             <div class="calendar-event-form" id="calendar-event-form" hidden>
-                <p class="muted">
-                    Events are added to the first selected date.
-                </p>
-
                 <label>
                     Type
                     <select id="event-type">
@@ -192,12 +176,8 @@
                 </label>
 
                 <div class="calendar-confirm-row">
-                    <button type="button" class="button" id="save-event">
-                        Add event
-                    </button>
-                    <button type="button" class="button secondary" id="cancel-event">
-                        Cancel
-                    </button>
+                    <button type="button" class="button" id="save-event">Add event</button>
+                    <button type="button" class="button secondary" id="cancel-event">Cancel</button>
                 </div>
             </div>
         {% endif %}
@@ -215,13 +195,6 @@
     <input type="hidden" name="event_time" id="event-submit-time">
 </form>
 {% endif %}
-
-<div class="card calendar-key">
-    <strong>Day-off guide</strong>
-    <span>Mon–Thu: first 3 requests have a good chance.</span>
-    <span>Fri–Sun: first 2 requests have a good chance.</span>
-    <span>Requests are ordered first come, first served.</span>
-</div>
 
 <script>
 (function () {
@@ -312,7 +285,6 @@
             shiftInput.focus();
             return;
         }
-
         actionInput.value = "shift_request";
         form.submit();
     });

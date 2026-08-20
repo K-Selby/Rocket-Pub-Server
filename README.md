@@ -926,3 +926,20 @@ Manager rota tools are accessible from the Rota screen.
   position.
 - The request inbox shows the position/chance separately for every selected
   date, so a multi-day request can have different positions on different days.
+
+
+## v9.5.2 calendar display and navigation cleanup
+
+- Removed Good chance / Lower chance wording from Staff Diary.
+- Day-off request order is shown as a numbered circle by the name.
+- Pending circles are amber, approved circles green, rejected circles grey.
+- Shift requests are blue.
+- Football events, other events and large parties are purple.
+- NO ONE OFF dates are red.
+- Rejected requests remain visible in grey.
+- Management Requests now includes the same monthly calendar above the inbox.
+- Admin/Managers can view Staff Diary even without a rota profile.
+- Managers can see other managers in Users, but cannot edit them.
+- Removed standalone Table Map; old URL redirects to Dashboard.
+- Removed Dashboard Fit whole map button and fixed the far-right wall clipping.
+- Navigation spacing/dropdowns cleaned up.
