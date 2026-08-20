@@ -1155,3 +1155,12 @@ Manager rota tools are accessible from the Rota screen.
 - Archive/unarchive staff actions wait for any pending rota autosave before
   reloading the page, preventing the draft from reverting when a staff member
   is restored or archived.
+
+
+## v9.8.1 static asset cache-busting
+
+- Added an explicit version query to `style.css`, `app.js`, and the favicon.
+- This prevents the live Cloudflare domain from serving new HTML alongside an
+  older cached CSS/JS file after an update.
+- Localhost and `rocketpubserver.co.uk` should now render the same rota/overlay
+  styling after the Windows server is updated.
