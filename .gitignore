@@ -1,2 +1,8 @@
 .DS_Store
 .env
+.venv/
+__pycache__/
+*.pyc
+instance/pub_booking.db
+instance/pub_booking-BACKUP.db
+instance/microsoft_token_cache.bin
