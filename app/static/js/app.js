@@ -2126,7 +2126,6 @@ function setupReadOnlyTableMap() {
         });
     });
 
-    fitButton?.addEventListener("click", fitMap);
     window.addEventListener("resize", fitMap);
     fitMap();
 }

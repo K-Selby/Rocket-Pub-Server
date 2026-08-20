@@ -212,6 +212,7 @@ MANAGER_ENDPOINTS = {
 
 
 ADMIN_ENDPOINTS = {
+    "main.table_map",
     "main.table_layout",
     "main.save_table_layout",
     "main.update_layout_table",
@@ -3832,6 +3833,102 @@ def staff_diary():
             [],
         ).append(event)
 
+    my_pending_requests = []
+
+    if profile is not None:
+        own_pending = db.session.scalars(
+            db.select(StaffDiaryEntry)
+            .where(
+                StaffDiaryEntry.staff_id == profile.id,
+                StaffDiaryEntry.status == "requested",
+                StaffDiaryEntry.entry_type.in_(
+                    ["day_off_request", "available_window"]
+                ),
+            )
+            .order_by(
+                StaffDiaryEntry.created_at,
+                StaffDiaryEntry.entry_date,
+            )
+        ).all()
+
+        grouped_pending = {}
+
+        for entry in own_pending:
+            key = entry.request_group_id or f"entry-{entry.id}"
+
+            if key not in grouped_pending:
+                grouped_pending[key] = {
+                    "key": key,
+                    "entry_type": entry.entry_type,
+                    "shift_text": (
+                        entry.note
+                        if entry.entry_type == "available_window"
+                        else None
+                    ),
+                    "dates": [],
+                }
+
+            grouped_pending[key]["dates"].append(entry.entry_date)
+
+        my_pending_requests = list(grouped_pending.values())
+
+    removable_by_date = {d: [] for d in visible_dates}
+
+    for entry in all_entries:
+        if entry.entry_type in {"day_off_request", "available_window"}:
+            can_remove = current_user().is_admin or (
+                profile is not None
+                and entry.staff_id == profile.id
+            )
+
+            if can_remove:
+                removable_by_date.setdefault(entry.entry_date, []).append(
+                    {
+                        "kind": "request",
+                        "id": entry.id,
+                        "label": (
+                            f"{entry.staff.rota_name} - Day off"
+                            if entry.entry_type == "day_off_request"
+                            else f"{entry.staff.rota_name} - Shift {entry.note or ''}"
+                        ),
+                        "url": url_for(
+                            "main.remove_staff_diary_request",
+                            entry_id=entry.id,
+                        ),
+                    }
+                )
+
+        elif (
+            entry.entry_type == "no_one_off"
+            and current_user().is_manager
+        ):
+            removable_by_date.setdefault(entry.entry_date, []).append(
+                {
+                    "kind": "no_one_off",
+                    "id": entry.id,
+                    "label": "NO ONE OFF",
+                    "url": url_for(
+                        "main.remove_no_one_off",
+                        entry_id=entry.id,
+                    ),
+                }
+            )
+
+    if current_user().is_manager:
+        for event in pub_events:
+            removable_by_date.setdefault(event.event_date, []).append(
+                {
+                    "kind": "event",
+                    "id": event.id,
+                    "label": event.title,
+                    "url": url_for(
+                        "main.calendar_event_delete",
+                        event_id=event.id,
+                    ),
+                }
+            )
+
+
     return render_template(
         "staff_diary.html",
         month_date=month_date,
@@ -3844,7 +3941,71 @@ def staff_diary():
         day_off_positions=day_off_positions,
         no_off_dates=no_off_dates,
         my_profile=profile,
+        my_pending_requests=my_pending_requests,
+        removable_by_date=removable_by_date,
     )
+
+
+@main.route("/staff-diary/request/<int:entry_id>/remove", methods=["POST"])
+def remove_staff_diary_request(entry_id):
+    entry = db.get_or_404(StaffDiaryEntry, entry_id)
+    profile = current_staff_profile()
+
+    if entry.entry_type not in {"day_off_request", "available_window"}:
+        flash("That diary item cannot be removed here.", "error")
+        return redirect(
+            url_for(
+                "main.staff_diary",
+                month=entry.entry_date.strftime("%Y-%m"),
+            )
+        )
+
+    # Admin can remove anybody's request. Everyone else can only remove
+    # a request that belongs to their own linked rota profile.
+    can_remove = current_user().is_admin or (
+        profile is not None
+        and entry.staff_id == profile.id
+    )
+
+    if not can_remove:
+        flash(
+            "You can only remove your own day-off or shift requests.",
+            "error",
+        )
+        return redirect(
+            url_for(
+                "main.staff_diary",
+                month=entry.entry_date.strftime("%Y-%m"),
+            )
+        )
+
+    month = entry.entry_date.strftime("%Y-%m")
+    db.session.delete(entry)
+    db.session.commit()
+
+    flash("Diary request removed.", "success")
+    return redirect(url_for("main.staff_diary", month=month))
+
+
+@main.route("/staff-diary/no-one-off/<int:entry_id>/remove", methods=["POST"])
+def remove_no_one_off(entry_id):
+    entry = db.get_or_404(StaffDiaryEntry, entry_id)
+
+    if (
+        not current_user().is_manager
+        or entry.entry_type != "no_one_off"
+    ):
+        flash("Manager access is required.", "error")
+        return redirect(url_for("main.staff_diary"))
+
+    month = entry.entry_date.strftime("%Y-%m")
+    db.session.delete(entry)
+    db.session.commit()
+
+    flash("NO ONE OFF removed.", "success")
+    return redirect(url_for("main.staff_diary", month=month))
+
+
 
 
 @main.route("/staff-diary/event/add", methods=["POST"])
@@ -4751,7 +4912,29 @@ def delete_customer(customer_id):
 
 @main.route("/table-map")
 def table_map():
-    return redirect(url_for("main.dashboard"))
+    tables = db.session.scalars(
+        db.select(PubTable)
+        .where(PubTable.active.is_(True))
+        .order_by(*table_order_clause())
+    ).all()
+
+    floor_objects = db.session.scalars(
+        db.select(FloorPlanObject)
+        .order_by(FloorPlanObject.z_index, FloorPlanObject.id)
+    ).all()
+
+    settings = db.session.scalar(
+        db.select(FloorPlanSetting).where(
+            FloorPlanSetting.name == "main"
+        )
+    )
+
+    return render_template(
+        "table_map.html",
+        tables=tables,
+        floor_objects=floor_objects,
+        settings=settings,
+    )
 
 
 @main.route("/table-layout")

@@ -5262,3 +5262,282 @@ main.container {
 .dashboard-floor-shell {
     padding-right: 14px;
 }
+
+
+/* v9.5.3 navigation + diary removal controls */
+.main-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.nav-menu > summary,
+.account-dropdown > summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    list-style: none;
+    cursor: pointer;
+}
+
+.nav-menu > summary::-webkit-details-marker,
+.account-dropdown > summary::-webkit-details-marker {
+    display: none;
+}
+
+.nav-menu[data-current="true"] > summary {
+    background: rgba(255,255,255,.13);
+}
+
+.nav-summary-badge {
+    display: inline-flex;
+    min-width: 18px;
+    height: 18px;
+    align-items: center;
+    justify-content: center;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: #bd4b42;
+    color: white;
+    font-size: 10px;
+    font-weight: 850;
+}
+
+.nav-menu-divider {
+    height: 1px;
+    margin: 5px 3px;
+    background: var(--border);
+}
+
+.account-dropdown {
+    position: relative;
+    margin-left: 5px;
+}
+
+.account-dropdown > summary {
+    min-width: 110px;
+    padding: 6px 10px;
+    border-left: 1px solid rgba(255,255,255,.2);
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+}
+
+.account-name {
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.account-role {
+    font-size: 9px;
+    opacity: .7;
+}
+
+.account-panel {
+    right: 0;
+    left: auto !important;
+    min-width: 150px;
+}
+
+.account-panel form {
+    margin: 0;
+}
+
+.account-logout-button {
+    width: 100%;
+    border: 0;
+    border-radius: 6px;
+    padding: 8px 9px;
+    background: transparent;
+    color: #8b332d;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+}
+
+.account-logout-button:hover {
+    background: #faecea;
+}
+
+.my-pending-requests,
+.month-event-list {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+
+.my-pending-requests h3,
+.month-event-list h3 {
+    margin: 0 0 8px;
+    font-size: 13px;
+}
+
+.my-pending-request,
+.month-event-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.my-pending-request > div,
+.month-event-row > div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.my-pending-request small,
+.month-event-row small {
+    color: var(--muted);
+    font-size: 10px;
+}
+
+@media (max-width: 980px) {
+    .main-nav {
+        gap: 2px;
+    }
+
+    .main-nav > a,
+    .nav-menu > summary {
+        padding-left: 7px;
+        padding-right: 7px;
+    }
+}
+
+
+/* v9.5.4 selected-day removal + booking map centring */
+.calendar-remove-section {
+    margin-top: 9px;
+}
+
+.calendar-remove-section[hidden],
+.calendar-remove-items[hidden] {
+    display: none !important;
+}
+
+.calendar-remove-items {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.calendar-remove-item {
+    width: 100%;
+    border: 1px solid #d6a19c;
+    border-radius: 7px;
+    padding: 8px 9px;
+    background: #faecea;
+    color: #7c312b;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+    font-size: 11px;
+}
+
+.calendar-remove-item:hover {
+    background: #f6ddda;
+}
+
+.booking-floor-plan-wrap {
+    max-width: 1100px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.booking-floor-plan-toolbar {
+    justify-content: center;
+    text-align: center;
+}
+
+.booking-floor-plan-shell {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.booking-floor-plan-zoom-surface {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+
+/* v9.5.4.2 selected-day diary delete controls */
+.calendar-selected-items {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+
+.calendar-selected-items[hidden] {
+    display: none !important;
+}
+
+.calendar-selected-items h3 {
+    margin: 0 0 8px;
+    font-size: 13px;
+}
+
+#calendar-selected-item-list {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.calendar-selected-item-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    padding: 8px;
+    border: 1px solid #e2d3d0;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.calendar-selected-item-copy {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: 11px;
+}
+
+.calendar-selected-item-copy span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.calendar-selected-item-x {
+    display: inline-flex;
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #eee5e3;
+    color: #8c3f38;
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.calendar-selected-delete {
+    border: 1px solid #a93f37;
+    border-radius: 6px;
+    padding: 6px 8px;
+    background: #bd4b42;
+    color: white;
+    font: inherit;
+    font-size: 10px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.calendar-selected-delete:hover {
+    background: #9f3e37;
+}

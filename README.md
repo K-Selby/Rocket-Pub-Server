@@ -943,3 +943,56 @@ Manager rota tools are accessible from the Rota screen.
 - Removed standalone Table Map; old URL redirects to Dashboard.
 - Removed Dashboard Fit whole map button and fixed the far-right wall clipping.
 - Navigation spacing/dropdowns cleaned up.
+
+
+## v9.5.3 navigation and diary controls
+
+- Staff can remove their own pending day-off or requested-shift submissions.
+  A multi-date request is removed as one grouped request.
+- Managers can remove football/pub events from the Staff Diary.
+- My Email moved out of the main navigation and into the account/username menu.
+- Navigation is now grouped into `Staff` and `Bookings` dropdowns:
+  - Staff: Rota, Staff Diary
+  - Bookings: Table Bookings, Large Parties, Customers
+- Archive moved into Management.
+- The standalone Table Map is restored but is Admin-only, alongside Edit Table
+  Layout.
+- Management contains Requests, Users, Tables and Archive, with Admin-only map
+  tools separated below.
+- Managers continue to see other manager accounts on Users without permission
+  to edit them.
+
+
+## v9.5.4 selected-day removal and booking map centring
+
+- Diary removal now works from the calendar itself: select the date, press
+  `Remove`, then choose the item on that selected date.
+- Staff can only remove their own pending day-off or shift requests.
+- Admin can remove any staff diary request.
+- Managers/Admin can remove calendar events and NO ONE OFF markers.
+- Removed the separate My Pending Requests / Events This Month removal lists.
+- Removed `Fit whole map` from the booking table-selection map.
+- The booking floor-plan map is now centred within the booking screen while
+  retaining automatic fitting.
+
+
+## v9.5.4.1 Staff Diary startup fix
+
+- Fixed the `month_events is not defined` error on `/staff-diary`.
+- The old sidebar event list was removed in v9.5.4, so its obsolete template
+  context has now been removed as well.
+- Events are still removed by selecting their date and pressing `Remove`.
+
+
+## v9.5.4.2 Staff Diary selected-day delete fix
+
+- Fixed malformed removal URLs such as `/staff-diary/request/1$1remove`.
+- Selecting a diary day now immediately shows removable items for that date in
+  the sidebar; there is no separate Remove-button step.
+- Every removable item shows an `×` marker and its own red `Delete` button.
+- Staff/managers can delete only day-off or shift requests belonging to their
+  own rota profile.
+- Admin can delete any person's day-off or shift request.
+- Managers/Admin can delete pub events and NO ONE OFF entries.
+- Deletion uses the exact server-generated URL rather than constructing route
+  strings in JavaScript.

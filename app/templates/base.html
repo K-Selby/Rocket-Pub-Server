@@ -26,45 +26,66 @@
     {% if current_user %}
     <nav class="main-nav">
         <a class="{% if request.endpoint == 'main.dashboard' %}active{% endif %}"
-           href="{{ url_for('main.dashboard') }}">Dashboard</a>
+           href="{{ url_for('main.dashboard') }}">
+            Dashboard
+        </a>
 
-        <a class="{% if request.endpoint and request.endpoint.startswith('main.rota') %}active{% endif %}"
-           href="{{ url_for('main.rota_home') }}">Rota</a>
-
-        <a class="{% if request.endpoint in ['main.bookings', 'main.new_booking', 'main.edit_booking'] %}active{% endif %}"
-           href="{{ url_for('main.bookings') }}">Bookings</a>
-
-        <a class="{% if request.endpoint in ['main.large_parties', 'main.new_large_party', 'main.edit_large_party'] %}active{% endif %}"
-           href="{{ url_for('main.large_parties') }}">Large Parties</a>
-
-        <a class="{% if request.endpoint in ['main.allergen_menu', 'main.allergen_new', 'main.allergen_edit'] %}active{% endif %}"
-           href="{{ url_for('main.allergen_menu') }}">Allergen Menu</a>
-
-        <details class="nav-menu" data-exclusive-nav>
-            <summary>More</summary>
+        <details class="nav-menu"
+                 data-exclusive-nav
+                 {% if request.endpoint and (request.endpoint.startswith('main.rota') or request.endpoint == 'main.staff_diary') %}data-current="true"{% endif %}>
+            <summary>Staff</summary>
             <div class="nav-menu-panel">
+                <a class="{% if request.endpoint and request.endpoint.startswith('main.rota') %}active{% endif %}"
+                   href="{{ url_for('main.rota_home') }}">
+                    Rota
+                </a>
+
                 <a class="{% if request.endpoint == 'main.staff_diary' %}active{% endif %}"
-                   href="{{ url_for('main.staff_diary') }}">Staff Diary</a>
-
-                <a class="{% if request.endpoint in ['main.customers', 'main.edit_customer'] %}active{% endif %}"
-                   href="{{ url_for('main.customers') }}">Customers</a>
-<a class="{% if request.endpoint == 'main.archive' %}active{% endif %}"
-                   href="{{ url_for('main.archive') }}">Archive</a>
-
-                <a class="{% if request.endpoint in ['main.email_setup', 'main.verify_email'] %}active{% endif %}"
-                   href="{{ url_for('main.email_setup') }}">My Email</a>
+                   href="{{ url_for('main.staff_diary') }}">
+                    Staff Diary
+                </a>
             </div>
         </details>
 
+        <details class="nav-menu"
+                 data-exclusive-nav
+                 {% if request.endpoint in ['main.bookings','main.new_booking','main.edit_booking','main.large_parties','main.new_large_party','main.edit_large_party','main.customers','main.edit_customer'] %}data-current="true"{% endif %}>
+            <summary>Bookings</summary>
+            <div class="nav-menu-panel">
+                <a class="{% if request.endpoint in ['main.bookings','main.new_booking','main.edit_booking'] %}active{% endif %}"
+                   href="{{ url_for('main.bookings') }}">
+                    Table Bookings
+                </a>
+
+                <a class="{% if request.endpoint in ['main.large_parties','main.new_large_party','main.edit_large_party'] %}active{% endif %}"
+                   href="{{ url_for('main.large_parties') }}">
+                    Large Parties
+                </a>
+
+                <a class="{% if request.endpoint in ['main.customers','main.edit_customer'] %}active{% endif %}"
+                   href="{{ url_for('main.customers') }}">
+                    Customers
+                </a>
+            </div>
+        </details>
+
+        <a class="{% if request.endpoint in ['main.allergen_menu','main.allergen_new','main.allergen_edit'] %}active{% endif %}"
+           href="{{ url_for('main.allergen_menu') }}">
+            Allergen Menu
+        </a>
+
         {% if current_user.is_manager %}
-            <details class="nav-menu management-menu" data-exclusive-nav>
-                <summary>Management</summary>
-                <div class="nav-menu-panel">
-                    <a href="{{ url_for('main.tables') }}">Tables</a>
-                    {% if current_user.is_admin %}
-                        <a href="{{ url_for('main.table_layout') }}">Table Layout</a>
+            <details class="nav-menu management-menu"
+                     data-exclusive-nav
+                     {% if request.endpoint in ['main.users','main.staff_request_inbox','main.tables','main.archive','main.table_map','main.table_layout'] %}data-current="true"{% endif %}>
+                <summary>
+                    Management
+                    {% if manager_request_count %}
+                        <span class="nav-summary-badge">{{ manager_request_count }}</span>
                     {% endif %}
-                    <a href="{{ url_for('main.users') }}">Users</a>
+                </summary>
+
+                <div class="nav-menu-panel">
                     <a class="management-request-link {% if request.endpoint == 'main.staff_request_inbox' %}active{% endif %}"
                        href="{{ url_for('main.staff_request_inbox') }}">
                         Requests
@@ -72,19 +93,61 @@
                             <span class="nav-count-badge">{{ manager_request_count }}</span>
                         {% endif %}
                     </a>
+
+                    <a class="{% if request.endpoint == 'main.users' %}active{% endif %}"
+                       href="{{ url_for('main.users') }}">
+                        Users
+                    </a>
+
+                    <a class="{% if request.endpoint == 'main.tables' %}active{% endif %}"
+                       href="{{ url_for('main.tables') }}">
+                        Tables
+                    </a>
+
+                    <a class="{% if request.endpoint == 'main.archive' %}active{% endif %}"
+                       href="{{ url_for('main.archive') }}">
+                        Archive
+                    </a>
+
+                    {% if current_user.is_admin %}
+                        <div class="nav-menu-divider"></div>
+
+                        <a class="{% if request.endpoint == 'main.table_map' %}active{% endif %}"
+                           href="{{ url_for('main.table_map') }}">
+                            Table Map
+                        </a>
+
+                        <a class="{% if request.endpoint == 'main.table_layout' %}active{% endif %}"
+                           href="{{ url_for('main.table_layout') }}">
+                            Edit Table Layout
+                        </a>
+                    {% endif %}
                 </div>
             </details>
         {% endif %}
 
-        <div class="account-menu">
-            <span>
-                {{ current_user.username }}
-                <small>{{ current_user.role|title }}</small>
-            </span>
-<form method="post" action="{{ url_for('main.logout') }}">
-                <button type="submit" class="topbar-logout">Log out</button>
-            </form>
-        </div>
+        <details class="account-dropdown"
+                 data-exclusive-nav>
+            <summary>
+                <span class="account-name">{{ current_user.username }}</span>
+                <span class="account-role">{{ current_user.role|title }}</span>
+            </summary>
+
+            <div class="nav-menu-panel account-panel">
+                <a class="{% if request.endpoint in ['main.email_setup','main.verify_email'] %}active{% endif %}"
+                   href="{{ url_for('main.email_setup') }}">
+                    My Email
+                </a>
+
+                <form method="post"
+                      action="{{ url_for('main.logout') }}">
+                    <button type="submit"
+                            class="account-logout-button">
+                        Log out
+                    </button>
+                </form>
+            </div>
+        </details>
     </nav>
     {% endif %}
 </header>

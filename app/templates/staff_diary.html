@@ -92,6 +92,15 @@
                                 {% endif %}
                             {% endfor %}
                         </span>
+
+                        <span class="calendar-removable-items" hidden>
+                            {% for item in removable_by_date.get(day, []) %}
+                                <span data-remove-kind="{{ item.kind }}"
+                                      data-remove-id="{{ item.id }}"
+                                      data-remove-label="{{ item.label }}"
+                                      data-remove-url="{{ item.url }}"></span>
+                            {% endfor %}
+                        </span>
                     </button>
                 {% endfor %}
             {% endfor %}
@@ -136,6 +145,13 @@
             {% endif %}
         </div>
 
+        <div class="calendar-selected-items"
+             id="calendar-selected-items"
+             hidden>
+            <h3>Items on selected day</h3>
+            <div id="calendar-selected-item-list"></div>
+        </div>
+
         <div class="calendar-shift-request" id="calendar-shift-request" hidden>
             <label>
                 Shift
@@ -154,8 +170,7 @@
                 </button>
             </div>
         </div>
-
-        {% if current_user.is_manager %}
+{% if current_user.is_manager %}
             <div class="calendar-event-form" id="calendar-event-form" hidden>
                 <label>
                     Type
@@ -180,9 +195,29 @@
                     <button type="button" class="button secondary" id="cancel-event">Cancel</button>
                 </div>
             </div>
-        {% endif %}
+{% endif %}
     </aside>
 </form>
+
+<form method="post"
+      id="remove-request-form"
+      data-action-template="{{ url_for('main.remove_staff_diary_request', entry_id=0) }}"
+      hidden>
+</form>
+
+{% if current_user.is_manager %}
+<form method="post"
+      id="remove-event-form"
+      data-action-template="{{ url_for('main.calendar_event_delete', event_id=0) }}"
+      hidden>
+</form>
+
+<form method="post"
+      id="remove-no-off-form"
+      data-action-template="{{ url_for('main.remove_no_one_off', entry_id=0) }}"
+      hidden>
+</form>
+{% endif %}
 
 {% if current_user.is_manager %}
 <form method="post"
@@ -207,6 +242,10 @@
     const warning = document.getElementById("selection-warning");
     const shiftPanel = document.getElementById("calendar-shift-request");
     const shiftInput = document.getElementById("availability-shift");
+    const selectedItemsSection =
+        document.getElementById("calendar-selected-items");
+    const selectedItemList =
+        document.getElementById("calendar-selected-item-list");
 
     function formatDate(value) {
         const date = new Date(value + "T12:00:00");
@@ -236,6 +275,8 @@
             buttons.hidden = true;
             warning.hidden = true;
             shiftPanel.hidden = true;
+            selectedItemsSection.hidden = true;
+            selectedItemList.innerHTML = "";
             return;
         }
 
@@ -245,6 +286,84 @@
 
         buttons.hidden = false;
         warning.hidden = !selectedHasNoOneOff();
+
+        renderSelectedItems(values);
+    }
+
+    function postRemoval(url, label) {
+        if (!url) return;
+
+        if (!confirm(`Delete ${label}?`)) {
+            return;
+        }
+
+        const deleteForm = document.createElement("form");
+        deleteForm.method = "post";
+        deleteForm.action = url;
+        deleteForm.hidden = true;
+        document.body.appendChild(deleteForm);
+        deleteForm.submit();
+    }
+
+    function renderSelectedItems(values) {
+        const items = [];
+
+        values.forEach(value => {
+            const cell = document.querySelector(
+                `.staff-calendar-day[data-date="${value}"]`
+            );
+
+            if (!cell) return;
+
+            cell.querySelectorAll(
+                ".calendar-removable-items [data-remove-url]"
+            ).forEach(item => {
+                items.push({
+                    date: value,
+                    label: item.dataset.removeLabel,
+                    url: item.dataset.removeUrl
+                });
+            });
+        });
+
+        selectedItemList.innerHTML = "";
+
+        if (!items.length) {
+            selectedItemsSection.hidden = true;
+            return;
+        }
+
+        items.forEach(item => {
+            const row = document.createElement("div");
+            row.className = "calendar-selected-item-row";
+
+            const text = document.createElement("div");
+            text.className = "calendar-selected-item-copy";
+
+            const closeMark = document.createElement("span");
+            closeMark.className = "calendar-selected-item-x";
+            closeMark.textContent = "×";
+
+            const label = document.createElement("span");
+            label.textContent =
+                `${formatDate(item.date)} · ${item.label}`;
+
+            const deleteButton = document.createElement("button");
+            deleteButton.type = "button";
+            deleteButton.className = "calendar-selected-delete";
+            deleteButton.textContent = "Delete";
+            deleteButton.addEventListener("click", () => {
+                postRemoval(item.url, item.label);
+            });
+
+            text.appendChild(closeMark);
+            text.appendChild(label);
+            row.appendChild(text);
+            row.appendChild(deleteButton);
+            selectedItemList.appendChild(row);
+        });
+
+        selectedItemsSection.hidden = false;
     }
 
     document.querySelectorAll(".staff-calendar-day").forEach(day => {
