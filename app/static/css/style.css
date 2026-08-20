@@ -6380,3 +6380,121 @@ body.rota-modal-open { overflow: hidden; }
         justify-content: center;
     }
 }
+
+
+/* v9.8.2 10+ normal-booking table mode */
+.large-booking-guidance {
+    margin: 14px 0;
+    padding: 14px;
+    border: 2px solid #856d2f;
+    border-radius: 10px;
+    background: #fff8df;
+}
+
+.large-booking-guidance[hidden] {
+    display: none !important;
+}
+
+.large-booking-guidance h3 {
+    margin: 0 0 5px;
+}
+
+.large-booking-guidance > p {
+    margin: 0 0 12px;
+    color: #62521e;
+}
+
+#large-booking-group-list {
+    display: grid;
+    gap: 7px;
+}
+
+.large-booking-group-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 10px;
+    border: 1px solid #dbc983;
+    border-radius: 8px;
+    background: white;
+}
+
+.large-booking-group-row > div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.large-booking-group-row small {
+    color: var(--muted);
+    text-align: right;
+}
+
+#large-booking-seat-count {
+    margin-top: 10px;
+    padding: 8px 9px;
+    border-radius: 7px;
+    background: #fff0bd;
+    color: #6b550d;
+    font-weight: 800;
+}
+
+#large-booking-seat-count.enough {
+    background: #e1efe0;
+    color: #315c37;
+}
+
+.status-priority-move {
+    border-color: #d1a12b !important;
+    background: #fff0bd !important;
+    color: #5f4b09 !important;
+}
+
+.status-large-area-only {
+    opacity: .35;
+}
+
+@media (max-width: 700px) {
+    .large-booking-group-row {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .large-booking-group-row small {
+        text-align: left;
+    }
+}
+
+
+/* v9.8.3 larger-booking selection usability */
+button.large-booking-group-row {
+    width: 100%;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+button.large-booking-group-row:hover,
+button.large-booking-group-row.selected {
+    border-color: #967629;
+    background: #fff8dc;
+    box-shadow: inset 0 0 0 1px #967629;
+}
+
+button.large-booking-group-row small {
+    font-weight: 800;
+    color: #6e5b21;
+}
+
+.large-booking-selected-tables {
+    margin-top: 6px;
+    padding: 8px 9px;
+    border: 1px solid #dbc983;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, .72);
+    color: #56481a;
+    font-size: 12px;
+    font-weight: 750;
+}

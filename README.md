@@ -1164,3 +1164,36 @@ Manager rota tools are accessible from the Rota screen.
   older cached CSS/JS file after an update.
 - Localhost and `rocketpubserver.co.uk` should now render the same rota/overlay
   styling after the Windows server is updated.
+
+
+## v9.8.2 10+ normal booking table rules
+
+- Removed the floor-plan proximity / "tables near each other" fallback.
+- Normal bookings of 10 or more now use a dedicated manual-selection mode.
+- Only Pool Room and Snug/Cubby tables are selectable for 10+ bookings.
+- The system no longer auto-assigns tables for these bookings; staff must
+  manually select enough tables to reach the required seat count.
+- The page shows area-based guidance such as `Pool Room: T17 + T18 + T19`,
+  accumulating tables in table-number order until the party size is reached.
+- Configured automatic pairing suggestions remain only for bookings under 10.
+- 10+ bookings take priority over strictly smaller normal bookings. If selected
+  Pool/Snug tables are occupied by a smaller booking, the save attempts to move
+  that smaller booking to another valid table automatically.
+- A smaller booking is never silently displaced if no safe alternative exists.
+- Equal or larger overlapping bookings remain protected and block the tables.
+- Existing large-party-enquiry reservations always remain protected.
+
+
+## v9.8.3 large-booking picker usability
+
+- Pool Room / Snug recommended collections are now clickable. Clicking a
+  recommendation selects that complete collection of tables immediately.
+- 10+ bookings still prioritise Pool Room and Snug/Cubby recommendations, but
+  staff may manually select any available non-Bar table when needed.
+- The horizontal table slider now uses natural table-number ordering rather
+  than status/DOM order, fixing strange sequences such as T2, T5, T6, T8...
+  caused by suitability sorting in large-booking mode.
+- The 10+ guidance now shows both the live seat count and the exact selected
+  table collection, for example:
+  `16 seats selected for 14 people — enough seats`
+  `Selected tables: T17 + T18 + T19`.

@@ -1203,13 +1203,14 @@ def available_pairing_groups(
     exclude_booking_id=None,
 ):
     """
-    Return useful table combinations.
+    Configured pairing suggestions for normal bookings below 10 people.
 
-    First use configured physical pairings. If none can accommodate the party,
-    fall back to nearby available tables based on floor-plan coordinates.
-    Pool Room and Snug / Cubby are preferred for these larger fallback groups.
-    Bar-area tables are excluded from normal booking allocation.
+    Large normal bookings (10+) deliberately do not use automatic pairing or
+    floor-plan proximity. They use the dedicated Pool Room / Snug manual mode.
     """
+    if party_size >= 10:
+        return []
+
     tables = {
         table.id: table
         for table in db.session.scalars(
@@ -1239,33 +1240,25 @@ def available_pairing_groups(
                 duration_minutes,
                 exclude_booking_id,
             )
-            and table.id not in large_party_blocked_table_ids(
-                date_value,
-                time_value,
-                duration_minutes,
-            )
             and not (avoids_bench and table.has_bench)
         )
 
     results = []
     seen = set()
 
-    def add_result(group_ids, fallback=False):
+    def add_result(group_ids):
         key = tuple(sorted(group_ids))
         if key in seen:
             return
         seen.add(key)
 
         group_tables = [tables[table_id] for table_id in key]
+
         if not all(available_table(table) for table in group_tables):
             return
 
         capacity = sum(table.capacity for table in group_tables)
-        shortage = max(party_size - capacity, 0)
-
-        # Normal configured pairings must fit. Fallback nearby groups may be
-        # up to two seats short, but are explicitly warned in the UI.
-        if (not fallback and shortage > 0) or (fallback and shortage > 2):
+        if capacity < party_size:
             return
 
         score = score_candidate(
@@ -1277,34 +1270,21 @@ def available_pairing_groups(
             avoids_bench,
             is_eating_food,
         )
-        score = score if score is not None else 0
 
-        area_names = {
-            (table.area.name or "").strip().lower()
-            for table in group_tables
-        }
-
-        # Prefer keeping fallback groups within Pool Room or Snug/Cubby.
-        priority_bonus = 0
-        if len(area_names) == 1:
-            only_area = next(iter(area_names))
-            if "pool" in only_area:
-                priority_bonus = 60
-            elif "snug" in only_area or "cubby" in only_area:
-                priority_bonus = 50
+        if score is None:
+            return
 
         results.append(
             {
                 "table_ids": list(key),
                 "numbers": [table.number for table in group_tables],
                 "capacity": capacity,
-                "shortage": shortage,
-                "score": score + priority_bonus,
-                "fallback": fallback,
+                "shortage": 0,
+                "score": score,
+                "fallback": False,
             }
         )
 
-    # Configured connected pairings first.
     def dfs(group):
         key = tuple(sorted(group))
         if key in seen:
@@ -1317,7 +1297,7 @@ def available_pairing_groups(
             capacity >= party_size
             and all(available_table(table) for table in group_tables)
         ):
-            add_result(group, fallback=False)
+            add_result(group)
             return
 
         neighbours = set()
@@ -1330,86 +1310,212 @@ def available_pairing_groups(
     for table_id in tables:
         dfs({table_id})
 
-    fitting_configured = [
-        item for item in results
-        if not item["fallback"] and item["capacity"] >= party_size
-    ]
-
-    # If configured pairings cannot solve it, choose physically close tables.
-    if not fitting_configured and party_size > 0:
-        candidates = [
-            table for table in tables.values()
-            if available_table(table)
-        ]
-
-        def centre(table):
-            return (
-                float(table.x_position or 0) + float(table.layout_width or 90) / 2,
-                float(table.y_position or 0) + float(table.layout_height or 60) / 2,
-            )
-
-        def distance(a, b):
-            ax, ay = centre(a)
-            bx, by = centre(b)
-            return ((ax - bx) ** 2 + (ay - by) ** 2) ** 0.5
-
-        # Try groups beginning with tables in preferred large-group areas.
-        candidates.sort(
-            key=lambda table: (
-                0 if "pool" in (table.area.name or "").lower() else
-                1 if (
-                    "snug" in (table.area.name or "").lower()
-                    or "cubby" in (table.area.name or "").lower()
-                ) else 2,
-                table.number,
-            )
-        )
-
-        for anchor in candidates:
-            same_area = [
-                table for table in candidates
-                if table.id != anchor.id
-                and table.area_id == anchor.area_id
-            ]
-            other_area = [
-                table for table in candidates
-                if table.id != anchor.id
-                and table.area_id != anchor.area_id
-            ]
-
-            ordered = (
-                [anchor]
-                + sorted(same_area, key=lambda t: distance(anchor, t))
-                + sorted(other_area, key=lambda t: distance(anchor, t))
-            )
-
-            group = []
-            capacity = 0
-
-            for table in ordered:
-                group.append(table.id)
-                capacity += table.capacity
-
-                if capacity >= party_size - 2:
-                    add_result(group, fallback=True)
-
-                    if capacity >= party_size:
-                        break
-
-                # Avoid ridiculous spread of tiny tables.
-                if len(group) >= 5:
-                    break
-
     results.sort(
         key=lambda item: (
-            item["fallback"],
-            item["shortage"] > 0,
             -item["score"],
-            abs(item["capacity"] - party_size),
+            item["capacity"] - party_size,
             len(item["table_ids"]),
         )
     )
     return results[:12]
+
+
+def is_large_booking_area(table):
+    """10+ normal bookings are seated only in Pool Room / Snug / Cubby."""
+    area_name = (table.area.name or "").strip().lower()
+    return (
+        "pool" in area_name
+        or "snug" in area_name
+        or "cubby" in area_name
+    )
+
+
+def overlapping_normal_bookings(
+    table_ids,
+    date_value,
+    time_value,
+    duration_minutes,
+    exclude_booking_id=None,
+):
+    """Return active normal bookings overlapping any of the supplied tables."""
+    table_ids = set(table_ids or [])
+    if not table_ids:
+        return []
+
+    requested_start = datetime.combine(date_value, time_value)
+    requested_end = requested_start + timedelta(minutes=duration_minutes)
+
+    stmt = (
+        db.select(Booking)
+        .join(BookingTable)
+        .where(
+            BookingTable.table_id.in_(table_ids),
+            Booking.booking_date == date_value,
+            Booking.status.notin_(["Cancelled", "Completed"]),
+        )
+        .distinct()
+    )
+
+    if exclude_booking_id:
+        stmt = stmt.where(Booking.id != exclude_booking_id)
+
+    overlaps = []
+    for existing in db.session.scalars(stmt).all():
+        existing_start, existing_end = booking_datetime_range(existing)
+        if requested_start < existing_end and requested_end > existing_start:
+            overlaps.append(existing)
+
+    return overlaps
+
+
+def large_booking_recommended_groups(
+    party_size,
+    date_value,
+    time_value,
+    duration_minutes,
+    exclude_booking_id=None,
+):
+    """
+    Build simple area-based table collections for 10+ normal bookings.
+
+    Tables are taken in table-number order within Pool Room first, then
+    Snug/Cubby. This is intentionally not a proximity algorithm.
+    """
+    if party_size < 10:
+        return []
+
+    tables = db.session.scalars(
+        db.select(PubTable)
+        .join(Area)
+        .where(PubTable.active.is_(True))
+        .order_by(*table_order_clause())
+    ).all()
+
+    priority_tables = [table for table in tables if is_large_booking_area(table)]
+    blocked_large_party = large_party_blocked_table_ids(
+        date_value,
+        time_value,
+        duration_minutes,
+    )
+
+    grouped = {}
+    for table in priority_tables:
+        if table.id in blocked_large_party:
+            continue
+
+        conflicts = overlapping_normal_bookings(
+            [table.id],
+            date_value,
+            time_value,
+            duration_minutes,
+            exclude_booking_id,
+        )
+
+        # A larger booking may displace only strictly smaller normal bookings.
+        if any(existing.party_size >= party_size for existing in conflicts):
+            continue
+
+        grouped.setdefault(table.area.name, []).append(table)
+
+    def area_rank(name):
+        lower = (name or "").lower()
+        if "pool" in lower:
+            return 0
+        if "snug" in lower or "cubby" in lower:
+            return 1
+        return 2
+
+    results = []
+
+    for area_name in sorted(grouped, key=lambda name: (area_rank(name), name)):
+        area_tables = grouped[area_name]
+        selected = []
+        capacity = 0
+
+        for table in area_tables:
+            selected.append(table)
+            capacity += table.capacity
+            if capacity >= party_size:
+                break
+
+        if capacity >= party_size:
+            results.append(
+                {
+                    "area_name": area_name,
+                    "table_ids": [table.id for table in selected],
+                    "numbers": [table.number for table in selected],
+                    "capacity": capacity,
+                }
+            )
+
+    return results
+
+
+def relocate_smaller_bookings_for_priority_large_booking(
+    selected_tables,
+    party_size,
+    booking_date,
+    booking_time,
+    exclude_booking_id=None,
+):
+    """
+    Give a 10+ normal booking priority over smaller normal bookings.
+
+    Smaller overlapping bookings are moved to the best available alternative.
+    If one cannot be moved safely, the larger booking save is rejected.
+    """
+    selected_ids = {table.id for table in selected_tables}
+
+    conflicts = overlapping_normal_bookings(
+        selected_ids,
+        booking_date,
+        booking_time,
+        STANDARD_BOOKING_DURATION,
+        exclude_booking_id,
+    )
+
+    moved = []
+
+    for existing in conflicts:
+        if existing.party_size >= party_size:
+            raise ValueError(
+                f"Table conflict with {existing.customer.name}'s booking for "
+                f"{existing.party_size}. Choose different Pool Room / Snug tables."
+            )
+
+        alternatives = suggest_tables(
+            existing.party_size,
+            existing.booking_date,
+            existing.booking_time,
+            existing.duration_minutes,
+            existing.preferred_area_id,
+            existing.preferred_table_id,
+            existing.wants_near_tv,
+            existing.avoids_bench,
+            existing.is_eating_food,
+            exclude_booking_id=existing.id,
+            excluded_table_ids=selected_ids,
+        )
+
+        if not alternatives:
+            raise ValueError(
+                f"{existing.customer.name}'s smaller booking uses one of those "
+                "tables and there is nowhere safe to move it."
+            )
+
+        BookingTable.query.filter_by(booking_id=existing.id).delete()
+        for table in alternatives:
+            db.session.add(
+                BookingTable(
+                    booking_id=existing.id,
+                    table_id=table.id,
+                )
+            )
+
+        moved.append(existing.customer.name)
+
+    return moved
+
 
 
 def validate_selected_tables(
@@ -1420,7 +1526,45 @@ def validate_selected_tables(
     exclude_booking_id=None,
 ):
     if not selected_tables:
+        if party_size >= 10:
+            return (
+                "For bookings of 10 or more, manually select enough tables "
+                "from the Pool Room and/or Snug."
+            )
         return "No suitable table is currently available."
+
+    total_capacity = sum(table.capacity for table in selected_tables)
+
+    if total_capacity < party_size:
+        return f"Selected tables only hold {total_capacity} people."
+
+    if party_size >= 10:
+        blocked = large_party_blocked_table_ids(
+            booking_date,
+            booking_time,
+            STANDARD_BOOKING_DURATION,
+        )
+        for table in selected_tables:
+            if table.id in blocked:
+                return (
+                    f"Table {table.number} is reserved by a large-party enquiry."
+                )
+
+        conflicts = overlapping_normal_bookings(
+            [table.id for table in selected_tables],
+            booking_date,
+            booking_time,
+            STANDARD_BOOKING_DURATION,
+            exclude_booking_id,
+        )
+
+        if any(existing.party_size >= party_size for existing in conflicts):
+            return (
+                "One or more selected tables are already being used by an "
+                "equal or larger booking."
+            )
+
+        return None
 
     for table in selected_tables:
         if not table_is_available(
@@ -1431,11 +1575,6 @@ def validate_selected_tables(
             exclude_booking_id,
         ):
             return f"Table {table.number} overlaps another booking."
-
-    total_capacity = sum(table.capacity for table in selected_tables)
-
-    if total_capacity < party_size:
-        return f"Selected tables only hold {total_capacity} people."
 
     if not selected_tables_form_valid_pairing_group(selected_tables):
         return (
@@ -6091,9 +6230,8 @@ def table_availability_api():
     """
     Live availability used by the normal booking form.
 
-    Green  = exact-capacity available table
-    Yellow = available but larger than required
-    Red    = unavailable / overlapping reservation
+    Under 10: normal automatic suitability / configured pairing suggestions.
+    10+: manual Pool Room / Snug selection with larger-booking priority.
     """
     date_text = request.args.get("date", "")
     time_text = request.args.get("time", "")
@@ -6108,13 +6246,29 @@ def table_availability_api():
         booking_date = datetime.strptime(date_text, "%Y-%m-%d").date()
         booking_time = datetime.strptime(time_text, "%H:%M").time()
     except ValueError:
-        return {"tables": [], "groups": []}
+        return {
+            "tables": [],
+            "groups": [],
+            "large_booking_mode": False,
+            "large_groups": [],
+        }
+
+    large_booking_mode = party_size >= 10
+    blocked_by_large_party_ids = large_party_blocked_table_ids(
+        booking_date,
+        booking_time,
+        STANDARD_BOOKING_DURATION,
+    )
 
     table_rows = []
 
     for table in db.session.scalars(
         db.select(PubTable)
-        .where(PubTable.active.is_(True))
+        .join(Area)
+        .where(
+            PubTable.active.is_(True),
+            db.func.lower(Area.name) != "bar",
+        )
         .order_by(*table_order_clause())
     ).all():
         available = table_is_available(
@@ -6125,28 +6279,52 @@ def table_availability_api():
             exclude_booking_id,
         )
 
-        blocked_by_large_party = (
-            table.id in large_party_blocked_table_ids(
-                booking_date,
-                booking_time,
-                STANDARD_BOOKING_DURATION,
-            )
-        )
+        if large_booking_mode:
+            if table.id in blocked_by_large_party_ids:
+                status = "large_party"
+                selectable = False
+            else:
+                conflicts = overlapping_normal_bookings(
+                    [table.id],
+                    booking_date,
+                    booking_time,
+                    STANDARD_BOOKING_DURATION,
+                    exclude_booking_id,
+                )
 
-        if not available:
-            status = (
-                "large_party"
-                if blocked_by_large_party
-                else "unavailable"
-            )
-        elif party_size > 0 and table.capacity == party_size:
-            status = "ideal"
-        elif party_size > 0 and table.capacity > party_size:
-            status = "suitable"
-        elif party_size > 0 and table.capacity < party_size:
-            status = "too_small"
+                if any(existing.party_size >= party_size for existing in conflicts):
+                    status = "unavailable"
+                    selectable = False
+                elif conflicts:
+                    status = "priority_move"
+                    selectable = True
+                elif is_large_booking_area(table):
+                    status = "large_booking_available"
+                    selectable = True
+                else:
+                    # Still selectable manually, but Pool Room / Snug remain the
+                    # preferred suggestion areas for larger bookings.
+                    status = "available"
+                    selectable = True
+
+            available = selectable
         else:
-            status = "available"
+            selectable = available
+
+            if not available:
+                status = (
+                    "large_party"
+                    if table.id in blocked_by_large_party_ids
+                    else "unavailable"
+                )
+            elif party_size > 0 and table.capacity == party_size:
+                status = "ideal"
+            elif party_size > 0 and table.capacity > party_size:
+                status = "suitable"
+            elif party_size > 0 and table.capacity < party_size:
+                status = "too_small"
+            else:
+                status = "available"
 
         table_rows.append(
             {
@@ -6155,7 +6333,7 @@ def table_availability_api():
                 "capacity": table.capacity,
                 "area_id": table.area_id,
                 "area_name": table.area.name,
-                "available": available,
+                "available": selectable,
                 "status": status,
                 "unsuitable_for_food": bool(table.unsuitable_for_food),
                 "near_tv": bool(table.near_tv),
@@ -6163,19 +6341,40 @@ def table_availability_api():
             }
         )
 
-    groups = available_pairing_groups(
-        party_size,
-        booking_date,
-        booking_time,
-        STANDARD_BOOKING_DURATION,
-        preferred_area_id,
-        wants_near_tv,
-        avoids_bench,
-        is_eating_food,
-        exclude_booking_id,
-    ) if party_size > 0 else []
+    groups = (
+        available_pairing_groups(
+            party_size,
+            booking_date,
+            booking_time,
+            STANDARD_BOOKING_DURATION,
+            preferred_area_id,
+            wants_near_tv,
+            avoids_bench,
+            is_eating_food,
+            exclude_booking_id,
+        )
+        if party_size > 0 and party_size < 10
+        else []
+    )
 
-    return {"tables": table_rows, "groups": groups}
+    large_groups = (
+        large_booking_recommended_groups(
+            party_size,
+            booking_date,
+            booking_time,
+            STANDARD_BOOKING_DURATION,
+            exclude_booking_id,
+        )
+        if large_booking_mode
+        else []
+    )
+
+    return {
+        "tables": table_rows,
+        "groups": groups,
+        "large_booking_mode": large_booking_mode,
+        "large_groups": large_groups,
+    }
 
 
 # -------------------------
@@ -6321,6 +6520,14 @@ def booking_form_handler(booking=None):
         exclude_id = booking.id if booking else None
 
         if not selected_table_ids:
+            if party_size >= 10:
+                flash(
+                    "Bookings of 10 or more require manual table selection "
+                    "from the Pool Room / Snug.",
+                    "error",
+                )
+                return redirect(request.url)
+
             suggested = suggest_tables(
                 party_size,
                 booking_date,
@@ -6352,6 +6559,23 @@ def booking_form_handler(booking=None):
         if table_error:
             flash(table_error, "error")
             return redirect(request.url)
+
+        moved_smaller_bookings = []
+        if party_size >= 10:
+            try:
+                moved_smaller_bookings = (
+                    relocate_smaller_bookings_for_priority_large_booking(
+                        selected_tables,
+                        party_size,
+                        booking_date,
+                        booking_time,
+                        exclude_booking_id=exclude_id,
+                    )
+                )
+            except ValueError as exc:
+                db.session.rollback()
+                flash(str(exc), "error")
+                return redirect(request.url)
 
         deposit_due = calculate_deposit(party_size)
         deposit_paid = request.form.get("deposit_paid_amount", type=float) or 0.0
@@ -6440,10 +6664,18 @@ def booking_form_handler(booking=None):
 
         db.session.commit()
 
-        flash(
-            "Booking updated." if exclude_id else "Booking created.",
-            "success",
-        )
+        message = "Booking updated." if exclude_id else "Booking created."
+
+        if moved_smaller_bookings:
+            message += (
+                " Smaller booking"
+                + ("s" if len(moved_smaller_bookings) != 1 else "")
+                + " moved: "
+                + ", ".join(moved_smaller_bookings)
+                + "."
+            )
+
+        flash(message, "success")
         return redirect(
             url_for("main.bookings", date=booking_date.isoformat())
         )

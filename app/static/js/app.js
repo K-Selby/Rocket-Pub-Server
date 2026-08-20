@@ -515,6 +515,10 @@ function setupNormalTableAvailability() {
     const mapTables = Array.from(document.querySelectorAll(".booking-map-table"));
     const pairingList = document.getElementById("pairing-suggestion-list");
     const capacityWarning = document.getElementById("table-capacity-warning");
+    const largeGuidance = document.getElementById("large-booking-guidance");
+    const largeGroupList = document.getElementById("large-booking-group-list");
+    const largeSeatCount = document.getElementById("large-booking-seat-count");
+    const largeSelectedTables = document.getElementById("large-booking-selected-tables");
 
     if (!form || !dateInput || !timeInput || !partyInput || !slider ||
         !cards.length || !mapStage || !mapShell || !zoomSurface || !pairingList) {
@@ -530,6 +534,9 @@ function setupNormalTableAvailability() {
         too_small: 2,
         unavailable: 3,
         large_party: 4,
+        large_booking_available: 0,
+        priority_move: 1,
+        large_area_only: 5,
     };
 
     const STATUS_TEXT = {
@@ -539,6 +546,9 @@ function setupNormalTableAvailability() {
         too_small: "Too small alone",
         unavailable: "Unavailable",
         large_party: "Reserved for large party",
+        large_booking_available: "Available for 10+ booking",
+        priority_move: "Smaller booking here — will be moved if possible",
+        large_area_only: "10+ bookings use Pool Room / Snug only",
     };
 
     function cardForTable(id) {
@@ -586,6 +596,38 @@ function setupNormalTableAvailability() {
                 mapTable.classList.toggle("booking-map-selected", selected);
             }
         });
+
+        if (largeSeatCount && Number(partyInput.value || 0) >= 10) {
+            const selectedCards = cards
+                .filter(card => {
+                    const checkbox = card.querySelector('input[type="checkbox"]');
+                    return Boolean(checkbox?.checked);
+                })
+                .sort((a, b) =>
+                    naturalTableNumber(a.dataset.number) -
+                    naturalTableNumber(b.dataset.number)
+                );
+
+            const seats = selectedCards.reduce(
+                (total, card) => total + Number(card.dataset.capacity || 0),
+                0
+            );
+            const party = Number(partyInput.value || 0);
+            const tableNames = selectedCards.map(card => `T${card.dataset.number}`);
+
+            largeSeatCount.textContent =
+                `${seats} seats selected for ${party} people` +
+                (seats >= party ? " — enough seats" : ` — select ${party - seats} more`);
+            largeSeatCount.classList.toggle("enough", seats >= party);
+
+            if (largeSelectedTables) {
+                largeSelectedTables.textContent = tableNames.length
+                    ? `Selected tables: ${tableNames.join(" + ")}`
+                    : "Selected tables: none";
+            }
+        } else if (largeSelectedTables) {
+            largeSelectedTables.textContent = "";
+        }
     }
 
     function applyStatusClasses(element, status) {
@@ -594,7 +636,9 @@ function setupNormalTableAvailability() {
             "status-suitable",
             "status-too-small",
             "status-unavailable",
-            "status-large-party"
+            "status-large-party",
+            "status-priority-move",
+            "status-large-area-only"
         );
 
         if (status === "ideal") {
@@ -605,9 +649,21 @@ function setupNormalTableAvailability() {
             element.classList.add("status-too-small");
         } else if (status === "large_party") {
             element.classList.add("status-large-party");
+        } else if (status === "priority_move") {
+            element.classList.add("status-priority-move");
+        } else if (status === "large_area_only") {
+            element.classList.add("status-large-area-only");
+        } else if (status === "large_booking_available") {
+            element.classList.add("status-ideal");
         } else if (status === "unavailable") {
             element.classList.add("status-unavailable");
         }
+    }
+
+    function naturalTableNumber(value) {
+        const text = String(value || "").trim();
+        const match = text.match(/(\d+(?:\.\d+)?)/);
+        return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
     }
 
     function sortCards() {
@@ -628,7 +684,17 @@ function setupNormalTableAvailability() {
 
             if (aWaste !== bWaste) return aWaste - bWaste;
 
-            return Number(a.dataset.number) - Number(b.dataset.number);
+            const numberDiff =
+                naturalTableNumber(a.dataset.number) -
+                naturalTableNumber(b.dataset.number);
+
+            if (numberDiff !== 0) return numberDiff;
+
+            return String(a.dataset.number).localeCompare(
+                String(b.dataset.number),
+                undefined,
+                { numeric: true, sensitivity: "base" }
+            );
         }).forEach(card => slider.appendChild(card));
     }
 
@@ -667,15 +733,8 @@ function setupNormalTableAvailability() {
             button.type = "button";
             button.className = "pairing-option";
 
-            const fallbackLabel = group.fallback ? " · nearby tables" : "";
-            const shortageLabel = group.shortage > 0
-                ? ` · ${group.shortage} seat${group.shortage === 1 ? "" : "s"} short`
-                : "";
-
             button.textContent =
-                `T${group.numbers.join(" + T")} · ${group.capacity} seats` +
-                fallbackLabel +
-                shortageLabel;
+                `T${group.numbers.join(" + T")} · ${group.capacity} seats`;
 
             button.addEventListener("mouseenter", () => {
                 clearHoverHighlight();
@@ -704,22 +763,71 @@ function setupNormalTableAvailability() {
                 });
 
                 syncSelectedVisuals();
-
-                if (capacityWarning) {
-                    if (group.shortage > 0) {
-                        capacityWarning.textContent =
-                            `Warning: these tables provide ${group.capacity} seats for a party of ` +
-                            `${partyInput.value}. They are ${group.shortage} seat` +
-                            `${group.shortage === 1 ? "" : "s"} short. Confirm this with the person booking.`;
-                        capacityWarning.hidden = false;
-                    } else {
-                        capacityWarning.hidden = true;
-                        capacityWarning.textContent = "";
-                    }
-                }
             });
 
             pairingList.appendChild(button);
+        });
+    }
+
+    function updateLargeBookingGuidance(data) {
+        const largeMode = Boolean(data.large_booking_mode);
+
+        if (largeGuidance) largeGuidance.hidden = !largeMode;
+        const pairingSuggestions = document.getElementById("pairing-suggestions");
+        if (pairingSuggestions) pairingSuggestions.hidden = largeMode;
+
+        if (!largeMode || !largeGroupList) {
+            if (largeGroupList) largeGroupList.innerHTML = "";
+            return;
+        }
+
+        largeGroupList.innerHTML = "";
+
+        const groups = data.large_groups || [];
+
+        if (!groups.length) {
+            const empty = document.createElement("div");
+            empty.className = "large-booking-no-group";
+            empty.textContent =
+                "No single Pool Room / Snug area currently has enough movable tables. " +
+                "You can still select Pool Room and Snug/Cubby tables manually.";
+            largeGroupList.appendChild(empty);
+            return;
+        }
+
+        groups.forEach(group => {
+            const row = document.createElement("button");
+            row.type = "button";
+            row.className = "large-booking-group-row";
+
+            const label = document.createElement("div");
+            label.innerHTML =
+                `<strong>${group.area_name}</strong>` +
+                `<span>T${group.numbers.join(" + T")} · ${group.capacity} seats</span>`;
+
+            const note = document.createElement("small");
+            note.textContent = "Select this collection";
+
+            row.appendChild(label);
+            row.appendChild(note);
+
+            row.addEventListener("click", () => {
+                cards.forEach(card => {
+                    const checkbox = card.querySelector('input[type="checkbox"]');
+                    if (!checkbox || checkbox.disabled) return;
+
+                    checkbox.checked = group.table_ids.includes(
+                        Number(card.dataset.tableId)
+                    );
+                });
+
+                syncSelectedVisuals();
+
+                row.classList.add("selected");
+                window.setTimeout(() => row.classList.remove("selected"), 500);
+            });
+
+            largeGroupList.appendChild(row);
         });
     }
 
@@ -732,6 +840,9 @@ function setupNormalTableAvailability() {
 
             mapTables.forEach(table => applyStatusClasses(table, "available"));
             pairingList.innerHTML = "";
+            if (largeGuidance) largeGuidance.hidden = true;
+            const pairingSuggestions = document.getElementById("pairing-suggestions");
+            if (pairingSuggestions) pairingSuggestions.hidden = false;
             return;
         }
 
@@ -763,9 +874,7 @@ function setupNormalTableAvailability() {
             card.querySelector(".table-choice-status").textContent =
                 STATUS_TEXT[table.status] || table.status;
 
-            const unavailable =
-                table.status === "unavailable" ||
-                table.status === "large_party";
+            const unavailable = !table.available;
 
             checkbox.disabled = unavailable;
             if (unavailable) checkbox.checked = false;
@@ -775,11 +884,39 @@ function setupNormalTableAvailability() {
             if (mapTable) {
                 applyStatusClasses(mapTable, table.status);
                 mapTable.disabled = !table.available;
+                mapTable.hidden = false;
             }
         });
 
-        sortCards();
+        if (!data.large_booking_mode) {
+            cards.forEach(card => card.hidden = false);
+            mapTables.forEach(table => table.hidden = false);
+            sortCards();
+        } else {
+            // For 10+ bookings keep every available area visible and put the
+            // slider in predictable natural table-number order.
+            cards.forEach(card => card.hidden = false);
+            mapTables.forEach(table => table.hidden = false);
+
+            [...cards]
+                .sort((a, b) => {
+                    const numberDiff =
+                        naturalTableNumber(a.dataset.number) -
+                        naturalTableNumber(b.dataset.number);
+
+                    if (numberDiff !== 0) return numberDiff;
+
+                    return String(a.dataset.number).localeCompare(
+                        String(b.dataset.number),
+                        undefined,
+                        { numeric: true, sensitivity: "base" }
+                    );
+                })
+                .forEach(card => slider.appendChild(card));
+        }
+
         updatePairingSuggestions(data.groups || []);
+        updateLargeBookingGuidance(data);
         syncSelectedVisuals();
     }
 

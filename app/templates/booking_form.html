@@ -210,10 +210,10 @@
     <legend>Table selection</legend>
 
     <p class="muted">
-        Tables are sorted from best match to least suitable once date,
-        time and party size are entered. Hover a table card to locate it
-        on the floor plan below, or click either the card or map table to
-        select it.
+        For parties under 10, tables are sorted by suitability and the system
+        can choose a suitable table automatically. For parties of 10 or more,
+        choose the Pool Room / Snug tables manually until the selected seats
+        reach the party size.
     </p>
 
     <div class="booking-table-legend">
@@ -260,10 +260,28 @@
         <button type="button" class="table-slider-arrow" id="table-slider-right" aria-label="Scroll tables right">›</button>
     </div>
 
+    <div id="large-booking-guidance"
+         class="large-booking-guidance"
+         hidden>
+        <h3>10+ booking — Pool Room / Snug</h3>
+        <p>
+            Pool Room and Snug/Cubby are prioritised for larger bookings.
+            You can click a suggested collection below or manually choose any
+            available tables until the selected seats reach the party size.
+            Larger bookings take priority over smaller normal bookings where
+            the smaller booking can be moved safely.
+        </p>
+        <div id="large-booking-group-list"></div>
+        <div id="large-booking-seat-count"></div>
+        <div id="large-booking-selected-tables"
+             class="large-booking-selected-tables">
+        </div>
+    </div>
+
     <div id="pairing-suggestions" class="pairing-suggestions">
         <h3>Suggested table combinations</h3>
         <p class="field-note">
-            Suitable connected table combinations appear here when a
+            Suitable configured table combinations appear here when a
             single table is not the best fit.
         </p>
         <div id="pairing-suggestion-list"></div>
