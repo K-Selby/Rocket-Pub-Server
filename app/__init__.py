@@ -1,3 +1,4 @@
+from datetime import timedelta
 from flask import Flask
 import os
 from dotenv import load_dotenv
@@ -18,6 +19,12 @@ def create_app():
     app.config["SECRET_KEY"] = os.environ.get("ROCKET_SECRET_KEY", "rocket-dev-change-this-later")
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///pub_booking.db"
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+    # Keep staff signed in across browser/app restarts. Explicit logout still
+    # clears the cookie immediately.
+    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
     db.init_app(app)
     migrate.init_app(app, db)

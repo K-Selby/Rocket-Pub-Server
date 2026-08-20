@@ -6,9 +6,7 @@
     <title>{% block title %}The Rocket Pub{% endblock %}</title>
     <link rel="stylesheet"
           href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="icon"
-          type="image/png"
-          href="{{ url_for('static', filename='images/rocket-pub-header-logo.png') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png') }}">
 </head>
 <body class="customer-body">
 <header class="customer-topbar">
@@ -29,6 +27,10 @@
         <a href="{{ url_for('main.customer_home') }}">Home</a>
         <a href="{{ url_for('main.customer_food_menu') }}">Food Menu</a>
         <a href="{{ url_for('main.customer_allergens') }}">Allergens</a>
+        <a class="customer-staff-login"
+           href="{{ url_for('main.dashboard') }}">
+            Staff Login
+        </a>
     </nav>
 </header>
 

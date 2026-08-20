@@ -35,6 +35,12 @@
                 Issue rota
             </button>
         {% endif %}
+
+        <span class="rota-autosave-status"
+              id="rota-autosave-status"
+              data-state="saved">
+            Saved
+        </span>
     </div>
 </div>
 
@@ -315,6 +321,11 @@
     const stateInput = document.getElementById("rota-state-input");
     const issueInput = document.getElementById("rota-issue-input");
     const issueButton = document.getElementById("issue-rota-button");
+    const saveUrl = saveForm.action;
+
+    let autosaveTimer = null;
+    let autosaveInFlight = null;
+    let draftDirty = false;
 
     function closeEditors(except) {
         document.querySelectorAll("[data-add-editor], [data-shift-editor]")
@@ -442,6 +453,7 @@
             }
 
             closeEditors(null);
+            queueAutosave();
         });
     });
 
@@ -460,6 +472,7 @@
             if (blank) blank.hidden = false;
 
             closeEditors(null);
+            queueAutosave();
         });
     });
 
@@ -479,6 +492,7 @@
                 }
 
                 closeEditors(null);
+                queueAutosave();
             });
         });
 
@@ -505,8 +519,103 @@
         });
     }
 
+
+    function setAutosaveStatus(text, state) {
+        const status = document.getElementById("rota-autosave-status");
+        if (!status) return;
+
+        status.textContent = text;
+        status.dataset.state = state || "";
+    }
+
+    async function saveDraftAutomatically() {
+        if (!draftDirty && autosaveInFlight) {
+            return autosaveInFlight;
+        }
+
+        if (!draftDirty) {
+            return Promise.resolve();
+        }
+
+        draftDirty = false;
+        setAutosaveStatus("Saving…", "saving");
+
+        const body = new FormData();
+        body.set("rota_state", JSON.stringify(collectRotaState()));
+        body.set("issue", "0");
+
+        autosaveInFlight = fetch(saveUrl, {
+            method: "POST",
+            body,
+            headers: {
+                "X-Rota-Autosave": "1"
+            },
+            credentials: "same-origin"
+        })
+            .then(async response => {
+                if (!response.ok) {
+                    throw new Error("Autosave failed");
+                }
+
+                const result = await response.json();
+                setAutosaveStatus(
+                    `Saved ${result.saved_at || ""}`.trim(),
+                    "saved"
+                );
+            })
+            .catch(() => {
+                draftDirty = true;
+                setAutosaveStatus(
+                    "Not saved — press Save draft",
+                    "error"
+                );
+            })
+            .finally(() => {
+                autosaveInFlight = null;
+            });
+
+        return autosaveInFlight;
+    }
+
+    function queueAutosave() {
+        draftDirty = true;
+        setAutosaveStatus("Unsaved changes", "dirty");
+
+        window.clearTimeout(autosaveTimer);
+        autosaveTimer = window.setTimeout(
+            saveDraftAutomatically,
+            900
+        );
+    }
+
     saveForm.addEventListener("submit", function () {
+        window.clearTimeout(autosaveTimer);
+        draftDirty = false;
         stateInput.value = JSON.stringify(collectRotaState());
+        setAutosaveStatus("Saving…", "saving");
+    });
+
+    document.querySelectorAll(
+        'form[action*="/rota/profile/"][action$="/archive"], ' +
+        'form[action*="/rota/profile/"][action$="/restore"]'
+    ).forEach(function (profileForm) {
+        profileForm.addEventListener("submit", async function (event) {
+            if (profileForm.dataset.autosaveFlushed === "1") {
+                return;
+            }
+
+            event.preventDefault();
+            window.clearTimeout(autosaveTimer);
+
+            if (draftDirty) {
+                await saveDraftAutomatically();
+            } else if (autosaveInFlight) {
+                await autosaveInFlight;
+            }
+
+            profileForm.dataset.autosaveFlushed = "1";
+            profileForm.submit();
+        });
     });
 
     issueButton?.addEventListener("click", function () {

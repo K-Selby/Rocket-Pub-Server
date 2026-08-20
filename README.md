@@ -1137,3 +1137,21 @@ Manager rota tools are accessible from the Rota screen.
   when they actually hold a shift in that displayed week.
 - Approval continues to change the underlying `RotaShift.staff_id` assignments,
   so refreshing/opening the rota shows the approved swap immediately.
+
+
+## v9.8 customer root, persistent staff login and rota autosave
+
+- `rocketpubserver.co.uk/` is now the public customer portal.
+- The staff dashboard lives at `/dashboard`.
+- The customer navigation includes `Staff Login`; it links to `/dashboard`.
+  Logged-out users are redirected to the login screen, while signed-in users go
+  straight to the dashboard.
+- Staff sessions are now permanent for 30 days, so closing the browser/computer
+  does not normally require another login. Explicit Log out still ends the
+  session immediately.
+- Rota Builder now auto-saves local changes after roughly 0.9 seconds of
+  inactivity and shows `Unsaved changes`, `Saving…`, or `Saved HH:MM:SS`.
+- Manual `Save draft` / `Save changes` remains available.
+- Archive/unarchive staff actions wait for any pending rota autosave before
+  reloading the page, preventing the draft from reverting when a staff member
+  is restored or archived.

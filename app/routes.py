@@ -111,6 +111,7 @@ from flask import (
     Blueprint,
     flash,
     g,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -733,6 +734,7 @@ def login():
             )
 
         session.clear()
+        session.permanent = True
         session["user_id"] = user.id
         user.last_login_at = datetime.now()
         db.session.commit()
@@ -1591,7 +1593,7 @@ def relocate_bookings_conflicting_with_large_party(inquiry):
     return moved
 
 
-@main.route("/")
+@main.route("/dashboard")
 def dashboard():
     selected_text = request.args.get("date")
 
@@ -3424,6 +3426,16 @@ def rota_save_draft(rota_id):
         destination = url_for("main.rota_edit", rota_id=week.id)
 
     db.session.commit()
+
+    if request.headers.get("X-Rota-Autosave") == "1":
+        return jsonify(
+            {
+                "ok": True,
+                "status": week.status,
+                "saved_at": datetime.now().strftime("%H:%M:%S"),
+            }
+        )
+
     flash(message, "success")
     return redirect(destination)
 
@@ -5033,6 +5045,7 @@ def rota_template_delete(template_id):
 # Public customer portal
 # -------------------------
 
+@main.route("/")
 @main.route("/customer")
 @main.route("/customer/")
 def customer_home():

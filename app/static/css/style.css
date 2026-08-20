@@ -6325,3 +6325,58 @@ body.rota-modal-open { overflow: hidden; }
     padding: 7px 10px;
     font-size: 11px;
 }
+
+
+/* v9.8 public root, staff-login link and rota autosave */
+.customer-staff-login {
+    margin-left: 6px;
+    border: 1px solid rgba(255,255,255,.28);
+    background: rgba(255,255,255,.08);
+}
+
+.customer-staff-login:hover {
+    background: rgba(255,255,255,.18) !important;
+}
+
+.rota-autosave-status {
+    display: inline-flex;
+    align-items: center;
+    min-height: 30px;
+    padding: 0 8px;
+    border-radius: 7px;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 750;
+}
+
+.rota-autosave-status[data-state="dirty"] {
+    background: #fff0bd;
+    color: #66510e;
+}
+
+.rota-autosave-status[data-state="saving"] {
+    background: #edf2f5;
+    color: #4a6070;
+}
+
+.rota-autosave-status[data-state="saved"] {
+    background: #e1efe0;
+    color: #315c37;
+}
+
+.rota-autosave-status[data-state="error"] {
+    background: #f8dddd;
+    color: #7a322c;
+}
+
+@media (max-width: 760px) {
+    .customer-staff-login {
+        margin-left: 0;
+    }
+
+    .rota-autosave-status {
+        order: 10;
+        width: 100%;
+        justify-content: center;
+    }
+}
