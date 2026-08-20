@@ -1197,3 +1197,21 @@ Manager rota tools are accessible from the Rota screen.
   table collection, for example:
   `16 seats selected for 14 people — enough seats`
   `Selected tables: T17 + T18 + T19`.
+
+
+## v9.8.4 mobile layout pass
+
+- Fixed the published rota disappearing entirely below 760px. The old CSS hid
+  `.rota-table-card` for a mobile-only rota view that no longer exists.
+- Phones now get the real rota in a compact horizontally scrollable table with
+  a sticky staff-name column.
+- Tightened the week/status controls and shift chips for narrow screens.
+- Shift-change overlay behaves as a bottom sheet on phones.
+- Hardened booking and other forms against iPhone Safari width overflow:
+  fieldsets/grid children may shrink, date/time inputs stay inside the card,
+  controls use 16px text to avoid Safari input zoom, and all inputs are capped
+  to the viewport/card width.
+- Table-selection sliders/legends scroll internally rather than widening the
+  whole page.
+- Staff navigation is a compact horizontal scroller on small screens.
+- Static CSS/JS/favicon cache version bumped to 9.8.4.

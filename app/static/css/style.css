@@ -6498,3 +6498,446 @@ button.large-booking-group-row small {
     font-size: 12px;
     font-weight: 750;
 }
+
+
+/* v9.8.4 mobile layout hardening
+   Final overrides intentionally sit at the end of the stylesheet so older
+   responsive rules cannot hide/overflow the current pages. */
+
+html,
+body {
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+.container,
+.card,
+.form-section,
+.form-grid,
+.nested-grid,
+.booking-table-picker,
+fieldset,
+label {
+    min-width: 0;
+}
+
+input,
+select,
+textarea,
+button {
+    max-width: 100%;
+}
+
+@media (max-width: 760px) {
+    /* ---- overall staff layout ---- */
+    .topbar {
+        width: 100%;
+        min-height: auto;
+        padding: 10px 10px 8px;
+        gap: 8px;
+        align-items: stretch;
+    }
+
+    .brand {
+        min-width: 0;
+        width: 100%;
+        gap: 9px;
+    }
+
+    .brand-logo-frame {
+        width: 42px;
+        height: 42px;
+        flex: 0 0 42px;
+        border-radius: 8px;
+    }
+
+    .brand-copy strong {
+        font-size: 14px;
+    }
+
+    .brand-copy small {
+        margin-top: 2px;
+        font-size: 8px;
+    }
+
+    .main-nav {
+        width: 100%;
+        display: flex;
+        flex-wrap: nowrap !important;
+        gap: 3px;
+        padding-bottom: 3px;
+        overflow-x: auto;
+        overflow-y: visible;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .main-nav::-webkit-scrollbar {
+        display: none;
+    }
+
+    .main-nav > a,
+    .nav-menu > summary,
+    .account-dropdown > summary {
+        min-height: 38px;
+        flex: 0 0 auto;
+        padding: 8px 9px !important;
+        font-size: 11px !important;
+        white-space: nowrap;
+    }
+
+    .nav-menu,
+    .account-dropdown {
+        flex: 0 0 auto;
+    }
+
+    .nav-menu-panel {
+        position: fixed !important;
+        left: 10px !important;
+        right: 10px !important;
+        top: auto !important;
+        width: auto !important;
+        max-width: none !important;
+        z-index: 5000 !important;
+    }
+
+    .account-name {
+        font-size: 11px;
+    }
+
+    .account-role {
+        font-size: 8px;
+    }
+
+    .container {
+        width: calc(100% - 16px);
+        margin: 14px auto 26px;
+    }
+
+    .page-heading {
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+
+    .page-heading h1 {
+        margin-bottom: 3px;
+        font-size: 28px;
+        line-height: 1.05;
+    }
+
+    .page-heading p {
+        margin: 0;
+        font-size: 13px;
+    }
+
+    .card,
+    .form-section {
+        width: 100%;
+        padding: 14px;
+        border-radius: 10px;
+        margin-bottom: 12px;
+    }
+
+    .button {
+        min-height: 42px;
+        padding: 10px 13px;
+    }
+
+    /* ---- forms: prevent iOS date/time and fieldsets escaping viewport ---- */
+    .form-grid,
+    .nested-grid {
+        width: 100%;
+        grid-template-columns: minmax(0, 1fr) !important;
+        gap: 12px;
+    }
+
+    .form-grid > *,
+    .nested-grid > *,
+    .form-section > *,
+    .booking-table-picker > * {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    fieldset {
+        width: 100%;
+        min-inline-size: 0;
+        padding: 12px;
+    }
+
+    input,
+    select,
+    textarea {
+        display: block;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        font-size: 16px; /* stops iPhone Safari zooming fields */
+    }
+
+    input[type="date"],
+    input[type="time"],
+    input[type="number"],
+    input[type="tel"] {
+        inline-size: 100% !important;
+        min-inline-size: 0 !important;
+        max-inline-size: 100% !important;
+    }
+
+    .booking-date-input,
+    .booking-time-input {
+        min-height: 48px;
+        height: 48px;
+        padding: 9px 10px;
+        font-size: 16px;
+    }
+
+    .checkbox-row {
+        width: 100%;
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .checkbox-row input {
+        width: auto !important;
+        flex: 0 0 auto;
+    }
+
+    .field-note {
+        max-width: 100%;
+        overflow-wrap: anywhere;
+    }
+
+    /* Booking table picker remains usable rather than forcing page width. */
+    .booking-table-picker {
+        overflow: hidden;
+    }
+
+    .table-slider-shell {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .table-slider {
+        min-width: 0;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .table-choice-card {
+        flex: 0 0 155px;
+        min-width: 155px;
+    }
+
+    .booking-table-legend {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding-bottom: 4px;
+    }
+
+    .booking-table-legend .legend-chip {
+        flex: 0 0 auto;
+        white-space: nowrap;
+    }
+
+    .large-booking-guidance,
+    .pairing-suggestions {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .large-booking-group-row {
+        width: 100%;
+        overflow-wrap: anywhere;
+    }
+
+    .booking-floor-plan-shell {
+        width: 100%;
+        max-width: 100%;
+        height: 300px;
+        overflow: auto;
+    }
+
+    /* ---- rota: never hide the actual rota on phones ---- */
+    .my-rota-mobile {
+        display: none !important;
+    }
+
+    .rota-table-card {
+        display: block !important;
+        width: 100%;
+        overflow: hidden;
+        padding: 0;
+    }
+
+    .rota-scroll {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        overflow-x: auto;
+        overflow-y: visible;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+    }
+
+    .rota-table {
+        display: table !important;
+        width: 760px;
+        min-width: 760px;
+        table-layout: fixed;
+    }
+
+    .rota-table th,
+    .rota-table td {
+        min-width: 82px;
+        width: 82px;
+        padding: 7px 5px;
+        font-size: 11px;
+    }
+
+    .rota-table th:first-child {
+        width: 104px;
+        min-width: 104px;
+        max-width: 104px;
+        padding-left: 8px;
+    }
+
+    .rota-table thead th {
+        font-size: 11px;
+    }
+
+    .rota-table th small {
+        font-size: 8px;
+    }
+
+    .rota-shift-chip {
+        max-width: 72px;
+        margin: 1px;
+        padding: 5px 4px;
+        font-size: 10px;
+        line-height: 1.15;
+        white-space: normal;
+        text-align: center;
+        justify-content: center;
+    }
+
+    .rota-shift-changeable {
+        min-width: 0 !important;
+        width: auto;
+        max-width: 72px;
+    }
+
+    .rota-shift-change-action {
+        display: block;
+        margin-top: 2px;
+        font-size: 7px;
+        line-height: 1.05;
+    }
+
+    .week-switcher {
+        width: 100%;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 6px;
+        align-items: center;
+    }
+
+    .week-switcher strong {
+        min-width: 0;
+        text-align: center;
+        font-size: 12px;
+        line-height: 1.2;
+    }
+
+    .week-switcher .button {
+        min-height: 38px;
+        padding: 8px 9px;
+        font-size: 10px;
+    }
+
+    .rota-status-strip {
+        width: 100%;
+        gap: 8px;
+        padding: 11px;
+    }
+
+    .rota-status-strip .button {
+        flex: 1 1 130px;
+        text-align: center;
+    }
+
+    .swap-row {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    /* Shift-swap modal behaves like a native bottom sheet. */
+    .rota-swap-overlay {
+        padding: 0;
+        align-items: flex-end;
+    }
+
+    .rota-swap-modal {
+        width: 100%;
+        max-width: none;
+        max-height: 88dvh;
+        padding: 14px;
+        border-radius: 16px 16px 0 0;
+    }
+
+    .rota-swap-person-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        max-height: 36vh;
+    }
+
+    .rota-swap-modal-selection {
+        grid-template-columns: 1fr;
+    }
+
+    .rota-swap-modal-selection .button {
+        width: 100%;
+    }
+}
+
+@media (max-width: 390px) {
+    .container {
+        width: calc(100% - 12px);
+    }
+
+    .main-nav > a,
+    .nav-menu > summary,
+    .account-dropdown > summary {
+        padding-left: 7px !important;
+        padding-right: 7px !important;
+        font-size: 10px !important;
+    }
+
+    .card,
+    .form-section {
+        padding: 12px;
+    }
+
+    fieldset {
+        padding: 10px;
+    }
+
+    .page-heading h1 {
+        font-size: 25px;
+    }
+
+    .rota-table {
+        width: 715px;
+        min-width: 715px;
+    }
+
+    .rota-table th,
+    .rota-table td {
+        width: 76px;
+        min-width: 76px;
+    }
+
+    .rota-table th:first-child {
+        width: 98px;
+        min-width: 98px;
+    }
+}
