@@ -802,6 +802,9 @@ class StaffDiaryEntry(db.Model):
     entry_date = db.Column(db.Date, nullable=False, index=True)
     entry_type = db.Column(db.String(30), nullable=False, index=True)
 
+    # Shared by all dates submitted in one request.
+    request_group_id = db.Column(db.String(36), index=True)
+
     available_from = db.Column(db.Time)
     available_until = db.Column(db.Time)
 

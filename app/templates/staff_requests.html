@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Staff Requests | Rocket Pub Server{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h1>Staff Requests</h1>
+        <p>Open day-off and shift requests.</p>
+    </div>
+</div>
+
+<div class="card">
+    {% if requests %}
+        <div class="staff-request-list">
+            {% for item in requests %}
+                <div class="staff-request-row">
+                    <div class="staff-request-main">
+                        <strong>{{ item.staff.rota_name }}</strong>
+
+                        <span class="staff-request-type">
+                            {% if item.entry_type == "day_off_request" %}
+                                Day off
+                            {% else %}
+                                Shift request
+                            {% endif %}
+                        </span>
+
+                        {% if item.shift_text %}
+                            <span class="badge">{{ item.shift_text }}</span>
+                        {% endif %}
+
+                        <div class="staff-request-dates">
+                            {% for request_date in item.dates %}
+                                <span>{{ request_date.strftime("%a %d %b") }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <form method="post"
+                          action="{{ url_for('main.diary_manager_update', group_key=item.key) }}"
+                          class="staff-request-actions">
+                        <button class="button" name="action" value="approved" type="submit">
+                            Approve
+                        </button>
+                        <button class="button secondary danger-outline"
+                                name="action" value="rejected" type="submit">
+                            Decline
+                        </button>
+                    </form>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <strong>No open requests</strong>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,5 +1,8 @@
 from datetime import date, datetime, time, timedelta
 
+import calendar
+import uuid
+
 import msal
 import requests
 import re
@@ -172,15 +175,6 @@ MANAGER_ENDPOINTS = {
     "main.edit_table",
 
     # Floor-plan editor and all write APIs behind it.
-    "main.table_layout",
-    "main.save_table_layout",
-    "main.update_layout_table",
-    "main.create_layout_pairing",
-    "main.delete_layout_pairing",
-    "main.create_floor_object",
-    "main.update_floor_object",
-    "main.delete_floor_object",
-    "main.duplicate_floor_object",
 
     # Permanent deletion is intentionally restricted.
     "main.delete_cancelled_booking",
@@ -209,8 +203,23 @@ MANAGER_ENDPOINTS = {
     "main.rota_template_add",
     "main.rota_template_delete",
     "main.diary_manager_update",
+    "main.staff_request_inbox",
     "main.swap_manager_decision",
 }
+
+
+ADMIN_ENDPOINTS = {
+    "main.table_layout",
+    "main.save_table_layout",
+    "main.update_layout_table",
+    "main.create_layout_pairing",
+    "main.delete_layout_pairing",
+    "main.create_floor_object",
+    "main.update_floor_object",
+    "main.delete_floor_object",
+    "main.duplicate_floor_object",
+}
+
 
 
 
@@ -453,13 +462,36 @@ def load_and_protect_user():
         flash("Manager access is required for that screen.", "error")
         return redirect(url_for("main.dashboard"))
 
+    if endpoint in ADMIN_ENDPOINTS and not g.current_user.is_admin:
+        flash("Admin access is required for table layout changes.", "error")
+        return redirect(url_for("main.table_map"))
+
     return None
 
 
 @main.app_context_processor
 def inject_current_user():
+    user = current_user()
+    request_count = 0
+
+    if user and user.is_manager:
+        pending = db.session.scalars(
+            db.select(StaffDiaryEntry).where(
+                StaffDiaryEntry.status == "requested",
+                StaffDiaryEntry.entry_type.in_(
+                    ["day_off_request", "available_window"]
+                ),
+            )
+        ).all()
+
+        request_count = len({
+            entry.request_group_id or f"entry-{entry.id}"
+            for entry in pending
+        })
+
     return {
-        "current_user": current_user(),
+        "current_user": user,
+        "manager_request_count": request_count,
     }
 
 
@@ -3484,109 +3516,91 @@ def rota_profile_restore(profile_id):
 
 @main.route("/staff-diary", methods=["GET", "POST"])
 def staff_diary():
-    selected_text = request.args.get("week")
-
-    try:
-        selected = (
-            datetime.strptime(selected_text, "%Y-%m-%d").date()
-            if selected_text
-            else date.today()
-        )
-    except ValueError:
-        selected = date.today()
-
-    week_start = sunday_for_date(selected)
-    days = [week_start + timedelta(days=i) for i in range(7)]
-
     profile = current_staff_profile()
 
-    if request.method == "POST":
-        if profile is None and not current_user().is_admin:
-            flash(
-                "Your login is not linked to a rota staff profile yet.",
-                "error",
-            )
-            return redirect(request.url)
-
-        if current_user().is_admin and request.form.get("staff_id"):
-            target_profile_id = int(request.form["staff_id"])
-        else:
-            if profile is None:
-                flash(
-                    "Your login is not linked to a rota profile.",
-                    "error",
-                )
-                return redirect(request.url)
-
-            target_profile_id = profile.id
-
-        entry_type = request.form.get(
-            "entry_type",
-            "day_off_request",
+    if profile is None:
+        flash(
+            "Your login is not linked to a rota staff profile yet.",
+            "error",
         )
+        return redirect(url_for("main.dashboard"))
 
-        if entry_type == "no_one_off" and not current_user().is_manager:
-            flash("Only managers can add No one off.", "error")
-            return redirect(request.url)
+    month_text = request.args.get("month", "").strip()
 
-        start_text = request.form.get("start_date", "").strip()
-        end_text = request.form.get("end_date", "").strip()
+    try:
+        month_date = (
+            datetime.strptime(month_text, "%Y-%m").date().replace(day=1)
+            if month_text
+            else date.today().replace(day=1)
+        )
+    except ValueError:
+        month_date = date.today().replace(day=1)
 
-        try:
-            start_date = datetime.strptime(
-                start_text,
-                "%Y-%m-%d",
-            ).date()
-        except ValueError:
-            flash("Choose a start date.", "error")
-            return redirect(
-                url_for(
-                    "main.staff_diary",
-                    week=week_start.isoformat(),
-                )
-            )
+    previous_month = (
+        month_date.replace(day=1) - timedelta(days=1)
+    ).replace(day=1)
 
-        if end_text:
+    next_month = (
+        date(month_date.year + 1, 1, 1)
+        if month_date.month == 12
+        else date(month_date.year, month_date.month + 1, 1)
+    )
+
+    cal = calendar.Calendar(firstweekday=0)
+    calendar_weeks = cal.monthdatescalendar(
+        month_date.year,
+        month_date.month,
+    )
+    visible_dates = [day for week in calendar_weeks for day in week]
+    visible_start = min(visible_dates)
+    visible_end = max(visible_dates)
+
+    if request.method == "POST":
+        action = request.form.get("request_action", "").strip()
+
+        selected_dates = []
+        for item in request.form.get("selected_dates", "").split(","):
+            item = item.strip()
+            if not item:
+                continue
             try:
-                end_date = datetime.strptime(
-                    end_text,
-                    "%Y-%m-%d",
-                ).date()
+                selected_dates.append(
+                    datetime.strptime(item, "%Y-%m-%d").date()
+                )
             except ValueError:
-                flash("Choose a valid end date.", "error")
-                return redirect(
-                    url_for(
-                        "main.staff_diary",
-                        week=week_start.isoformat(),
-                    )
-                )
-        else:
-            end_date = start_date
+                pass
 
-        if end_date < start_date:
-            flash("End date cannot be before start date.", "error")
+        selected_dates = sorted(set(selected_dates))
+
+        if not selected_dates:
+            flash("Select at least one date.", "error")
             return redirect(
-                url_for(
-                    "main.staff_diary",
-                    week=sunday_for_date(start_date).isoformat(),
-                )
+                url_for("main.staff_diary", month=month_date.strftime("%Y-%m"))
             )
 
-        # Stop accidental enormous ranges while allowing normal holidays.
-        if (end_date - start_date).days > 62:
-            flash("A diary range can be up to 63 days.", "error")
+        if len(selected_dates) > 63:
+            flash("You can select up to 63 dates in one request.", "error")
             return redirect(
-                url_for(
-                    "main.staff_diary",
-                    week=sunday_for_date(start_date).isoformat(),
-                )
+                url_for("main.staff_diary", month=month_date.strftime("%Y-%m"))
             )
 
+        if action not in {"day_off", "shift_request", "no_one_off"}:
+            flash("Choose a request type.", "error")
+            return redirect(
+                url_for("main.staff_diary", month=month_date.strftime("%Y-%m"))
+            )
+
+        if action == "no_one_off" and not current_user().is_manager:
+            flash("Only managers can mark NO ONE OFF.", "error")
+            return redirect(
+                url_for("main.staff_diary", month=month_date.strftime("%Y-%m"))
+            )
+
+        shorthand = None
         available_from = None
         available_until = None
-        shorthand = None
 
-        if entry_type == "available_window":
+        if action == "shift_request":
             shorthand = request.form.get(
                 "availability_shift",
                 "",
@@ -3599,129 +3613,191 @@ def staff_diary():
                     end_is_finish,
                 ) = parse_rota_shift_text(shorthand)
             except ValueError:
-                flash("Enter a valid shift time.", "error")
+                flash("Enter a valid shift.", "error")
                 return redirect(
-                    url_for(
-                        "main.staff_diary",
-                        week=sunday_for_date(start_date).isoformat(),
-                    )
+                    url_for("main.staff_diary", month=month_date.strftime("%Y-%m"))
                 )
 
             if end_is_finish:
                 available_until = None
 
-        manager_note = request.form.get("note", "").strip() or None
+        request_group_id = str(uuid.uuid4())
 
-        date_count = (end_date - start_date).days + 1
-
-        for offset in range(date_count):
-            entry_date = start_date + timedelta(days=offset)
-            entry_note = manager_note
-
-            if entry_type == "available_window":
-                if entry_note:
-                    entry_note = f"{shorthand} · {entry_note}"
-                else:
-                    entry_note = shorthand
-
-            db.session.add(
-                StaffDiaryEntry(
-                    staff_id=(
-                        None
-                        if entry_type == "no_one_off"
-                        else target_profile_id
-                    ),
+        for entry_date in selected_dates:
+            if action == "no_one_off":
+                entry = StaffDiaryEntry(
+                    staff_id=None,
                     entry_date=entry_date,
-                    entry_type=entry_type,
-                    available_from=available_from,
-                    available_until=available_until,
-                    note=entry_note,
-                    status=(
-                        "approved"
-                        if current_user().is_manager
-                        else "requested"
-                    ),
+                    entry_type="no_one_off",
+                    request_group_id=request_group_id,
+                    note=None,
+                    status="info",
+                    created_by_user_id=current_user().id,
+                    reviewed_by_user_id=current_user().id,
+                    reviewed_at=datetime.now(),
+                )
+            elif action == "day_off":
+                entry = StaffDiaryEntry(
+                    staff_id=profile.id,
+                    entry_date=entry_date,
+                    entry_type="day_off_request",
+                    request_group_id=request_group_id,
+                    note=None,
+                    status="requested",
                     created_by_user_id=current_user().id,
                 )
-            )
+            else:
+                entry = StaffDiaryEntry(
+                    staff_id=profile.id,
+                    entry_date=entry_date,
+                    entry_type="available_window",
+                    request_group_id=request_group_id,
+                    available_from=available_from,
+                    available_until=available_until,
+                    note=shorthand,
+                    status="requested",
+                    created_by_user_id=current_user().id,
+                )
+
+            db.session.add(entry)
 
         db.session.commit()
 
         flash(
-            "Diary entry added."
-            if date_count == 1
-            else f"Diary entry added for {date_count} days.",
+            "NO ONE OFF added."
+            if action == "no_one_off"
+            else "Request sent to managers.",
             "success",
         )
 
         return redirect(
             url_for(
                 "main.staff_diary",
-                week=sunday_for_date(start_date).isoformat(),
+                month=selected_dates[0].strftime("%Y-%m"),
             )
         )
 
-    entries = db.session.scalars(
+    all_entries = db.session.scalars(
         db.select(StaffDiaryEntry)
         .where(
-            StaffDiaryEntry.entry_date >= week_start,
-            StaffDiaryEntry.entry_date <= week_start + timedelta(days=6),
+            StaffDiaryEntry.entry_date >= visible_start,
+            StaffDiaryEntry.entry_date <= visible_end,
+            StaffDiaryEntry.status != "rejected",
         )
-        .order_by(
-            StaffDiaryEntry.entry_date,
-            StaffDiaryEntry.created_at,
-        )
+        .order_by(StaffDiaryEntry.entry_date, StaffDiaryEntry.created_at)
     ).all()
 
-    profiles = db.session.scalars(
-        db.select(StaffProfile)
-        .where(StaffProfile.active.is_(True))
-        .order_by(
-            StaffProfile.sort_order,
-            StaffProfile.display_name,
+    entries_by_date = {d: [] for d in visible_dates}
+
+    for entry in all_entries:
+        visible = (
+            current_user().is_manager
+            or entry.status in {"approved", "info"}
+            or entry.staff_id == profile.id
         )
-    ).all()
 
-    by_day = {day: [] for day in days}
-
-    for entry in entries:
-        by_day.setdefault(
-            entry.entry_date,
-            [],
-        ).append(entry)
+        if visible:
+            entries_by_date.setdefault(entry.entry_date, []).append(entry)
 
     return render_template(
         "staff_diary.html",
-        week_start=week_start,
-        days=days,
-        by_day=by_day,
-        profiles=profiles,
+        month_date=month_date,
+        previous_month=previous_month,
+        next_month=next_month,
+        calendar_weeks=calendar_weeks,
+        entries_by_date=entries_by_date,
         my_profile=profile,
-        previous_start=week_start - timedelta(days=7),
-        next_start=week_start + timedelta(days=7),
     )
 
 
-@main.route("/staff-diary/<int:entry_id>/update", methods=["POST"])
-def diary_manager_update(entry_id):
-    entry = db.get_or_404(StaffDiaryEntry, entry_id)
+@main.route("/staff-requests")
+def staff_request_inbox():
+    pending = db.session.scalars(
+        db.select(StaffDiaryEntry)
+        .where(
+            StaffDiaryEntry.status == "requested",
+            StaffDiaryEntry.entry_type.in_(
+                ["day_off_request", "available_window"]
+            ),
+        )
+        .order_by(StaffDiaryEntry.created_at, StaffDiaryEntry.entry_date)
+    ).all()
+
+    grouped = {}
+
+    for entry in pending:
+        key = entry.request_group_id or f"entry-{entry.id}"
+
+        if key not in grouped:
+            grouped[key] = {
+                "key": key,
+                "staff": entry.staff,
+                "entry_type": entry.entry_type,
+                "entries": [],
+                "created_at": entry.created_at,
+                "shift_text": (
+                    entry.note
+                    if entry.entry_type == "available_window"
+                    else None
+                ),
+            }
+
+        grouped[key]["entries"].append(entry)
+
+    requests = list(grouped.values())
+
+    for group in requests:
+        group["entries"].sort(key=lambda e: e.entry_date)
+        group["dates"] = [e.entry_date for e in group["entries"]]
+
+    return render_template(
+        "staff_requests.html",
+        requests=requests,
+    )
+
+
+@main.route("/staff-requests/<string:group_key>/decision", methods=["POST"])
+def diary_manager_update(group_key):
     action = request.form.get("action")
 
-    if action in {"approved", "rejected"}:
+    if action not in {"approved", "rejected"}:
+        flash("Choose Approve or Decline.", "error")
+        return redirect(url_for("main.staff_request_inbox"))
+
+    if group_key.startswith("entry-"):
+        try:
+            entry_id = int(group_key.split("-", 1)[1])
+        except ValueError:
+            entry_id = -1
+
+        entry = db.session.get(StaffDiaryEntry, entry_id)
+        entries = [entry] if entry else []
+    else:
+        entries = db.session.scalars(
+            db.select(StaffDiaryEntry).where(
+                StaffDiaryEntry.request_group_id == group_key,
+                StaffDiaryEntry.status == "requested",
+            )
+        ).all()
+
+    if not entries:
+        flash("That request is no longer open.", "error")
+        return redirect(url_for("main.staff_request_inbox"))
+
+    for entry in entries:
         entry.status = action
         entry.reviewed_by_user_id = current_user().id
         entry.reviewed_at = datetime.now()
-    elif action == "delete":
-        db.session.delete(entry)
 
     db.session.commit()
 
-    return redirect(
-        url_for(
-            "main.staff_diary",
-            week=sunday_for_date(entry.entry_date).isoformat(),
-        )
+    flash(
+        "Request approved." if action == "approved" else "Request declined.",
+        "success",
     )
+    return redirect(url_for("main.staff_request_inbox"))
+
+
 
 
 # -------------------------
@@ -5600,6 +5676,19 @@ def large_parties():
 @main.route("/large-parties/new", methods=["GET", "POST"])
 def new_large_party():
     return large_party_form_handler()
+
+
+@main.route("/large-parties/<int:inquiry_id>/cancel", methods=["POST"])
+def cancel_large_party(inquiry_id):
+    inquiry = db.get_or_404(LargePartyInquiry, inquiry_id)
+    inquiry.status = "Cancelled"
+    db.session.commit()
+
+    flash(
+        f"{inquiry.customer_name}'s large party was cancelled and moved to Archive.",
+        "success",
+    )
+    return redirect(url_for("main.large_parties"))
 
 
 @main.route("/large-parties/<int:inquiry_id>/edit", methods=["GET", "POST"])

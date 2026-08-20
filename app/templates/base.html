@@ -65,8 +65,17 @@
                 <summary>Management</summary>
                 <div class="nav-menu-panel">
                     <a href="{{ url_for('main.tables') }}">Tables</a>
-                    <a href="{{ url_for('main.table_layout') }}">Table Layout</a>
+                    {% if current_user.is_admin %}
+                        <a href="{{ url_for('main.table_layout') }}">Table Layout</a>
+                    {% endif %}
                     <a href="{{ url_for('main.users') }}">Users</a>
+                    <a class="management-request-link {% if request.endpoint == 'main.staff_request_inbox' %}active{% endif %}"
+                       href="{{ url_for('main.staff_request_inbox') }}">
+                        Requests
+                        {% if manager_request_count %}
+                            <span class="nav-count-badge">{{ manager_request_count }}</span>
+                        {% endif %}
+                    </a>
                 </div>
             </details>
         {% endif %}

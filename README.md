@@ -893,3 +893,15 @@ Manager rota tools are accessible from the Rota screen.
 - Removed `Return to draft` from an issued rota. Rota edits already save
   immediately, so issued rota editing now has a simple `Save changes` button.
 - The supplied v9.4.2 database has Alara archived.
+
+
+## v9.5 staff calendar, requests inbox and permissions
+
+- Table Layout and all floor-plan write APIs are Admin-only.
+- Staff Diary is now a monthly multi-select calendar.
+- Every user submits day-off/shift requests only for themselves.
+- Managers/Admin can place NO ONE OFF on selected dates.
+- Requests go to Management -> Requests for approval/decline.
+- Multi-day submissions are grouped and count as one open request.
+- The Management menu shows a live open-request badge.
+- Large parties have a direct Cancel action that moves them to Archive.

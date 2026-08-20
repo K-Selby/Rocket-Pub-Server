@@ -134,6 +134,13 @@ def ensure_starter_schema_updates():
             sql_type,
         )
 
+    add_column_if_missing(
+        inspector,
+        "staff_diary_entry",
+        "request_group_id",
+        "VARCHAR(36)",
+    )
+
     allergen_item_additions = {
         "milk_status": "VARCHAR(20) DEFAULT 'free'",
         "nuts_status": "VARCHAR(20) DEFAULT 'free'",

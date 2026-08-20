@@ -3,6 +3,18 @@
 {% block title %}
     {% if inquiry %}Edit Large Party Enquiry{% else %}Large Party Enquiry{% endif %}
     | Rocket Pub Server
+{% if inquiry %}
+<div class="card large-party-cancel-card">
+    <form method="post"
+          action="{{ url_for('main.cancel_large_party', inquiry_id=inquiry.id) }}"
+          onsubmit="return confirm('Cancel this large party? It will move to Archive.');">
+        <button class="button secondary danger-outline" type="submit">
+            Cancel large party
+        </button>
+    </form>
+</div>
+{% endif %}
+
 {% endblock %}
 
 {% block content %}
@@ -114,7 +126,7 @@
             <label>
                 Status
                 <select name="status">
-                    {% for status in ["Enquiry", "Awaiting customer", "Provisional", "Confirmed", "Cancelled"] %}
+                    {% for status in ["Enquiry", "Awaiting customer", "Provisional", "Confirmed"] %}
                         <option value="{{ status }}"
                             {% if inquiry and inquiry.status == status %}selected{% endif %}>
                             {{ status }}

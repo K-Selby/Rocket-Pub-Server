@@ -74,10 +74,20 @@
                         {% endif %}
                     </div>
 
-                    <a class="small-link"
-                       href="{{ url_for('main.edit_large_party', inquiry_id=inquiry.id) }}">
-                        Edit enquiry
-                    </a>
+                    <div class="large-party-row-actions">
+                        <a class="small-link"
+                           href="{{ url_for('main.edit_large_party', inquiry_id=inquiry.id) }}">
+                            Edit enquiry
+                        </a>
+
+                        <form method="post"
+                              action="{{ url_for('main.cancel_large_party', inquiry_id=inquiry.id) }}"
+                              onsubmit="return confirm('Cancel this large party? It will move to Archive.');">
+                            <button class="link-button danger" type="submit">
+                                Cancel
+                            </button>
+                        </form>
+                    </div>
                 </div>
             {% endfor %}
         </div>

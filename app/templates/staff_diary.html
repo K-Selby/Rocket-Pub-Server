@@ -3,194 +3,192 @@
 
 {% block content %}
 <div class="page-heading">
-    <div>
-        <h1>Staff Diary</h1>
-        <p>Availability, days off and manager notes.</p>
-    </div>
+    <div><h1>Staff Diary</h1></div>
 </div>
 
-<div class="week-switcher card">
+<div class="calendar-toolbar card">
     <a class="button secondary"
-       href="{{ url_for('main.staff_diary', week=previous_start.isoformat()) }}">← Previous</a>
-    <strong>Week from {{ week_start.strftime("%d %B %Y") }}</strong>
+       href="{{ url_for('main.staff_diary', month=previous_month.strftime('%Y-%m')) }}">←</a>
+    <h2>{{ month_date.strftime("%B %Y") }}</h2>
     <a class="button secondary"
-       href="{{ url_for('main.staff_diary', week=next_start.isoformat()) }}">Next →</a>
+       href="{{ url_for('main.staff_diary', month=next_month.strftime('%Y-%m')) }}">→</a>
 </div>
 
-<div class="card diary-add-card">
-    <h2>Add diary entry</h2>
+<form method="post" id="staff-diary-request-form" class="staff-calendar-layout">
+    <input type="hidden" name="selected_dates" id="selected-dates">
+    <input type="hidden" name="request_action" id="request-action">
 
-    <form method="post" class="diary-entry-form diary-entry-form-clean">
-        {% if current_user.is_admin %}
-            <label>
-                Staff
-                <select name="staff_id">
-                    {% for profile in profiles %}
-                        <option value="{{ profile.id }}">
-                            {{ profile.rota_name }}
-                        </option>
-                    {% endfor %}
-                </select>
-            </label>
-        {% endif %}
-
-        <label>
-            Type
-            <select name="entry_type" id="diary-entry-type">
-                <option value="day_off_request">Day off / unavailable</option>
-                <option value="available_window">Can work a specific shift</option>
-                <option value="note">Note</option>
-
-                {% if current_user.is_manager %}
-                    <option value="unavailable">Mark unavailable</option>
-                    <option value="no_one_off">NO ONE OFF</option>
-                {% endif %}
-            </select>
-        </label>
-
-        <label>
-            From
-            <input type="date"
-                   name="start_date"
-                   required>
-        </label>
-
-        <label>
-            To
-            <input type="date"
-                   name="end_date">
-        </label>
-
-        <label class="diary-shift-field">
-            Shift
-            <input type="text"
-                   name="availability_shift"
-                   autocomplete="off">
-        </label>
-
-        <label class="diary-note-field">
-            Note
-            <input name="note">
-        </label>
-
-        <div class="diary-submit-field">
-            <button class="button" type="submit">
-                Add
-            </button>
-        </div>
-    </form>
-</div>
-
-<div class="staff-diary-week">
-{% for day in days %}
-    <section class="card diary-day-card">
-        <div class="diary-day-heading">
-            <strong>{{ day.strftime("%A") }}</strong>
-            <span>{{ day.strftime("%d %b") }}</span>
+    <section class="card staff-calendar-card">
+        <div class="staff-calendar-weekdays">
+            {% for day_name in ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"] %}
+                <div>{{ day_name }}</div>
+            {% endfor %}
         </div>
 
-        {% for entry in by_day.get(day, []) %}
-            <div class="diary-entry diary-{{ entry.status }}">
-                <div>
-                    {% if entry.entry_type == "no_one_off" %}
-                        <strong>NO ONE OFF</strong>
-                    {% else %}
-                        <strong>{{ entry.staff.display_name }}</strong>
-                        <span>
-                            {% if entry.entry_type == "available_window" %}
-                                Available
-                            {% else %}
-                                {{ entry.entry_type.replace("_", " ")|title }}
-                            {% endif %}
+        <div class="staff-calendar-grid">
+            {% for week in calendar_weeks %}
+                {% for day in week %}
+                    {% set entries = entries_by_date.get(day, []) %}
+                    <button type="button"
+                            class="staff-calendar-day {% if day.month != month_date.month %}other-month{% endif %}"
+                            data-date="{{ day.isoformat() }}">
+                        <span class="calendar-day-number">{{ day.day }}</span>
+
+                        <span class="calendar-day-events">
+                            {% for entry in entries %}
+                                {% if entry.entry_type == "no_one_off" %}
+                                    <span class="calendar-event no-one-off">NO ONE OFF</span>
+                                {% elif entry.entry_type == "day_off_request" %}
+                                    <span class="calendar-event day-off {% if entry.status == 'requested' %}pending{% endif %}">
+                                        {{ entry.staff.rota_name }} · Off{% if entry.status == "requested" %} · Pending{% endif %}
+                                    </span>
+                                {% elif entry.entry_type == "available_window" %}
+                                    <span class="calendar-event shift-request {% if entry.status == 'requested' %}pending{% endif %}">
+                                        {{ entry.staff.rota_name }} · {{ entry.note }}{% if entry.status == "requested" %} · Pending{% endif %}
+                                    </span>
+                                {% endif %}
+                            {% endfor %}
                         </span>
-                    {% endif %}
-
-                    {% if entry.entry_type == "available_window" %}
-                        {% set stored_shift = entry.note.split(" · ", 1)[0] if entry.note else "" %}
-
-                        {% if stored_shift %}
-                            <small class="diary-shift-value">
-                                {{ stored_shift }}
-                            </small>
-                        {% endif %}
-
-                        {% if entry.note and " · " in entry.note %}
-                            <small>
-                                {{ entry.note.split(" · ", 1)[1] }}
-                            </small>
-                        {% endif %}
-                    {% elif entry.note %}
-                        <small>{{ entry.note }}</small>
-                    {% endif %}
-                </div>
-
-                <span class="badge">{{ entry.status|title }}</span>
-
-                {% if current_user.is_manager %}
-                    <form method="post"
-                          action="{{ url_for('main.diary_manager_update', entry_id=entry.id) }}"
-                          class="diary-actions">
-                        {% if entry.status == "requested" %}
-                            <button class="small-link" name="action" value="approved" type="submit">Approve</button>
-                            <button class="link-button danger" name="action" value="rejected" type="submit">Reject</button>
-                        {% endif %}
-                        <button class="link-button danger" name="action" value="delete" type="submit">Delete</button>
-                    </form>
-                {% endif %}
-            </div>
-        {% else %}
-            <span class="muted">Nothing entered</span>
-        {% endfor %}
+                    </button>
+                {% endfor %}
+            {% endfor %}
+        </div>
     </section>
-{% endfor %}
-</div>
+
+    <aside class="card staff-calendar-actions">
+        <h2>Selected dates</h2>
+
+        <div id="selected-date-list" class="selected-date-list">
+            <span class="muted">Select one or more days.</span>
+        </div>
+
+        <div class="calendar-request-buttons" id="calendar-request-buttons" hidden>
+            <button type="button" class="button" data-request-type="day_off">
+                Request day off
+            </button>
+
+            <button type="button" class="button secondary" data-request-type="shift_request">
+                Request a shift
+            </button>
+
+            {% if current_user.is_manager %}
+                <button type="button"
+                        class="button secondary no-one-off-button"
+                        data-request-type="no_one_off">
+                    NO ONE OFF
+                </button>
+            {% endif %}
+        </div>
+
+        <div class="calendar-shift-request" id="calendar-shift-request" hidden>
+            <label>
+                Shift
+                <input type="text"
+                       name="availability_shift"
+                       id="availability-shift"
+                       autocomplete="off">
+            </label>
+
+            <div class="calendar-confirm-row">
+                <button type="button" class="button" id="confirm-shift-request">
+                    Send request
+                </button>
+                <button type="button" class="button secondary" id="cancel-shift-request">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </aside>
+</form>
 
 <script>
 (function () {
-    const type = document.getElementById("diary-entry-type");
-    const shiftField = document.querySelector(".diary-shift-field");
-    const shiftInput = document.querySelector(
-        'input[name="availability_shift"]'
-    );
-    const fromDate = document.querySelector('input[name="start_date"]');
-    const toDate = document.querySelector('input[name="end_date"]');
+    const selected = new Set();
+    const form = document.getElementById("staff-diary-request-form");
+    const hiddenDates = document.getElementById("selected-dates");
+    const actionInput = document.getElementById("request-action");
+    const selectedList = document.getElementById("selected-date-list");
+    const buttons = document.getElementById("calendar-request-buttons");
+    const shiftPanel = document.getElementById("calendar-shift-request");
+    const shiftInput = document.getElementById("availability-shift");
 
-    function updateDiaryFields() {
-        const isShift = (
-            type &&
-            type.value === "available_window"
-        );
-
-        if (shiftField) {
-            shiftField.hidden = !isShift;
-        }
-
-        if (shiftInput) {
-            shiftInput.required = isShift;
-
-            if (!isShift) {
-                shiftInput.value = "";
-            }
-        }
+    function formatDate(value) {
+        const date = new Date(value + "T12:00:00");
+        return date.toLocaleDateString("en-GB", {
+            weekday: "short",
+            day: "numeric",
+            month: "short"
+        });
     }
 
-    function syncDateRange() {
-        if (!fromDate || !toDate || !fromDate.value) {
+    function updateSelection() {
+        const values = Array.from(selected).sort();
+        hiddenDates.value = values.join(",");
+
+        if (!values.length) {
+            selectedList.innerHTML =
+                '<span class="muted">Select one or more days.</span>';
+            buttons.hidden = true;
+            shiftPanel.hidden = true;
             return;
         }
 
-        toDate.min = fromDate.value;
+        selectedList.innerHTML = values
+            .map(value => `<span class="selected-date-chip">${formatDate(value)}</span>`)
+            .join("");
 
-        if (!toDate.value || toDate.value < fromDate.value) {
-            toDate.value = fromDate.value;
-        }
+        buttons.hidden = false;
     }
 
-    type?.addEventListener("change", updateDiaryFields);
-    fromDate?.addEventListener("change", syncDateRange);
+    document.querySelectorAll(".staff-calendar-day").forEach(day => {
+        day.addEventListener("click", () => {
+            const value = day.dataset.date;
 
-    updateDiaryFields();
-    syncDateRange();
+            if (selected.has(value)) {
+                selected.delete(value);
+                day.classList.remove("selected");
+            } else {
+                selected.add(value);
+                day.classList.add("selected");
+            }
+
+            updateSelection();
+        });
+    });
+
+    document.querySelectorAll("[data-request-type]").forEach(button => {
+        button.addEventListener("click", () => {
+            const type = button.dataset.requestType;
+            if (!selected.size) return;
+
+            if (type === "shift_request") {
+                actionInput.value = type;
+                shiftPanel.hidden = false;
+                shiftInput.focus();
+                return;
+            }
+
+            actionInput.value = type;
+            form.submit();
+        });
+    });
+
+    document.getElementById("confirm-shift-request")?.addEventListener("click", () => {
+        if (!shiftInput.value.trim()) {
+            shiftInput.focus();
+            return;
+        }
+
+        actionInput.value = "shift_request";
+        form.submit();
+    });
+
+    document.getElementById("cancel-shift-request")?.addEventListener("click", () => {
+        shiftPanel.hidden = true;
+        shiftInput.value = "";
+    });
+
+    updateSelection();
 })();
 </script>
 {% endblock %}
