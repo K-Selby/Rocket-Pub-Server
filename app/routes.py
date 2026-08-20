@@ -3943,6 +3943,7 @@ def staff_diary():
         my_profile=profile,
         my_pending_requests=my_pending_requests,
         removable_by_date=removable_by_date,
+        preselected_date=request.args.get("selected", "").strip(),
     )
 
 
@@ -3979,12 +3980,23 @@ def remove_staff_diary_request(entry_id):
             )
         )
 
-    month = entry.entry_date.strftime("%Y-%m")
+    selected_date = entry.entry_date
+    month = selected_date.strftime("%Y-%m")
+
+    # The diary entry itself is the manager-inbox request record. Deleting it
+    # removes that date from the request inbox as well. If it was the only date
+    # in a grouped request, the request disappears completely.
     db.session.delete(entry)
     db.session.commit()
 
     flash("Diary request removed.", "success")
-    return redirect(url_for("main.staff_diary", month=month))
+    return redirect(
+        url_for(
+            "main.staff_diary",
+            month=month,
+            selected=selected_date.isoformat(),
+        )
+    )
 
 
 @main.route("/staff-diary/no-one-off/<int:entry_id>/remove", methods=["POST"])
@@ -3998,12 +4010,19 @@ def remove_no_one_off(entry_id):
         flash("Manager access is required.", "error")
         return redirect(url_for("main.staff_diary"))
 
-    month = entry.entry_date.strftime("%Y-%m")
+    selected_date = entry.entry_date
+    month = selected_date.strftime("%Y-%m")
     db.session.delete(entry)
     db.session.commit()
 
     flash("NO ONE OFF removed.", "success")
-    return redirect(url_for("main.staff_diary", month=month))
+    return redirect(
+        url_for(
+            "main.staff_diary",
+            month=month,
+            selected=selected_date.isoformat(),
+        )
+    )
 
 
 
@@ -4060,12 +4079,19 @@ def calendar_event_add():
 @main.route("/staff-diary/event/<int:event_id>/delete", methods=["POST"])
 def calendar_event_delete(event_id):
     event = db.get_or_404(PubCalendarEvent, event_id)
-    month = event.event_date.strftime("%Y-%m")
+    selected_date = event.event_date
+    month = selected_date.strftime("%Y-%m")
     db.session.delete(event)
     db.session.commit()
 
     flash("Event removed.", "success")
-    return redirect(url_for("main.staff_diary", month=month))
+    return redirect(
+        url_for(
+            "main.staff_diary",
+            month=month,
+            selected=selected_date.isoformat(),
+        )
+    )
 
 
 @main.route("/staff-requests")

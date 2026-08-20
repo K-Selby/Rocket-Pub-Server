@@ -246,6 +246,7 @@
         document.getElementById("calendar-selected-items");
     const selectedItemList =
         document.getElementById("calendar-selected-item-list");
+    const preselectedDate = {{ preselected_date|tojson }};
 
     function formatDate(value) {
         const date = new Date(value + "T12:00:00");
@@ -290,12 +291,8 @@
         renderSelectedItems(values);
     }
 
-    function postRemoval(url, label) {
+    function postRemoval(url) {
         if (!url) return;
-
-        if (!confirm(`Delete ${label}?`)) {
-            return;
-        }
 
         const deleteForm = document.createElement("form");
         deleteForm.method = "post";
@@ -353,7 +350,7 @@
             deleteButton.className = "calendar-selected-delete";
             deleteButton.textContent = "Delete";
             deleteButton.addEventListener("click", () => {
-                postRemoval(item.url, item.label);
+                postRemoval(item.url);
             });
 
             text.appendChild(closeMark);
@@ -441,6 +438,17 @@
 
         document.getElementById("calendar-event-submit-form").submit();
     });
+
+    if (preselectedDate) {
+        const preselectedCell = document.querySelector(
+            `.staff-calendar-day[data-date="${preselectedDate}"]`
+        );
+
+        if (preselectedCell) {
+            selected.add(preselectedDate);
+            preselectedCell.classList.add("selected");
+        }
+    }
 
     updateSelection();
 })();

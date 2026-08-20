@@ -996,3 +996,14 @@ Manager rota tools are accessible from the Rota screen.
 - Managers/Admin can delete pub events and NO ONE OFF entries.
 - Deletion uses the exact server-generated URL rather than constructing route
   strings in JavaScript.
+
+
+## v9.5.4.3 diary delete flow
+
+- Staff Diary delete buttons no longer ask for confirmation.
+- After deleting an item, the same calendar date remains selected and its
+  sidebar stays open.
+- Deleting a day-off/shift diary entry deletes the underlying request record as
+  well, so it is removed from the manager Requests inbox immediately.
+- For a multi-date grouped request, deleting one date removes that date from
+  the request; deleting the last remaining date removes the request entirely.
