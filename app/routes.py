@@ -1,4 +1,5 @@
 from datetime import date, datetime, time, timedelta
+from sqlalchemy import inspect, text
 
 import calendar
 import json
@@ -5236,8 +5237,52 @@ def customer_allergens():
 # Allergen menu
 # -------------------------
 
+def ensure_allergen_schema_current():
+    """
+    Repair older development SQLite databases before allergen queries run.
+
+    The live Windows server keeps its existing instance/pub_booking.db while
+    code is updated from GitHub, so newer model columns may not exist yet.
+    """
+    inspector = inspect(db.engine)
+
+    if "allergen_menu_item" not in inspector.get_table_names():
+        return
+
+    columns = {
+        column["name"]
+        for column in inspector.get_columns("allergen_menu_item")
+    }
+
+    required = {
+        "milk_status": "VARCHAR(20) DEFAULT 'free'",
+        "nuts_status": "VARCHAR(20) DEFAULT 'free'",
+        "egg_status": "VARCHAR(20) DEFAULT 'free'",
+        "gluten_status": "VARCHAR(20) DEFAULT 'free'",
+        "can_make_gluten_free": "BOOLEAN DEFAULT 0",
+        "gluten_free_changes": "VARCHAR(300)",
+    }
+
+    changed = False
+
+    for name, sql_type in required.items():
+        if name not in columns:
+            db.session.execute(
+                text(
+                    f"ALTER TABLE allergen_menu_item "
+                    f"ADD COLUMN {name} {sql_type}"
+                )
+            )
+            changed = True
+
+    if changed:
+        db.session.commit()
+
+
+
 def allergen_menu_context():
     """Shared read-only allergen data for staff and customer views."""
+    ensure_allergen_schema_current()
     search = request.args.get("q", "").strip()
     category = request.args.get("category", "").strip()
 
@@ -5378,6 +5423,8 @@ def allergen_menu():
 
 
 def allergen_form_values(item=None):
+    ensure_allergen_schema_current()
+
     side_items = db.session.scalars(
         db.select(AllergenMenuItem)
         .where(
@@ -5422,6 +5469,7 @@ def allergen_new():
 
 @main.route("/allergens/<int:item_id>/edit", methods=["GET", "POST"])
 def allergen_edit(item_id):
+    ensure_allergen_schema_current()
     item = db.get_or_404(AllergenMenuItem, item_id)
 
     if request.method == "POST":

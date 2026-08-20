@@ -1236,3 +1236,13 @@ Manager rota tools are accessible from the Rota screen.
   e.g. `Chicken breast, tomato, mozzarella, garlic, and basil`.
 - The editor clarifies that this list does not need to describe every cooking
   ingredient such as oil, salt or flour unless staff want it shown.
+
+
+## v9.8.6.1 Windows allergen database compatibility
+
+- Added a targeted self-healing schema check before allergen pages query the
+  database.
+- This fixes live Windows installs that retain an older
+  `instance/pub_booking.db` while the application code is updated.
+- Missing allergen status / gluten-free preparation columns are added
+  automatically without deleting or replacing existing menu data.
