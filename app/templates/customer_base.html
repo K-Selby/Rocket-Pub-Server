@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}The Rocket Pub{% endblock %}</title>
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="customer-body">
+<header class="customer-topbar">
+    <a class="customer-brand"
+       href="{{ url_for('main.customer_home') }}">
+        <span class="brand-logo-frame">
+            <img src="{{ url_for('static', filename='images/rocket-pub-header-logo.png') }}"
+                 alt="The Rocket Pub Liverpool">
+        </span>
+
+        <span class="brand-copy">
+            <strong>The Rocket Pub</strong>
+            <small>Liverpool</small>
+        </span>
+    </a>
+
+    <nav class="customer-nav">
+        <a href="{{ url_for('main.customer_home') }}">Home</a>
+        <a href="{{ url_for('main.customer_food_menu') }}">Food Menu</a>
+        <a href="{{ url_for('main.customer_allergens') }}">Allergens</a>
+    </nav>
+</header>
+
+<main class="customer-container">
+    {% block content %}{% endblock %}
+</main>
+</body>
+</html>

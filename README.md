@@ -1007,3 +1007,18 @@ Manager rota tools are accessible from the Rota screen.
   well, so it is removed from the manager Requests inbox immediately.
 - For a multi-date grouped request, deleting one date removes that date from
   the request; deleting the last remaining date removes the request entirely.
+
+
+## v9.6 public customer portal
+
+- Added a public, no-login customer area at `/customer`.
+- Customer home has two options only:
+  - View Food Menu PDF
+  - View Allergen Menu
+- The public allergen menu uses the same live allergen data and filters as the
+  staff system, but contains no add/edit/delete controls.
+- The staff allergen editor remains unchanged behind login.
+- The food-menu route expects the PDF at:
+  `app/static/menus/the-rocket-pub-food-menu.pdf`
+- Until that PDF exists, `/customer/food-menu` shows a clean "coming soon"
+  screen rather than an error page.

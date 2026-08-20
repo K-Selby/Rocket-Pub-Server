@@ -1,0 +1,36 @@
+{% extends "customer_base.html" %}
+{% block title %}The Rocket Pub | Menu & Allergens{% endblock %}
+
+{% block content %}
+<section class="customer-hero">
+    <span class="customer-eyebrow">The Rocket Pub · Liverpool</span>
+    <h1>Food Menu & Allergens</h1>
+    <p>Choose what you'd like to view.</p>
+</section>
+
+<div class="customer-choice-grid">
+    <a class="customer-choice-card"
+       href="{{ url_for('main.customer_food_menu') }}">
+        <span class="customer-choice-icon">PDF</span>
+        <div>
+            <h2>View Food Menu</h2>
+            {% if food_menu_available %}
+                <p>Open our current food menu.</p>
+            {% else %}
+                <p>Menu PDF coming soon.</p>
+            {% endif %}
+        </div>
+        <span class="customer-choice-arrow">→</span>
+    </a>
+
+    <a class="customer-choice-card"
+       href="{{ url_for('main.customer_allergens') }}">
+        <span class="customer-choice-icon">A</span>
+        <div>
+            <h2>Allergen Menu</h2>
+            <p>Search dishes and check allergen information.</p>
+        </div>
+        <span class="customer-choice-arrow">→</span>
+    </a>
+</div>
+{% endblock %}

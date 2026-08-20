@@ -1,0 +1,10 @@
+{% extends "customer_base.html" %}
+{% block title %}Food Menu | The Rocket Pub{% endblock %}
+
+{% block content %}
+<div class="customer-message-card">
+    <h1>Food Menu</h1>
+    <p>The current food menu PDF hasn't been added yet.</p>
+    <a class="button" href="{{ url_for('main.customer_home') }}">Back</a>
+</div>
+{% endblock %}

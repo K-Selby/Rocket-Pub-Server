@@ -120,7 +120,7 @@ from sqlalchemy import Integer, cast
 from werkzeug.security import check_password_hash, generate_password_hash
 from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
-from flask import send_file
+from flask import send_file, send_from_directory
 
 from app import db
 from app.models import (
@@ -444,6 +444,11 @@ def load_and_protect_user():
         "main.forgot_password",
         "main.forgot_password_verify",
         "main.forgot_password_new",
+
+        # Public customer portal - no staff login required.
+        "main.customer_home",
+        "main.customer_food_menu",
+        "main.customer_allergens",
     }
 
     if endpoint in public_endpoints:
@@ -4549,12 +4554,64 @@ def rota_template_delete(template_id):
     return redirect(url_for("main.rota_settings"))
 
 
+
+# -------------------------
+# Public customer portal
+# -------------------------
+
+@main.route("/customer")
+@main.route("/customer/")
+def customer_home():
+    menu_path = os.path.join(
+        os.path.dirname(__file__),
+        "static",
+        "menus",
+        "the-rocket-pub-food-menu.pdf",
+    )
+
+    return render_template(
+        "customer_home.html",
+        food_menu_available=os.path.exists(menu_path),
+    )
+
+
+@main.route("/customer/food-menu")
+def customer_food_menu():
+    menu_directory = os.path.join(
+        os.path.dirname(__file__),
+        "static",
+        "menus",
+    )
+    filename = "the-rocket-pub-food-menu.pdf"
+    menu_path = os.path.join(menu_directory, filename)
+
+    if not os.path.exists(menu_path):
+        return render_template(
+            "customer_menu_unavailable.html",
+        ), 404
+
+    return send_from_directory(
+        menu_directory,
+        filename,
+        mimetype="application/pdf",
+        as_attachment=False,
+    )
+
+
+@main.route("/customer/allergens")
+def customer_allergens():
+    return render_template(
+        "customer_allergens.html",
+        **allergen_menu_context(),
+    )
+
+
 # -------------------------
 # Allergen menu
 # -------------------------
 
-@main.route("/allergens")
-def allergen_menu():
+def allergen_menu_context():
+    """Shared read-only allergen data for staff and customer views."""
     search = request.args.get("q", "").strip()
     category = request.args.get("category", "").strip()
 
@@ -4582,7 +4639,6 @@ def allergen_menu():
     if category:
         stmt = stmt.where(AllergenMenuItem.category == category)
 
-    # "Free from" filters are strict: yellow / may-contain does NOT qualify.
     if milk_free:
         stmt = stmt.where(AllergenMenuItem.milk_status == "free")
     if nut_free:
@@ -4616,8 +4672,6 @@ def allergen_menu():
         "Desserts",
     ]
 
-    # Build side choices for each main meal and mark only sides that are
-    # strictly free from every allergen currently selected by staff.
     selected_allergens = []
     if milk_free:
         selected_allergens.append("milk_status")
@@ -4656,16 +4710,15 @@ def allergen_menu():
         else:
             safe_side_options[item.id] = sides
 
-    return render_template(
-        "allergen_menu.html",
-        items=items,
-        categories=categories,
-        side_options=side_options,
-        safe_side_options=safe_side_options,
-        selected_allergens=selected_allergens,
-        search=search,
-        selected_category=category,
-        filters={
+    return {
+        "items": items,
+        "categories": categories,
+        "side_options": side_options,
+        "safe_side_options": safe_side_options,
+        "selected_allergens": selected_allergens,
+        "search": search,
+        "selected_category": category,
+        "filters": {
             "milk_free": milk_free,
             "nut_free": nut_free,
             "egg_free": egg_free,
@@ -4673,6 +4726,15 @@ def allergen_menu():
             "vegetarian": vegetarian,
             "can_make_vegetarian": can_make_vegetarian,
         },
+    }
+
+
+
+@main.route("/allergens")
+def allergen_menu():
+    return render_template(
+        "allergen_menu.html",
+        **allergen_menu_context(),
     )
 
 

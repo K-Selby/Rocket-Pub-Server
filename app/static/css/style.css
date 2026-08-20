@@ -5541,3 +5541,181 @@ main.container {
 .calendar-selected-delete:hover {
     background: #9f3e37;
 }
+
+
+/* v9.6 public customer portal */
+.customer-body {
+    min-height: 100vh;
+    background:
+        linear-gradient(rgba(240,245,238,.94), rgba(240,245,238,.97)),
+        url("../images/rocket-pub-wallpaper.jpg") center/cover fixed;
+}
+
+.customer-topbar {
+    min-height: 82px;
+    padding: 10px max(18px, calc((100vw - 1180px) / 2));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    background:
+        linear-gradient(
+            110deg,
+            var(--brand-deep) 0%,
+            #164936 54%,
+            #2d6047 100%
+        );
+    border-bottom: 3px solid rgba(184, 217, 167, 0.72);
+    box-shadow: 0 3px 16px rgba(12, 54, 39, 0.16);
+}
+
+.customer-brand {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    color: white;
+    text-decoration: none;
+}
+
+.customer-nav {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.customer-nav a {
+    padding: 9px 11px;
+    border-radius: 8px;
+    color: #f5fbf2;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.customer-nav a:hover {
+    background: rgba(205,230,193,.15);
+}
+
+.customer-container {
+    width: min(1040px, calc(100% - 28px));
+    margin: 42px auto;
+}
+
+.customer-hero {
+    max-width: 650px;
+    margin: 30px auto 34px;
+    text-align: center;
+}
+
+.customer-hero h1,
+.customer-allergen-heading h1 {
+    margin: 4px 0 8px;
+    font-size: clamp(30px, 5vw, 48px);
+}
+
+.customer-hero p,
+.customer-allergen-heading p {
+    color: var(--muted);
+    font-size: 17px;
+}
+
+.customer-eyebrow {
+    color: var(--accent-dark);
+    font-size: 12px;
+    font-weight: 850;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.customer-choice-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    max-width: 820px;
+    margin: 0 auto;
+}
+
+.customer-choice-card {
+    min-height: 180px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 16px;
+    align-items: center;
+    padding: 25px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: rgba(255,255,255,.96);
+    color: var(--text);
+    text-decoration: none;
+    box-shadow: 0 8px 28px rgba(16,53,40,.07);
+}
+
+.customer-choice-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 11px 32px rgba(16,53,40,.12);
+}
+
+.customer-choice-card h2 {
+    margin: 0 0 6px;
+}
+
+.customer-choice-card p {
+    margin: 0;
+    color: var(--muted);
+}
+
+.customer-choice-icon {
+    display: inline-flex;
+    width: 50px;
+    height: 50px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 13px;
+    background: var(--accent-soft);
+    color: var(--accent-dark);
+    font-size: 14px;
+    font-weight: 900;
+}
+
+.customer-choice-arrow {
+    font-size: 26px;
+    color: var(--accent);
+}
+
+.customer-message-card {
+    max-width: 600px;
+    margin: 70px auto;
+    padding: 30px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: white;
+    text-align: center;
+}
+
+.customer-allergen-heading {
+    margin-bottom: 20px;
+}
+
+.customer-allergen-warning {
+    margin-bottom: 20px;
+}
+
+@media (max-width: 700px) {
+    .customer-topbar {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .customer-nav {
+        width: 100%;
+        overflow-x: auto;
+    }
+
+    .customer-choice-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .customer-container {
+        margin-top: 24px;
+    }
+}
