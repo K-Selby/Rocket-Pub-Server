@@ -6970,3 +6970,67 @@ button {
 .ingredient-details > summary {
     font-weight: 800;
 }
+
+
+/* v9.8.6.3 iPhone navigation dropdown stacking fix */
+.topbar,
+.main-nav,
+.nav-menu,
+.account-dropdown {
+    position: relative;
+    z-index: 2000;
+}
+
+.main-content,
+.container {
+    position: relative;
+    z-index: 1;
+}
+
+.nav-menu-panel,
+.account-dropdown-panel {
+    z-index: 9999 !important;
+}
+
+@media (max-width: 760px) {
+    .topbar {
+        position: relative;
+        z-index: 9000;
+        overflow: visible !important;
+    }
+
+    .main-nav {
+        position: relative;
+        z-index: 9100;
+        overflow-x: auto;
+        overflow-y: visible !important;
+    }
+
+    .nav-menu,
+    .account-dropdown {
+        position: static;
+    }
+
+    .nav-menu-panel,
+    .account-dropdown-panel {
+        position: fixed !important;
+        z-index: 10000 !important;
+        top: 92px !important;
+        left: 10px !important;
+        right: 10px !important;
+        width: auto !important;
+        max-width: none !important;
+        max-height: calc(100dvh - 110px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        border-radius: 12px;
+        box-shadow: 0 14px 40px rgba(0, 0, 0, .24);
+    }
+
+    .container,
+    .main-content,
+    .card,
+    .page-heading {
+        z-index: auto;
+    }
+}

@@ -1254,3 +1254,21 @@ Manager rota tools are accessible from the Rota screen.
 - New allergen rows are now populated with required values before the first database flush.
 - Removed both `Changes required` text areas from the allergen editor.
 - Existing legacy change-note columns remain only for database compatibility and are no longer displayed.
+
+
+## v9.8.6.3 iPhone dropdown stacking fix
+
+- Fixed Staff/Management/Account dropdown menus appearing behind the page body on iPhone.
+- Raised the header/dropdown stacking context above cards and page content.
+- Mobile dropdown panels now use a fixed-position layer with a very high z-index.
+- Dropdowns remain scrollable if they are taller than the phone viewport.
+- Asset cache version bumped so Safari/Cloudflare fetch the corrected CSS.
+
+
+## v9.8.7 live food menu PDF
+
+- Added the supplied 2026 Rocket Pub food menu to
+  `app/static/menus/the-rocket-pub-food-menu.pdf`.
+- The existing customer `Food Menu` link now opens the real 12-page menu PDF.
+- The customer home page automatically detects the PDF, so `Menu PDF coming
+  soon` changes to `Open our current food menu`.
