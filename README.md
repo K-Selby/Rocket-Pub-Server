@@ -1272,3 +1272,19 @@ Manager rota tools are accessible from the Rota screen.
 - The existing customer `Food Menu` link now opens the real 12-page menu PDF.
 - The customer home page automatically detects the PDF, so `Menu PDF coming
   soon` changes to `Open our current food menu`.
+
+
+## v10.8 email binding / verification fix
+
+- Corrected self-service email binding for staff and managers. A logic error
+  previously replaced every non-admin user's submitted email with an empty
+  string, causing valid addresses to show `Enter a valid email address`.
+- Any signed-in user can now add or replace the email on their own account.
+- Adding an email always sends a six-digit verification code first.
+- The address remains pending and is not attached as the verified account email
+  until the correct code is entered.
+- If Microsoft email delivery fails, the pending verification is cleared rather
+  than leaving a misleading pending address.
+- Server-side email validation now uses a practical email-format check in
+  addition to the browser's `type=email` validation.
+- Project versioning continues from 10.8.

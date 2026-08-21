@@ -363,7 +363,14 @@ def send_password_reset_email(recipient, code):
 def start_email_verification(user, email):
     email = normalise_email(email)
 
-    if not email or "@" not in email or "." not in email.rsplit("@", 1)[-1]:
+    # Basic practical validation. Browser type=email handles the common UI
+    # mistakes; this server check protects direct POST requests as well.
+    email_pattern = re.compile(
+        r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+        re.IGNORECASE,
+    )
+
+    if not email or not email_pattern.fullmatch(email):
         return False, "Enter a valid email address."
 
     duplicate = db.session.scalar(
@@ -391,6 +398,12 @@ def start_email_verification(user, email):
     success, delivery_message = send_verification_email(email, code)
 
     if not success:
+        # Do not leave the account looking as though verification is pending
+        # if the message could not actually be sent.
+        user.pending_email = None
+        user.email_verification_code_hash = None
+        user.email_verification_expires_at = None
+        db.session.commit()
         return False, delivery_message
 
     return True, delivery_message
@@ -2147,11 +2160,10 @@ def email_setup():
             )
             return redirect(url_for("main.dashboard"))
 
-        email = (
-            normalise_email(request.form.get("email"))
-            if current_user().is_admin
-            else ""
-        )
+        # Every signed-in user can bind/replace the email on their own
+        # account. Previously non-admin users were forced to an empty string,
+        # which made every address fail with "Enter a valid email address."
+        email = normalise_email(request.form.get("email"))
 
         success, message = start_email_verification(user, email)
         flash(message, "success" if success else "error")
