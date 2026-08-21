@@ -4154,7 +4154,12 @@ def staff_diary():
                 url_for("main.staff_diary", month=month_date.strftime("%Y-%m"))
             )
 
-        if action not in {"day_off", "shift_request", "no_one_off"}:
+        if action not in {
+            "day_off",
+            "shift_request",
+            "no_one_off",
+            "admin_day_off",
+        }:
             flash("Choose a request type.", "error")
             return redirect(
                 url_for("main.staff_diary", month=month_date.strftime("%Y-%m"))
@@ -4174,6 +4179,34 @@ def staff_diary():
             return redirect(
                 url_for("main.staff_diary", month=month_date.strftime("%Y-%m"))
             )
+
+        admin_target_profile = None
+
+        if action == "admin_day_off":
+            if not current_user().is_admin:
+                flash("Administrator access is required.", "error")
+                return redirect(
+                    url_for(
+                        "main.staff_diary",
+                        month=month_date.strftime("%Y-%m"),
+                    )
+                )
+
+            target_staff_id = request.form.get("target_staff_id", type=int)
+            admin_target_profile = (
+                db.session.get(StaffProfile, target_staff_id)
+                if target_staff_id
+                else None
+            )
+
+            if admin_target_profile is None:
+                flash("Choose a staff member.", "error")
+                return redirect(
+                    url_for(
+                        "main.staff_diary",
+                        month=month_date.strftime("%Y-%m"),
+                    )
+                )
 
         shorthand = None
         available_from = None
@@ -4230,6 +4263,39 @@ def staff_diary():
                     status="requested",
                     created_by_user_id=current_user().id,
                 )
+            elif action == "admin_day_off":
+                existing = db.session.scalar(
+                    db.select(StaffDiaryEntry)
+                    .where(
+                        StaffDiaryEntry.staff_id == admin_target_profile.id,
+                        StaffDiaryEntry.entry_date == entry_date,
+                        StaffDiaryEntry.entry_type == "day_off_request",
+                    )
+                    .order_by(StaffDiaryEntry.created_at.desc())
+                )
+
+                if existing:
+                    # Admin assignment wins over a pending/declined request.
+                    existing.status = "approved"
+                    existing.note = None
+                    existing.reviewed_by_user_id = current_user().id
+                    existing.reviewed_at = datetime.now()
+                    existing.created_by_user_id = (
+                        existing.created_by_user_id or current_user().id
+                    )
+                    continue
+
+                entry = StaffDiaryEntry(
+                    staff_id=admin_target_profile.id,
+                    entry_date=entry_date,
+                    entry_type="day_off_request",
+                    request_group_id=request_group_id,
+                    note=None,
+                    status="approved",
+                    created_by_user_id=current_user().id,
+                    reviewed_by_user_id=current_user().id,
+                    reviewed_at=datetime.now(),
+                )
             else:
                 entry = StaffDiaryEntry(
                     staff_id=profile.id,
@@ -4249,6 +4315,11 @@ def staff_diary():
 
         if action == "no_one_off":
             flash("NO ONE OFF added.", "success")
+        elif action == "admin_day_off":
+            flash(
+                f"Day off added for {admin_target_profile.rota_name}.",
+                "success",
+            )
         elif action == "day_off" and selected_no_one_off:
             flash(
                 "Request sent. One or more selected dates are marked "
@@ -4434,6 +4505,26 @@ def staff_diary():
             )
 
 
+    admin_diary_profiles = []
+
+    if current_user().is_admin:
+        admin_diary_profiles = db.session.scalars(
+            db.select(StaffProfile)
+            .order_by(
+                StaffProfile.active.desc(),
+                StaffProfile.sort_order,
+                StaffProfile.display_name,
+            )
+        ).all()
+
+        admin_diary_profiles = sorted(
+            admin_diary_profiles,
+            key=lambda item: (
+                0 if item.active else 1,
+                (item.rota_name or "").lower(),
+            ),
+        )
+
     return render_template(
         "staff_diary.html",
         month_date=month_date,
@@ -4449,6 +4540,7 @@ def staff_diary():
         my_pending_requests=my_pending_requests,
         removable_by_date=removable_by_date,
         preselected_date=request.args.get("selected", "").strip(),
+        admin_diary_profiles=admin_diary_profiles,
     )
 
 

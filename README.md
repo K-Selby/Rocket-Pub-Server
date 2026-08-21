@@ -1288,3 +1288,19 @@ Manager rota tools are accessible from the Rota screen.
 - Server-side email validation now uses a practical email-format check in
   addition to the browser's `type=email` validation.
 - Project versioning continues from 10.8.
+
+
+## v10.8.1 mobile dropdowns + admin assigned days off
+
+- Reworked the mobile staff navigation to a compact grid instead of a
+  horizontally scrolling overflow container. This fixes iPhone Safari clipping
+  open Staff / Bookings / Management / Account dropdowns behind the page body.
+- Open dropdowns now sit in a high stacking layer above all page cards.
+- Admins can select one or more dates in Staff Diary and choose
+  `Add day off for staff`.
+- The admin can choose any rota profile, including archived profiles.
+- Admin-assigned days off are immediately `Approved`; they do not create a
+  manager approval request.
+- If that staff member already has a pending/declined day-off entry for the same
+  date, the admin action converts it to approved rather than creating a
+  duplicate.

@@ -24,6 +24,7 @@
 <form method="post" id="staff-diary-request-form" class="staff-calendar-layout">
     <input type="hidden" name="selected_dates" id="selected-dates">
     <input type="hidden" name="request_action" id="request-action">
+    <input type="hidden" name="target_staff_id" id="admin-target-staff-id">
 
     <section class="card staff-calendar-card">
         <div class="staff-calendar-weekdays">
@@ -142,6 +143,14 @@
                         id="show-event-form">
                     Add event
                 </button>
+
+                {% if current_user.is_admin %}
+                    <button type="button"
+                            class="button secondary"
+                            id="show-admin-day-off-form">
+                        Add day off for staff
+                    </button>
+                {% endif %}
             {% endif %}
         </div>
 
@@ -170,6 +179,38 @@
                 </button>
             </div>
         </div>
+{% if current_user.is_admin %}
+            <div class="calendar-event-form"
+                 id="admin-day-off-form"
+                 hidden>
+                <label>
+                    Staff member
+                    <select id="admin-day-off-staff">
+                        <option value="">Choose staff member</option>
+                        {% for staff_profile in admin_diary_profiles %}
+                            <option value="{{ staff_profile.id }}">
+                                {{ staff_profile.rota_name }}
+                                {% if not staff_profile.active %} (Archived){% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </label>
+
+                <div class="calendar-confirm-row">
+                    <button type="button"
+                            class="button"
+                            id="confirm-admin-day-off">
+                        Add day off
+                    </button>
+                    <button type="button"
+                            class="button secondary"
+                            id="cancel-admin-day-off">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+{% endif %}
+
 {% if current_user.is_manager %}
             <div class="calendar-event-form" id="calendar-event-form" hidden>
                 <label>
@@ -242,6 +283,9 @@
     const warning = document.getElementById("selection-warning");
     const shiftPanel = document.getElementById("calendar-shift-request");
     const shiftInput = document.getElementById("availability-shift");
+    const adminDayOffPanel = document.getElementById("admin-day-off-form");
+    const adminDayOffStaff = document.getElementById("admin-day-off-staff");
+    const adminTargetStaffId = document.getElementById("admin-target-staff-id");
     const selectedItemsSection =
         document.getElementById("calendar-selected-items");
     const selectedItemList =
@@ -408,6 +452,32 @@
     document.getElementById("cancel-shift-request")?.addEventListener("click", () => {
         shiftPanel.hidden = true;
         shiftInput.value = "";
+    });
+
+    document.getElementById("show-admin-day-off-form")?.addEventListener("click", () => {
+        if (!selected.size) return;
+
+        if (adminDayOffPanel) {
+            adminDayOffPanel.hidden = false;
+            adminDayOffStaff?.focus();
+        }
+    });
+
+    document.getElementById("confirm-admin-day-off")?.addEventListener("click", () => {
+        if (!selected.size || !adminDayOffStaff?.value) {
+            adminDayOffStaff?.focus();
+            return;
+        }
+
+        adminTargetStaffId.value = adminDayOffStaff.value;
+        actionInput.value = "admin_day_off";
+        form.submit();
+    });
+
+    document.getElementById("cancel-admin-day-off")?.addEventListener("click", () => {
+        if (adminDayOffPanel) adminDayOffPanel.hidden = true;
+        if (adminDayOffStaff) adminDayOffStaff.value = "";
+        if (adminTargetStaffId) adminTargetStaffId.value = "";
     });
 
     const eventPanel = document.getElementById("calendar-event-form");
