@@ -3750,95 +3750,216 @@ def rota_image(rota_id):
 
     profiles, days, shift_map = rota_context(week)
 
-    # High-resolution, phone-friendly PNG generated locally.
-    width = 2200
-    row_h = 92
-    header_h = 220
-    bottom_padding = 40
+    # Keep the exported rota compact enough to read at normal zoom while still
+    # retaining enough resolution for sharing/saving on phones.
+    width = 1680
+    row_h = 104
+    title_bar_h = 108
+    week_line_h = 72
+    table_header_h = 88
+    top_padding = 20
+    bottom_padding = 28
 
-    # One row is used by the Sun-Sat column headings in addition to every
-    # staff row. Include it in the canvas height so nobody is clipped.
-    table_rows = max(len(profiles), 1) + 1
-    height = header_h + (table_rows * row_h) + bottom_padding
+    table_rows = max(len(profiles), 1)
+    y0 = title_bar_h + week_line_h + top_padding
+    height = (
+        y0
+        + table_header_h
+        + (table_rows * row_h)
+        + bottom_padding
+    )
 
     image = Image.new("RGB", (width, height), "white")
     draw = ImageDraw.Draw(image)
 
-    try:
-        title_font = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial Bold.ttf", 60)
-        head_font = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial Bold.ttf", 34)
-        text_font = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial.ttf", 30)
-        small_font = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial.ttf", 24)
-    except Exception:
-        title_font = ImageFont.load_default()
-        head_font = ImageFont.load_default()
-        text_font = ImageFont.load_default()
-        small_font = ImageFont.load_default()
+    def load_rota_font(size, bold=False):
+        """
+        Use a real TrueType font on both macOS development and the Windows
+        pub server. ImageFont.load_default() is intentionally avoided because
+        it renders extremely tiny text in a high-resolution exported PNG.
+        """
+        font_candidates = []
+
+        if bold:
+            font_candidates.extend([
+                # Windows
+                r"C:\Windows\Fonts\arialbd.ttf",
+                r"C:\Windows\Fonts\segoeuib.ttf",
+                # macOS
+                "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+                "/System/Library/Fonts/Supplemental/Arial Bold Italic.ttf",
+                # Linux / common Pillow environments
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            ])
+        else:
+            font_candidates.extend([
+                # Windows
+                r"C:\Windows\Fonts\arial.ttf",
+                r"C:\Windows\Fonts\segoeui.ttf",
+                # macOS
+                "/System/Library/Fonts/Supplemental/Arial.ttf",
+                # Linux / common Pillow environments
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            ])
+
+        for candidate in font_candidates:
+            try:
+                if os.path.exists(candidate):
+                    return ImageFont.truetype(candidate, size)
+            except Exception:
+                continue
+
+        # Pillow commonly ships DejaVu even where the absolute path differs.
+        for family in (
+            "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf",
+            "Arial Bold.ttf" if bold else "Arial.ttf",
+        ):
+            try:
+                return ImageFont.truetype(family, size)
+            except Exception:
+                continue
+
+        return ImageFont.load_default()
+
+    title_font = load_rota_font(48, bold=True)
+    week_font = load_rota_font(29, bold=True)
+    header_font = load_rota_font(27, bold=True)
+    day_date_font = load_rota_font(20)
+    name_font = load_rota_font(28, bold=True)
+    shift_font = load_rota_font(28, bold=True)
 
     deep = (14, 53, 40)
     pale = (236, 245, 234)
-    line = (190, 205, 194)
+    alternate = (249, 251, 249)
+    line = (174, 195, 181)
     text = (25, 48, 37)
 
-    draw.rectangle((0, 0, width, 130), fill=deep)
+    # Compact title bar.
+    draw.rectangle((0, 0, width, title_bar_h), fill=deep)
     draw.text(
-        (55, 32),
-        "THE ROCKET PUB — STAFF ROTA",
+        (38, 27),
+        "THE ROCKET PUB · STAFF ROTA",
         fill="white",
         font=title_font,
     )
 
     draw.text(
-        (55, 150),
+        (40, title_bar_h + 20),
         f"Week from Sunday {week.week_start.strftime('%d %B %Y')}",
         fill=text,
-        font=head_font,
+        font=week_font,
     )
 
-    name_w = 330
-    day_w = (width - name_w - 80) // 7
-    x0 = 40
-    y0 = header_h
+    # Slightly narrower name column and tighter margins make the actual table
+    # substantially smaller than the previous 2200px-wide export.
+    x0 = 28
+    right_margin = 28
+    name_w = 224
+    day_w = (width - x0 - right_margin - name_w) // 7
 
-    headers = ["Staff"] + [d.strftime("%a\n%d") for d in days]
-    widths = [name_w] + [day_w]*7
-
+    # Header row.
     x = x0
-    for label, col_w in zip(headers, widths):
-        draw.rectangle((x, y0, x+col_w, y0+row_h), fill=pale, outline=line, width=2)
-        draw.multiline_text(
-            (x+12, y0+18),
-            label,
-            fill=text,
-            font=head_font if label in {"Staff", "Hours"} else small_font,
-            spacing=4,
+    draw.rectangle(
+        (x, y0, x + name_w, y0 + table_header_h),
+        fill=pale,
+        outline=line,
+        width=2,
+    )
+    draw.text(
+        (x + 12, y0 + 27),
+        "Staff",
+        fill=text,
+        font=header_font,
+    )
+    x += name_w
+
+    for day in days:
+        draw.rectangle(
+            (x, y0, x + day_w, y0 + table_header_h),
+            fill=pale,
+            outline=line,
+            width=2,
         )
-        x += col_w
 
-    y = y0 + row_h
+        day_name = day.strftime("%a")
+        day_number = day.strftime("%d")
 
-    for profile in profiles:
+        draw.text(
+            (x + 12, y0 + 15),
+            day_name,
+            fill=text,
+            font=header_font,
+        )
+        draw.text(
+            (x + 12, y0 + 50),
+            day_number,
+            fill=text,
+            font=day_date_font,
+        )
+        x += day_w
+
+    # Staff rows.
+    y = y0 + table_header_h
+
+    for row_index, profile in enumerate(profiles):
+        row_fill = "white" if row_index % 2 == 0 else alternate
+
         x = x0
-        draw.rectangle((x, y, x+name_w, y+row_h), fill="white", outline=line, width=2)
-        draw.text((x+12, y+26), profile.rota_name, fill=text, font=text_font)
+        draw.rectangle(
+            (x, y, x + name_w, y + row_h),
+            fill=row_fill,
+            outline=line,
+            width=2,
+        )
+
+        # Vertically centre names rather than leaving excessive whitespace.
+        name_box = draw.textbbox((0, 0), profile.rota_name, font=name_font)
+        name_height = name_box[3] - name_box[1]
+        draw.text(
+            (x + 12, y + (row_h - name_height) // 2 - 2),
+            profile.rota_name,
+            fill=text,
+            font=name_font,
+        )
         x += name_w
 
         for day in days:
-            draw.rectangle((x, y, x+day_w, y+row_h), fill="white", outline=line, width=2)
-            labels = [
-                shift_label(s)
-                + (" K" if s.shift_role == "kitchen" else "")
-                for s in shift_map.get((profile.id, day), [])
-            ]
-            draw.multiline_text(
-                (x+10, y+25),
-                "\n".join(labels) if labels else "",
-                fill=text,
-                font=text_font,
-                spacing=3,
+            draw.rectangle(
+                (x, y, x + day_w, y + row_h),
+                fill=row_fill,
+                outline=line,
+                width=2,
             )
-            x += day_w
 
+            labels = [
+                shift_label(shift)
+                + (" K" if shift.shift_role == "kitchen" else "")
+                for shift in shift_map.get((profile.id, day), [])
+            ]
+
+            if labels:
+                label_text = "\n".join(labels)
+                text_box = draw.multiline_textbbox(
+                    (0, 0),
+                    label_text,
+                    font=shift_font,
+                    spacing=3,
+                )
+                label_height = text_box[3] - text_box[1]
+
+                draw.multiline_text(
+                    (
+                        x + 10,
+                        y + max(8, (row_h - label_height) // 2 - 2),
+                    ),
+                    label_text,
+                    fill=text,
+                    font=shift_font,
+                    spacing=3,
+                )
+
+            x += day_w
 
         y += row_h
 

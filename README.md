@@ -1304,3 +1304,17 @@ Manager rota tools are accessible from the Rota screen.
 - If that staff member already has a pending/declined day-off entry for the same
   date, the admin action converts it to approved rather than creating a
   duplicate.
+
+
+## v10.8.2 rota image readability
+
+- Fixed exported rota images being almost unreadable on the Windows pub server.
+  The previous generator only knew a macOS Arial path; when Windows could not
+  find it Pillow fell back to its tiny bitmap default font.
+- Added Windows Arial / Segoe UI font lookup, plus macOS and DejaVu fallbacks.
+- Reduced the exported image width from 2200px to 1680px so the table itself is
+  physically smaller when viewed on a phone or shared in messaging apps.
+- Increased staff names and shift times to bold 28px TrueType text.
+- Tightened the title/week area and reduced the oversized staff-name column.
+- Vertically centres names and shifts and alternates row backgrounds for easier
+  scanning.
