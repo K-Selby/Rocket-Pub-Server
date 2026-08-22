@@ -1,12 +1,12 @@
 <!doctype html>
 <html lang="en">
 <head>
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png', v='10.8.2') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png', v='10.9.0') }}">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Rocket Pub Server{% endblock %}</title>
     <link rel="stylesheet"
-          href="{{ url_for('static', filename='css/style.css', v='10.8.2') }}">
+          href="{{ url_for('static', filename='css/style.css', v='10.9.0') }}">
 </head>
 <body>
 <header class="topbar">
@@ -91,7 +91,7 @@
         {% if current_user.is_manager %}
             <details class="nav-menu management-menu"
                      data-exclusive-nav
-                     {% if request.endpoint in ['main.users','main.staff_request_inbox','main.tables','main.archive','main.table_map','main.table_layout'] %}data-current="true"{% endif %}>
+                     {% if request.endpoint in ['main.users','main.staff_request_inbox','main.tables','main.archive','main.table_map','main.table_layout','main.admin_health','main.admin_create_backup','main.admin_download_backup'] %}data-current="true"{% endif %}>
                 <summary>
                     Management
                     {% if manager_request_count %}
@@ -135,6 +135,11 @@
                            href="{{ url_for('main.table_layout') }}">
                             Edit Table Layout
                         </a>
+
+                        <a class="{% if request.endpoint and request.endpoint.startswith('main.admin_') %}active{% endif %}"
+                           href="{{ url_for('main.admin_health') }}">
+                            Server Health
+                        </a>
                     {% endif %}
                 </div>
             </details>
@@ -176,6 +181,6 @@
     {% block content %}{% endblock %}
 </main>
 
-<script src="{{ url_for('static', filename='js/app.js', v='10.8.2') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js', v='10.9.0') }}"></script>
 </body>
 </html>

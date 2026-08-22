@@ -1,41 +1,177 @@
-from datetime import timedelta
-from flask import Flask
+from datetime import datetime, timedelta
+from flask import Flask, render_template
+import logging
 import os
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 from dotenv import load_dotenv
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
-from sqlalchemy import inspect, text
+from sqlalchemy import event, inspect, text
+from sqlalchemy.engine import Engine
+import sqlite3
 
 load_dotenv()
 
 db = SQLAlchemy()
+
 migrate = Migrate()
 
 
+@event.listens_for(Engine, "connect")
+def configure_sqlite_connection(dbapi_connection, connection_record):
+    """Safer/faster SQLite defaults for the small multi-user pub server."""
+    if not isinstance(dbapi_connection, sqlite3.Connection):
+        return
+
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA busy_timeout=5000")
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+    finally:
+        cursor.close()
+
+
+def _persistent_secret_key(app):
+    configured = os.environ.get("ROCKET_SECRET_KEY")
+
+    if configured and configured != "rocket-dev-change-this-later":
+        return configured
+
+    secret_path = Path(app.instance_path) / ".rocket-secret-key"
+    secret_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if secret_path.exists():
+        return secret_path.read_text(encoding="utf-8").strip()
+
+    import secrets
+    generated = secrets.token_urlsafe(48)
+    secret_path.write_text(generated, encoding="utf-8")
+    return generated
+
+
+def _configure_logging(app):
+    log_dir = Path(app.instance_path) / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    handler = RotatingFileHandler(
+        log_dir / "rocket.log",
+        maxBytes=1_500_000,
+        backupCount=5,
+        encoding="utf-8",
+    )
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s %(levelname)s %(name)s: %(message)s"
+        )
+    )
+
+    if not any(
+        isinstance(existing, RotatingFileHandler)
+        for existing in app.logger.handlers
+    ):
+        app.logger.addHandler(handler)
+
+    app.logger.setLevel(logging.INFO)
+
+
 def create_app():
-    """Create and configure the Flask application."""
+    """Create and configure the Rocket Pub Server application."""
     app = Flask(__name__, instance_relative_config=True)
 
-    app.config["SECRET_KEY"] = os.environ.get("ROCKET_SECRET_KEY", "rocket-dev-change-this-later")
+    app.config["SECRET_KEY"] = _persistent_secret_key(app)
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///pub_booking.db"
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-    # Keep staff signed in across browser/app restarts. Explicit logout still
-    # clears the cookie immediately.
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_SECURE"] = (
+        os.environ.get("ROCKET_COOKIE_SECURE", "0") == "1"
+    )
+
+    _configure_logging(app)
 
     db.init_app(app)
     migrate.init_app(app, db)
 
     from app import models  # noqa: F401
     from app.routes import main
+    from app.services.backup_service import (
+        create_daily_backup_if_due,
+        create_database_backup,
+    )
+    from app.services.migration_service import run_pending_migrations
+    from app.services.security_service import apply_security_headers
+
     app.register_blueprint(main)
 
+    @app.after_request
+    def add_security_headers(response):
+        return apply_security_headers(response)
+
+    @app.errorhandler(404)
+    def not_found(error):
+        return render_template("error_404.html"), 404
+
+    @app.errorhandler(500)
+    def internal_error(error):
+        db.session.rollback()
+        reference = datetime.now().strftime("%Y%m%d-%H%M%S")
+        app.logger.exception(
+            "Unhandled server error reference=%s",
+            reference,
+            exc_info=error,
+        )
+        return render_template(
+            "error_500.html",
+            error_reference=reference,
+        ), 500
+
     with app.app_context():
+        # Protect the live data before startup schema work.
+        try:
+            create_daily_backup_if_due(app, db)
+        except Exception:
+            app.logger.exception("Automatic startup backup failed")
+
         db.create_all()
-        ensure_starter_schema_updates()
+
+        # Every schema change from this point is explicitly versioned. The
+        # first migration records the old compatibility helper as our baseline.
+        pending_before = None
+        try:
+            # If a database already exists, make an extra migration backup only
+            # when startup actually has pending migrations.
+            from app.services.migration_service import (
+                applied_versions,
+                MIGRATIONS,
+            )
+            done = applied_versions(db)
+            pending_before = [
+                version
+                for version, _ in MIGRATIONS
+                if version not in done
+            ]
+            if pending_before:
+                create_database_backup(app, db, reason="pre-migration")
+
+            applied = run_pending_migrations(
+                db,
+                ensure_starter_schema_updates,
+            )
+            if applied:
+                app.logger.info(
+                    "Applied database migrations: %s",
+                    ", ".join(applied),
+                )
+        except Exception:
+            app.logger.exception("Database migration failed")
+            raise
+
         seed_default_areas()
         seed_buffet_options()
         seed_extra_dishes()
@@ -46,6 +182,7 @@ def create_app():
         seed_rota_shift_templates()
         seed_initial_staff_profiles()
 
+    app.logger.info("Rocket Pub Server started")
     return app
 
 

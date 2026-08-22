@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Page not found | Rocket Pub Server</title>
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='css/style.css', v='10.9.0') }}">
+    <link rel="icon" type="image/png"
+          href="{{ url_for('static', filename='images/favicon.png', v='10.9.0') }}">
+</head>
+<body>
+<main class="system-error-page">
+    <section class="system-error-card">
+        <span class="system-error-code">404</span>
+        <h1>Page not found</h1>
+        <p>The page you tried to open does not exist.</p>
+        <a class="button" href="{{ url_for('main.dashboard') if current_user else url_for('main.customer_home') }}">
+            Go back
+        </a>
+    </section>
+</main>
+</body>
+</html>

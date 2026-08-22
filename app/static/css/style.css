@@ -7145,3 +7145,312 @@ button {
         max-width: calc(100vw - 16px) !important;
     }
 }
+
+
+/* ==========================================================
+   v10.9.0 reliability/mobile foundation
+   ========================================================== */
+
+.system-error-page {
+    min-height: 100dvh;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: #0d3b2d;
+}
+
+.system-error-card {
+    width: min(520px, 100%);
+    padding: 30px;
+    border-radius: 16px;
+    background: #f7faf5;
+    box-shadow: 0 18px 55px rgba(0, 0, 0, .22);
+}
+
+.system-error-card h1 {
+    margin: 4px 0 10px;
+}
+
+.system-error-card p {
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+.system-error-code {
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: .12em;
+}
+
+.system-error-reference {
+    display: block;
+    margin: 14px 0;
+    padding: 10px;
+    border-radius: 8px;
+    background: #edf1ed;
+    overflow-wrap: anywhere;
+}
+
+.health-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.health-card {
+    margin: 0;
+}
+
+.health-card-heading,
+.health-section-heading,
+.health-migration-row,
+.health-backup-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.health-card-heading h2,
+.health-section-heading h2 {
+    margin: 0;
+}
+
+.health-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    padding: 4px 9px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 900;
+    white-space: nowrap;
+}
+
+.health-pill.ok {
+    background: #dff0df;
+    color: #285b31;
+}
+
+.health-pill.warning {
+    background: #fff0bd;
+    color: #6a520b;
+}
+
+.health-pill.error {
+    background: #f6d9d7;
+    color: #7a2c28;
+}
+
+.health-details {
+    margin: 14px 0 0;
+}
+
+.health-details > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 0;
+    border-top: 1px solid var(--border);
+}
+
+.health-details dt {
+    color: var(--muted);
+}
+
+.health-details dd {
+    margin: 0;
+    font-weight: 800;
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+
+.health-migration-list,
+.health-backup-list {
+    display: grid;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.health-migration-row,
+.health-backup-row {
+    padding: 10px 0;
+    border-top: 1px solid var(--border);
+}
+
+.health-migration-row > div,
+.health-backup-row > div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.health-migration-row span:not(.health-pill),
+.health-backup-row span {
+    color: var(--muted);
+    font-size: 11px;
+    overflow-wrap: anywhere;
+}
+
+
+/* Final, shared narrow-screen pass after all legacy responsive rules. */
+@media (max-width: 760px) {
+    body {
+        -webkit-text-size-adjust: 100%;
+    }
+
+    .container,
+    .customer-container {
+        width: calc(100% - 16px) !important;
+        max-width: none !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }
+
+    .page-heading,
+    .health-page-heading {
+        align-items: stretch !important;
+        flex-direction: column !important;
+    }
+
+    .page-heading > *,
+    .health-page-heading > *,
+    .page-heading form,
+    .health-page-heading form {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .page-heading .button,
+    .health-page-heading .button {
+        width: 100%;
+        text-align: center;
+    }
+
+    .card,
+    .form-section,
+    .auth-card,
+    .customer-choice-card,
+    .allergen-item-card,
+    .user-row {
+        max-width: 100% !important;
+        min-width: 0 !important;
+        box-sizing: border-box;
+    }
+
+    .row-actions,
+    .calendar-confirm-row,
+    .form-actions,
+    .email-connection-actions {
+        max-width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .row-actions > *,
+    .calendar-confirm-row > *,
+    .form-actions > * {
+        min-width: 0;
+    }
+
+    .user-edit-panel {
+        width: min(320px, calc(100vw - 28px)) !important;
+        max-width: calc(100vw - 28px) !important;
+    }
+
+    .health-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .health-card-heading,
+    .health-section-heading {
+        align-items: flex-start;
+    }
+
+    .health-migration-row,
+    .health-backup-row {
+        align-items: flex-start;
+    }
+
+    .health-details > div {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 3px;
+    }
+
+    .health-details dd {
+        text-align: left;
+    }
+
+    /* Customer-facing header becomes compact and wrap-safe. */
+    .customer-topbar {
+        padding: 10px !important;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .customer-brand {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .customer-nav {
+        width: 100%;
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 5px;
+    }
+
+    .customer-nav a {
+        min-width: 0;
+        padding: 9px 7px !important;
+        text-align: center;
+        white-space: normal;
+    }
+
+    .customer-choice-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Generic wide-data containers should scroll themselves, never the page. */
+    .table-wrapper,
+    .table-scroll,
+    .rota-scroll,
+    .booking-table-picker,
+    .archive-table-wrap {
+        max-width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Keep dialogs/forms inside iPhone safe width. */
+    dialog,
+    .modal,
+    .modal-card,
+    .rota-swap-modal,
+    .user-edit-panel {
+        max-width: calc(100vw - 16px) !important;
+    }
+
+    textarea {
+        resize: vertical;
+    }
+}
+
+@media (max-width: 390px) {
+    .container,
+    .customer-container {
+        width: calc(100% - 12px) !important;
+    }
+
+    .health-card,
+    .system-error-card {
+        padding: 14px;
+    }
+
+    .customer-nav {
+        grid-template-columns: 1fr 1fr;
+    }
+}

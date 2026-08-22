@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Server error | Rocket Pub Server</title>
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='css/style.css', v='10.9.0') }}">
+    <link rel="icon" type="image/png"
+          href="{{ url_for('static', filename='images/favicon.png', v='10.9.0') }}">
+</head>
+<body>
+<main class="system-error-page">
+    <section class="system-error-card">
+        <span class="system-error-code">500</span>
+        <h1>Something went wrong</h1>
+        <p>
+            Rocket Pub Server recorded the error. Try the page again;
+            if it keeps happening, give the administrator this reference:
+        </p>
+        <code class="system-error-reference">{{ error_reference }}</code>
+        <a class="button" href="{{ url_for('main.dashboard') if current_user else url_for('main.customer_home') }}">
+            Return to Rocket Pub Server
+        </a>
+    </section>
+</main>
+</body>
+</html>

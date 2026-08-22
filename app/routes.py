@@ -110,6 +110,7 @@ def microsoft_email_connected():
 
 from flask import (
     Blueprint,
+    current_app,
     flash,
     g,
     jsonify,
@@ -226,6 +227,11 @@ ADMIN_ENDPOINTS = {
     "main.update_floor_object",
     "main.delete_floor_object",
     "main.duplicate_floor_object",
+
+    # Server/database administration.
+    "main.admin_health",
+    "main.admin_create_backup",
+    "main.admin_download_backup",
 }
 
 
@@ -721,6 +727,13 @@ def forgot_password_new():
 
 @main.route("/login", methods=["GET", "POST"])
 def login():
+    from app.services.security_service import (
+        clear_login_failures,
+        login_is_limited,
+        login_key,
+        record_login_failure,
+    )
+
     if current_user() is not None and current_user().active:
         if current_user().must_change_password:
             return redirect(url_for("main.change_password"))
@@ -729,6 +742,22 @@ def login():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
+        attempt_key = login_key(request, username)
+
+        if login_is_limited(attempt_key):
+            current_app.logger.warning(
+                "Login rate limit reached for username=%r",
+                username,
+            )
+            flash(
+                "Too many unsuccessful sign-in attempts. "
+                "Wait a few minutes and try again.",
+                "error",
+            )
+            return render_template(
+                "login.html",
+                username=username,
+            ), 429
 
         user = db.session.scalar(
             db.select(AppUser).where(
@@ -741,17 +770,25 @@ def login():
             user.password_hash,
             password,
         ):
+            record_login_failure(attempt_key)
             flash("Incorrect username or password.", "error")
             return render_template(
                 "login.html",
                 username=username,
             )
 
+        clear_login_failures(attempt_key)
+
         session.clear()
         session.permanent = True
         session["user_id"] = user.id
         user.last_login_at = datetime.now()
         db.session.commit()
+
+        current_app.logger.info(
+            "Successful login user=%s",
+            user.username,
+        )
 
         if user.must_change_password:
             return redirect(url_for("main.change_password"))
@@ -2364,6 +2401,99 @@ def reset_user_email(user_id):
         "success",
     )
     return redirect(url_for("main.users"))
+
+
+
+# -------------------------
+# Admin health / backups
+# -------------------------
+
+@main.route("/admin/health")
+def admin_health():
+    from app.services.backup_service import list_backups
+    from app.services.health_service import collect_health
+    from app.services.migration_service import migration_status
+
+    migration_rows = migration_status(db)
+
+    email_configured = bool(
+        MICROSOFT_CLIENT_ID
+        and MICROSOFT_CLIENT_SECRET
+        and MICROSOFT_TENANT_ID
+    )
+
+    health = collect_health(
+        current_app,
+        db,
+        migration_rows,
+        email_configured=email_configured,
+    )
+
+    backups = list_backups(current_app)[:10]
+
+    return render_template(
+        "admin_health.html",
+        health=health,
+        backups=backups,
+    )
+
+
+@main.route("/admin/health/backup", methods=["POST"])
+def admin_create_backup():
+    from app.services.backup_service import create_database_backup
+
+    try:
+        backup_path = create_database_backup(
+            current_app,
+            db,
+            reason="manual",
+        )
+    except Exception:
+        current_app.logger.exception("Manual database backup failed")
+        flash("Database backup failed. Check the server log.", "error")
+        return redirect(url_for("main.admin_health"))
+
+    if backup_path is None:
+        flash("The database file could not be found.", "error")
+    else:
+        current_app.logger.info(
+            "Manual database backup created by %s: %s",
+            current_user().username,
+            backup_path.name,
+        )
+        flash(
+            f"Backup created: {backup_path.name}",
+            "success",
+        )
+
+    return redirect(url_for("main.admin_health"))
+
+
+@main.route("/admin/health/backup/<path:filename>")
+def admin_download_backup(filename):
+    from app.services.backup_service import backup_directory
+
+    # Only allow files that follow our generated backup naming convention.
+    safe_name = os.path.basename(filename)
+
+    if (
+        safe_name != filename
+        or not safe_name.startswith("pub_booking-")
+        or not safe_name.endswith(".db")
+    ):
+        return render_template("error_404.html"), 404
+
+    path = backup_directory(current_app) / safe_name
+
+    if not path.exists():
+        return render_template("error_404.html"), 404
+
+    return send_file(
+        path,
+        mimetype="application/x-sqlite3",
+        as_attachment=True,
+        download_name=safe_name,
+    )
 
 
 # -------------------------

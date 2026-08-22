@@ -1318,3 +1318,56 @@ Manager rota tools are accessible from the Rota screen.
 - Tightened the title/week area and reduced the oversized staff-name column.
 - Vertically centres names and shifts and alternates row backgrounds for easier
   scanning.
+
+
+## v10.9.0 reliability foundation
+
+This release begins the reliability/maintenance phase before larger new
+features are added.
+
+### Backups
+- The SQLite database is backed up with SQLite's online backup API, so copies
+  are consistent even while the server is running.
+- A daily startup backup is created when the newest backup is roughly a day old.
+- A separate `pre-migration` backup is created whenever a schema migration is
+  pending.
+- The newest 30 backups are retained under `instance/backups`.
+- Admins can create and download backups from Management -> Server Health.
+
+### Versioned database migrations
+- Added `rocket_schema_migration`, which records each schema migration applied
+  to the live database.
+- The previous ad-hoc compatibility upgrades are now recorded as the baseline
+  migration instead of silently running forever on every startup.
+- Added operational indexes for bookings, table allocation, large parties,
+  staff diary, rota shifts and shift-swap requests.
+
+### Performance / structure
+- SQLite now uses foreign-key enforcement, a 5-second busy timeout, WAL mode and
+  NORMAL synchronous mode, improving concurrent read/write behaviour for the
+  small Windows server.
+- Backup, migration, security and health logic has moved out of the very large
+  routes module into `app/services/`, beginning the codebase refactor without
+  risking a wholesale route rewrite in one release.
+
+### Security / errors
+- Normal `python run.py` now serves through Waitress instead of Flask's debug
+  development server. Debug mode only starts when `ROCKET_DEBUG=1`.
+- If `ROCKET_SECRET_KEY` is not configured, a strong persistent random secret is
+  generated inside the instance folder instead of using the old development
+  string.
+- Added login throttling: repeated failed attempts are temporarily blocked.
+- Added standard clickjacking/content-type/referrer/permissions security headers.
+- Added friendly 404/500 pages and rotating server logs in `instance/logs`.
+- Database sessions are rolled back after unhandled 500 errors.
+
+### Mobile pass
+- Added final narrow-screen guardrails for forms, cards, user edit panels,
+  customer navigation, dialogs, health screens and wide data containers.
+- Existing rota/booking-specific mobile behaviour remains in place.
+
+### Admin Server Health
+- New Management -> Server Health screen shows app version, production/debug
+  mode, database health and size, migration state, free disk space, backup
+  status and Microsoft email configuration.
+- Admins can create a backup immediately and download recent backups.

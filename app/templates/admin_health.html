@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Server Health | Rocket Pub Server{% endblock %}
+
+{% block content %}
+<div class="page-heading health-page-heading">
+    <div>
+        <h1>Server Health</h1>
+        <p>
+            Rocket Pub Server {{ health.version }} · checked
+            {{ health.checked_at.strftime("%d/%m/%Y %H:%M:%S") }}
+        </p>
+    </div>
+
+    <form method="post"
+          action="{{ url_for('main.admin_create_backup') }}">
+        <button class="button" type="submit">
+            Create backup now
+        </button>
+    </form>
+</div>
+
+<div class="health-grid">
+    <section class="card health-card">
+        <div class="health-card-heading">
+            <h2>Application</h2>
+            <span class="health-pill {{ 'ok' if not health.debug else 'warning' }}">
+                {{ 'Production' if not health.debug else 'Debug on' }}
+            </span>
+        </div>
+        <dl class="health-details">
+            <div><dt>Version</dt><dd>{{ health.version }}</dd></div>
+            <div><dt>Server mode</dt><dd>{{ 'Production' if not health.debug else 'Debug' }}</dd></div>
+            <div><dt>Log file</dt><dd>{{ 'Available' if health.log_exists else 'Created on first log' }}</dd></div>
+        </dl>
+    </section>
+
+    <section class="card health-card">
+        <div class="health-card-heading">
+            <h2>Database</h2>
+            <span class="health-pill {{ 'ok' if health.database_ok else 'error' }}">
+                {{ 'Healthy' if health.database_ok else 'Error' }}
+            </span>
+        </div>
+        <dl class="health-details">
+            <div>
+                <dt>Size</dt>
+                <dd>{{ "%.1f"|format(health.database_size / 1024 / 1024) }} MB</dd>
+            </div>
+            <div>
+                <dt>Migrations</dt>
+                <dd>{{ 'Up to date' if health.migrations_ok else 'Pending' }}</dd>
+            </div>
+            <div>
+                <dt>Storage free</dt>
+                <dd>{{ "%.1f"|format(health.disk_free / 1024 / 1024 / 1024) }} GB</dd>
+            </div>
+        </dl>
+    </section>
+
+    <section class="card health-card">
+        <div class="health-card-heading">
+            <h2>Backups</h2>
+            <span class="health-pill {{ 'ok' if health.latest_backup else 'warning' }}">
+                {{ health.backup_count }} stored
+            </span>
+        </div>
+
+        {% if health.latest_backup %}
+            <dl class="health-details">
+                <div>
+                    <dt>Latest</dt>
+                    <dd>{{ health.latest_backup.created_at.strftime("%d/%m/%Y %H:%M") }}</dd>
+                </div>
+                <div>
+                    <dt>File</dt>
+                    <dd>{{ health.latest_backup.name }}</dd>
+                </div>
+            </dl>
+        {% else %}
+            <p class="muted">No backup has been created yet.</p>
+        {% endif %}
+    </section>
+
+    <section class="card health-card">
+        <div class="health-card-heading">
+            <h2>Email</h2>
+            <span class="health-pill {{ 'ok' if health.email_configured else 'warning' }}">
+                {{ 'Configured' if health.email_configured else 'Needs setup' }}
+            </span>
+        </div>
+        <p class="muted">
+            This checks the Microsoft application configuration. The existing
+            Users screen remains the place to reconnect the Outlook mailbox.
+        </p>
+    </section>
+</div>
+
+<section class="card">
+    <div class="health-section-heading">
+        <div>
+            <h2>Database migrations</h2>
+            <p class="muted">
+                Schema changes are now versioned and recorded against the live database.
+            </p>
+        </div>
+    </div>
+
+    <div class="health-migration-list">
+        {% for migration in health.migrations %}
+            <div class="health-migration-row">
+                <div>
+                    <strong>{{ migration.version }}</strong>
+                    <span>{{ migration.description }}</span>
+                </div>
+                <span class="health-pill {{ 'ok' if migration.applied else 'warning' }}">
+                    {{ 'Applied' if migration.applied else 'Pending' }}
+                </span>
+            </div>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="card">
+    <div class="health-section-heading">
+        <div>
+            <h2>Recent backups</h2>
+            <p class="muted">
+                Automatic backups are retained locally; the newest 30 are kept.
+            </p>
+        </div>
+    </div>
+
+    {% if backups %}
+        <div class="health-backup-list">
+            {% for backup in backups %}
+                <div class="health-backup-row">
+                    <div>
+                        <strong>{{ backup.created_at.strftime("%d/%m/%Y %H:%M:%S") }}</strong>
+                        <span>
+                            {{ backup.name }} ·
+                            {{ "%.1f"|format(backup.size_bytes / 1024 / 1024) }} MB
+                        </span>
+                    </div>
+
+                    <a class="small-link"
+                       href="{{ url_for('main.admin_download_backup', filename=backup.name) }}">
+                        Download
+                    </a>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="muted">No backups found.</p>
+    {% endif %}
+</section>
+{% endblock %}
